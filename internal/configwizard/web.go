@@ -260,7 +260,15 @@ func redactSnapshotTOML(raw string) string {
 		if _, ok := snapshotSecretKeys[key]; !ok {
 			continue
 		}
-		lines[i] = strings.TrimRight(line[:eq], " \t") + ` = ""`
+		// Use "[REDACTED]" sentinel for non-empty values so the frontend
+		// can distinguish "key is configured" from "key is not set".
+		valPart := strings.TrimSpace(line[eq+1:])
+		unquoted := strings.Trim(valPart, `"'`)
+		if strings.TrimSpace(unquoted) != "" {
+			lines[i] = strings.TrimRight(line[:eq], " \t") + ` = "[REDACTED]"`
+		} else {
+			lines[i] = strings.TrimRight(line[:eq], " \t") + ` = ""`
+		}
 	}
 	return strings.Join(lines, "\n")
 }

@@ -850,7 +850,7 @@ func preserveRedactedStringField(f map[string]any, key, existing string) string 
 
 func preserveRedactedStringFieldWithImport(f map[string]any, key, existing, imported string) string {
 	if v, ok := f[key]; ok {
-		if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+		if s, ok := v.(string); ok && strings.TrimSpace(s) != "" && s != "[REDACTED]" {
 			return s
 		}
 		if strings.TrimSpace(existing) != "" {

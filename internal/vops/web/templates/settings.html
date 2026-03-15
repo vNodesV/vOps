@@ -419,8 +419,8 @@
       <label>abuseipdb<input name="abuseipdb" type="password" autocomplete="off"></label>
       <label>virustotal<input name="virustotal" type="password" autocomplete="off"></label>
       <label>shodan<input name="shodan" type="password" autocomplete="off"></label>
-      <label>push_user<input name="push_user" type="text"></label>
-      <label>push_key_path<input name="push_key_path" type="text"></label>
+      <label title="SSH username for fleet push ops (vops.toml [vops.push.defaults])">push_user (fleet push default)<input name="push_user" type="text"></label>
+      <label title="Path to SSH private key for fleet push operations (vops.toml [vops.push.defaults].key_path)">push_ssh_key_path (fleet push default)<input name="push_key_path" type="text"></label>
       <label>poll_interval_sec<input name="poll_interval_sec" type="number" min="1" value="60"></label>
       <label>db_path<input name="db_path" type="text"></label>
       <label>archives_dir<input name="archives_dir" type="text"></label>
@@ -433,7 +433,7 @@
   <form id="settings-form-fleet" data-step="fleet">
     <div class="settings-grid">
       <label>ssh_user <span class="required-dot">*</span><input name="ssh_user" type="text" required></label>
-      <label>ssh_key_path <span class="required-dot">*</span><input name="ssh_key_path" type="text" required></label>
+      <label title="SSH private key path for fleet module to connect to VMs (fleet/settings.toml [ssh].key_path)">ssh_key_path (fleet SSH key) <span class="required-dot">*</span><input name="ssh_key_path" type="text" required></label>
       <label>ssh_port<input name="ssh_port" type="number" min="1" max="65535" value="22"></label>
       <label>ssh_timeout_sec<input name="ssh_timeout_sec" type="number" min="1" value="15"></label>
       <label>poll_interval_sec<input name="poll_interval_sec" type="number" min="1" value="60"></label>
@@ -455,7 +455,7 @@
         <label>host_public_ip<input name="host_public_ip" type="text"></label>
         <label>host_datacenter<input name="host_datacenter" type="text"></label>
         <label>host_user<input name="host_user" type="text"></label>
-        <label>host_ssh_key_path<input name="host_ssh_key_path" type="text"></label>
+        <label title="SSH private key path for connecting to the proxy host server (infra.toml [host].ssh_key_path)">host_ssh_key_path (host SSH key)<input name="host_ssh_key_path" type="text"></label>
       </div>
     </fieldset>
 
@@ -464,8 +464,8 @@
       <div class="settings-grid">
         <label>vprox_name<input name="vprox_name" type="text" value="vProx"></label>
         <label>vprox_lan_ip<input name="vprox_lan_ip" type="text"></label>
-        <label>vprox_key<input name="vprox_key" type="password" autocomplete="off"></label>
-        <label>vprox_ssh_key_path<input name="vprox_ssh_key_path" type="text"></label>
+        <label title="SSH private key path for vProx instance authentication (infra.toml [vprox].key)">vprox_key (vProx SSH key path)<input name="vprox_key" type="text" autocomplete="off"></label>
+        <label title="Alternative SSH key path for fleet-managed vProx access (infra.toml [vprox].ssh_key_path)">vprox_ssh_key_path (vProx fleet key)<input name="vprox_ssh_key_path" type="text"></label>
       </div>
     </fieldset>
 
@@ -506,9 +506,16 @@
       <label>vm.lan_ip<input class="vm-field" data-field="lan_ip" type="text"></label>
       <label>vm.public_ip<input class="vm-field" data-field="public_ip" type="text"></label>
       <label>vm.user<input class="vm-field" data-field="user" type="text"></label>
-      <label>vm.key_path<input class="vm-field" data-field="key_path" type="text"></label>
+      <label title="SSH private key path for this VM (used by fleet for deployments)">vm.key_path (VM SSH key)<input class="vm-field" data-field="key_path" type="text"></label>
       <label>vm.datacenter<input class="vm-field" data-field="datacenter" type="text"></label>
-      <label>vm.type<input class="vm-field" data-field="type" type="text"></label>
+      <label>vm.type
+        <select class="vm-field" data-field="type" multiple size="4">
+          <option value="validator">validator</option>
+          <option value="sp">sp (api/rpc)</option>
+          <option value="node">node</option>
+          <option value="relayer">relayer</option>
+        </select>
+      </label>
       <label>vm.chain_name<input class="vm-field" data-field="chain_name" type="text"></label>
       <label>vm.ping.country<input class="vm-field" data-field="ping_country" type="text" value="CA"></label>
       <label>vm.ping.provider<input class="vm-field" data-field="ping_provider" type="text"></label>
@@ -814,7 +821,13 @@
 
   function setVal(form, name, value) {
     const el = $(`[name="${name}"]`, form);
-    if (!el || value === undefined || value === null || value === "") return;
+    if (!el) return;
+    if (value === "[REDACTED]") {
+      el.value = "";
+      el.placeholder = "••• already configured — leave blank to keep, or enter a new value";
+      return;
+    }
+    if (value === undefined || value === null || value === "") return;
     el.value = String(value);
   }
 
@@ -1018,9 +1031,17 @@
       const key = el.dataset.field;
       const value = seed[key];
       if (value !== undefined && value !== null && value !== "") {
-        el.value = String(value);
+        if (el.tagName === "SELECT" && el.multiple) {
+          const vals = String(value).split(",").map((v) => v.trim().toLowerCase());
+          Array.from(el.options).forEach((opt) => {
+            opt.selected = vals.includes(opt.value.toLowerCase());
+          });
+        } else {
+          el.value = String(value);
+        }
       }
       el.addEventListener("input", syncVMJSON);
+      el.addEventListener("change", syncVMJSON);
     });
     $(".settings-vm-remove", row).addEventListener("click", () => {
       row.remove();
@@ -1035,6 +1056,10 @@
       const vm = {};
       $$(".vm-field", row).forEach((el) => {
         const key = el.dataset.field;
+        if (el.tagName === "SELECT" && el.multiple) {
+          vm[key] = Array.from(el.selectedOptions).map((o) => o.value).join(",");
+          return;
+        }
         const raw = (el.value || "").trim();
         if (key === "port") {
           const port = Number(raw);
