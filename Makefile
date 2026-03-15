@@ -427,6 +427,8 @@ systemd:
 ## Build vOps binary to .build/vOps  (does NOT rebuild vProx)
 
 build-vops:
+	@echo "Stopping $(VOPS_NAME) service (if running)..."
+	@sudo systemctl stop "$(VOPS_NAME)" 2>/dev/null && echo "  ✓ $(VOPS_NAME) stopped" || echo "  ○ $(VOPS_NAME) was not running"
 	@echo "Building $(VOPS_NAME)..."
 	mkdir -p "$(BUILD_DIR)"
 	GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(VOPS_BUILD)" "$(VOPS_SRC)"
