@@ -430,8 +430,10 @@ build-vops:
 	@echo "Building $(VOPS_NAME)..."
 	mkdir -p "$(BUILD_DIR)"
 	GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(VOPS_BUILD)" "$(VOPS_SRC)"
+	@cp "$(VOPS_BUILD)" "$(GOPATH_BIN)/$(VOPS_NAME)"
 	@echo "✓ Build complete"
-	@echo "  Output: $(VOPS_BUILD)"
+	@echo "  Binary:  $(VOPS_BUILD)"
+	@echo "  Copied → $(GOPATH_BIN)/$(VOPS_NAME)"
 
 ## Install .samples/vops/vops.sample → ~/.vProx/config/vops/vops.toml (only if absent)
 
