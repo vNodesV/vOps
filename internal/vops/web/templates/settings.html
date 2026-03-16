@@ -297,62 +297,103 @@
   </form>
 
   <form id="settings-form-chain" data-step="chain">
-    <div class="settings-grid">
-      <label>chain_name <span class="required-dot">*</span><input name="chain_name" type="text" required></label>
-      <label>chain_id <span class="required-dot">*</span><input name="chain_id" type="text" required></label>
-      <label>host<input name="host" type="text" placeholder="cheqd-testnet.srvs.vnodesv.net"></label>
-      <label>ip<input name="ip" type="text" placeholder="10.0.0.66"></label>
-      <label>dashboard_name<input name="dashboard_name" type="text"></label>
-      <label>explorer_base<input name="explorer_base" type="text"></label>
-      <label class="full">explorers (comma-separated)<input name="explorers" type="text" placeholder="https://mintscan.io/cheqd-mainnet"></label>
-      <label class="check">default_ports <input name="default_ports" type="checkbox" checked></label>
-      <label class="check">msg_rpc <input name="msg_rpc" type="checkbox"></label>
-      <label class="check">msg_api <input name="msg_api" type="checkbox"></label>
-      <label class="full">rpc_aliases (comma-separated)<input name="rpc_aliases" type="text"></label>
-      <label class="full">rest_aliases (comma-separated)<input name="rest_aliases" type="text"></label>
-      <label class="full">api_aliases (comma-separated)<input name="api_aliases" type="text"></label>
-      <label class="full">message.rpc_msg<input name="message_rpc_msg" type="text"></label>
-      <label class="full">message.api_msg<input name="message_api_msg" type="text"></label>
-      <label class="check">expose.path <input name="expose_path" type="checkbox" checked></label>
-      <label class="check">expose.vhost <input name="expose_vhost" type="checkbox" checked></label>
-      <label>chain_ping_country<input name="chain_ping_country" type="text" value="CA"></label>
-      <label>chain_ping_provider<input name="chain_ping_provider" type="text"></label>
-      <label>proxy.vhost_prefix.rpc<input name="proxy_vhost_prefix_rpc" type="text" placeholder="rpc"></label>
-      <label>proxy.vhost_prefix.rest<input name="proxy_vhost_prefix_rest" type="text" placeholder="api"></label>
-      <label class="full">proxy.sp.prefixes (comma-separated)<input name="proxy_sp_prefixes" type="text" placeholder="api,rest,rpc"></label>
-      <label class="full">proxy.sp.suffixes (comma-separated)<input name="proxy_sp_suffixes" type="text" placeholder="api,rest,rpc"></label>
-      <label class="check">services.rpc <input name="services_rpc" type="checkbox" checked></label>
-      <label class="check">services.rest <input name="services_rest" type="checkbox" checked></label>
-      <label class="check">services.websocket <input name="services_websocket" type="checkbox" checked></label>
-      <label class="check">services.grpc <input name="services_grpc" type="checkbox" checked></label>
-      <label class="check">services.grpc_web <input name="services_grpc_web" type="checkbox" checked></label>
-      <label class="check">services.api_alias <input name="services_api_alias" type="checkbox" checked></label>
-      <label>ports.rpc override<input name="ports_rpc" type="number" min="0" max="65535" placeholder="26657"></label>
-      <label>ports.rest override<input name="ports_rest" type="number" min="0" max="65535" placeholder="1317"></label>
-      <label>ports.grpc override<input name="ports_grpc" type="number" min="0" max="65535" placeholder="9090"></label>
-      <label>ports.grpc_web override<input name="ports_grpc_web" type="number" min="0" max="65535" placeholder="9091"></label>
-      <label>ports.api override<input name="ports_api" type="number" min="0" max="65535" placeholder="1317"></label>
-      <label>ws.idle_timeout_sec<input name="ws_idle_timeout_sec" type="number" min="0" value="3600"></label>
-      <label>ws.max_lifetime_sec<input name="ws_max_lifetime_sec" type="number" min="0" value="0"></label>
-      <label class="check">features.rpc_address_masking <input name="feature_rpc_address_masking" type="checkbox" checked></label>
-      <label>features.mask_rpc<input name="feature_mask_rpc" type="text" placeholder="cheqd-testnet.srvs.vnodesv.net"></label>
-      <label class="check">features.swagger_masking <input name="feature_swagger_masking" type="checkbox"></label>
-      <label>features.absolute_links
-        <select name="feature_absolute_links">
-          <option value="auto">auto</option>
-          <option value="always">always</option>
-          <option value="never">never</option>
-        </select>
-      </label>
-      <label>logging.file<input name="logging_file" type="text"></label>
-      <label>logging.format
-        <select name="logging_format">
-          <option value="summary">summary</option>
-          <option value="json">json</option>
-          <option value="raw">raw</option>
-        </select>
-      </label>
-    </div>
+
+    <fieldset class="settings-fieldset">
+      <legend>Identity</legend>
+      <div class="settings-grid">
+        <label>chain_name <span class="required-dot">*</span><input name="chain_name" type="text" required></label>
+        <label>chain_id <span class="required-dot">*</span><input name="chain_id" type="text" required></label>
+        <label>host<input name="host" type="text" placeholder="cheqd-testnet.srvs.vnodesv.net"></label>
+        <label>ip<input name="ip" type="text" placeholder="10.0.0.66"></label>
+        <label>dashboard_name<input name="dashboard_name" type="text"></label>
+        <label>explorer_base<input name="explorer_base" type="text"></label>
+        <label class="full">explorers (comma-separated)<input name="explorers" type="text" placeholder="https://mintscan.io/cheqd-mainnet"></label>
+        <label>chain_ping_country<input name="chain_ping_country" type="text" value="CA"></label>
+        <label>chain_ping_provider<input name="chain_ping_provider" type="text"></label>
+      </div>
+    </fieldset>
+
+    <fieldset class="settings-fieldset">
+      <legend>Services</legend>
+      <div class="settings-grid">
+        <label class="check">services.rpc <input name="services_rpc" type="checkbox" checked></label>
+        <label class="check">services.rest <input name="services_rest" type="checkbox" checked></label>
+        <label class="check">services.websocket <input name="services_websocket" type="checkbox" checked></label>
+        <label class="check">services.grpc <input name="services_grpc" type="checkbox" checked></label>
+        <label class="check">services.grpc_web <input name="services_grpc_web" type="checkbox" checked></label>
+        <label class="check">services.api_alias <input name="services_api_alias" type="checkbox" checked></label>
+      </div>
+    </fieldset>
+
+    <fieldset class="settings-fieldset">
+      <legend>Ports</legend>
+      <div class="settings-grid">
+        <label class="check full">default_ports (use global defaults) <input name="default_ports" type="checkbox" checked></label>
+        <label>ports.rpc override<input name="ports_rpc" type="number" min="0" max="65535" placeholder="26657"></label>
+        <label>ports.rest override<input name="ports_rest" type="number" min="0" max="65535" placeholder="1317"></label>
+        <label>ports.grpc override<input name="ports_grpc" type="number" min="0" max="65535" placeholder="9090"></label>
+        <label>ports.grpc_web override<input name="ports_grpc_web" type="number" min="0" max="65535" placeholder="9091"></label>
+        <label>ports.api override<input name="ports_api" type="number" min="0" max="65535" placeholder="1317"></label>
+      </div>
+    </fieldset>
+
+    <fieldset class="settings-fieldset">
+      <legend>Messaging</legend>
+      <div class="settings-grid">
+        <label class="check">msg_rpc (enable RPC message) <input name="msg_rpc" type="checkbox"></label>
+        <label class="check">msg_api (enable API message) <input name="msg_api" type="checkbox"></label>
+        <label class="full">message.rpc_msg (maintenance/custom message for RPC)<input name="message_rpc_msg" type="text"></label>
+        <label class="full">message.api_msg (maintenance/custom message for API)<input name="message_api_msg" type="text"></label>
+      </div>
+    </fieldset>
+
+    <fieldset class="settings-fieldset">
+      <legend>Proxy / Routing</legend>
+      <div class="settings-grid">
+        <label class="check">expose.path <input name="expose_path" type="checkbox" checked></label>
+        <label class="check">expose.vhost <input name="expose_vhost" type="checkbox" checked></label>
+        <label>proxy.vhost_prefix.rpc<input name="proxy_vhost_prefix_rpc" type="text" placeholder="rpc"></label>
+        <label>proxy.vhost_prefix.rest<input name="proxy_vhost_prefix_rest" type="text" placeholder="api"></label>
+        <label class="full">rpc_aliases (comma-separated)<input name="rpc_aliases" type="text"></label>
+        <label class="full">rest_aliases (comma-separated)<input name="rest_aliases" type="text"></label>
+        <label class="full">api_aliases (comma-separated)<input name="api_aliases" type="text"></label>
+        <label class="full">proxy.sp.prefixes (comma-separated)<input name="proxy_sp_prefixes" type="text" placeholder="api,rest,rpc"></label>
+        <label class="full">proxy.sp.suffixes (comma-separated)<input name="proxy_sp_suffixes" type="text" placeholder="api,rest,rpc"></label>
+      </div>
+    </fieldset>
+
+    <fieldset class="settings-fieldset">
+      <legend>Features</legend>
+      <div class="settings-grid">
+        <label class="check">features.rpc_address_masking <input name="feature_rpc_address_masking" type="checkbox" checked></label>
+        <label>features.mask_rpc<input name="feature_mask_rpc" type="text" placeholder="cheqd-testnet.srvs.vnodesv.net"></label>
+        <label class="check">features.swagger_masking <input name="feature_swagger_masking" type="checkbox"></label>
+        <label>features.absolute_links
+          <select name="feature_absolute_links">
+            <option value="auto">auto</option>
+            <option value="always">always</option>
+            <option value="never">never</option>
+          </select>
+        </label>
+      </div>
+    </fieldset>
+
+    <fieldset class="settings-fieldset">
+      <legend>WebSocket &amp; Logging</legend>
+      <div class="settings-grid">
+        <label>ws.idle_timeout_sec<input name="ws_idle_timeout_sec" type="number" min="0" value="3600"></label>
+        <label>ws.max_lifetime_sec<input name="ws_max_lifetime_sec" type="number" min="0" value="0"></label>
+        <label>logging.file<input name="logging_file" type="text"></label>
+        <label>logging.format
+          <select name="logging_format">
+            <option value="summary">summary</option>
+            <option value="json">json</option>
+            <option value="raw">raw</option>
+          </select>
+        </label>
+      </div>
+    </fieldset>
+
     <section class="settings-vms">
       <div class="settings-vms-head">
         <strong>[[chain_services]]</strong>

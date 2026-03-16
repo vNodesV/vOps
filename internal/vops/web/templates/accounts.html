@@ -38,7 +38,12 @@
   <span class="sort-spinner-label">Sorting…</span>
 </div>
 
-<div class="table-wrap">
+<article class="v-block">
+  <div class="v-block-header">
+    <span class="v-block-title">IP Intelligence</span>
+  </div>
+  <div class="v-block-body" style="padding: .5rem .85rem">
+    <div class="table-wrap" style="overflow-x:auto">
 <table id="accounts-tbl" role="grid">
   <thead>
     <tr>
@@ -86,8 +91,10 @@
     {{end}}
   </tbody>
 </table>
-</div>
-<script>initSortableTable('accounts-tbl', 'sort-spinner');</script>
+    </div>
+    <script>initSortableTable('accounts-tbl', 'sort-spinner');</script>
+  </div>
+</article>
 
 <nav class="pagination-nav">
   <ul>

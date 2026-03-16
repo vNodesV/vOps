@@ -86,7 +86,7 @@ input[type="checkbox"] {
 .nav-inner {
   max-width: 1200px;
   margin: 0 auto;
-  padding: .25rem 1.2rem;
+  padding: 0 1.2rem;
   display: flex;
   align-items: center;
   gap: 0.2rem;
@@ -99,10 +99,10 @@ input[type="checkbox"] {
   margin-right: .6rem;
 }
 
-/* Logo: doubled from 180×50 → 360×100, proportional; CSS bg-image swapped per theme */
+/* Logo: sized to 80px height, auto width; CSS bg-image swapped per theme */
 .vops-logo {
-  width: 360px;
-  height: 100px;
+  height: 80px;
+  width: auto;
   background: url('2026_logos/default/logo/logo.png') left center / contain no-repeat;
 }
 [data-theme="dark-blue"] .vops-logo {
@@ -710,6 +710,8 @@ transition: opacity 0.15s;
 .org-none   { opacity: 0.25; }
 .asn-cell   { font-size: 0.75rem; opacity: 0.7; }
 .ip-code    { font-size: 0.8rem; }
+/* IP code cells: inherit td color so IPs match other columns */
+td code, td a code { color: inherit !important; background: transparent !important; padding: 0 !important; }
 .lastseen-cell { font-size: 0.75rem; opacity: 0.7; white-space: nowrap; }
 .actions-cell  { white-space: nowrap; display: flex; gap: 0.35rem; align-items: center; }
 
@@ -908,6 +910,26 @@ summary { list-style: none; }
   text-transform: uppercase;
   border-bottom: 1px solid var(--vn-green-border);
   border-radius: 7px 7px 0 0;
+}
+/* dark-blue: use blue accent for block headers and summaries */
+html[data-theme="dark-blue"] .v-block > details > summary,
+html[data-theme="dark-blue"] .v-block-header {
+  color: rgba(79, 195, 247, 0.85);
+  border-bottom-color: rgba(79, 195, 247, 0.22);
+}
+html[data-theme="dark-blue"] .v-block > details > summary:hover {
+  background: rgba(79, 195, 247, 0.05);
+  color: rgba(79, 195, 247, 1);
+}
+/* light-blue: use deep blue accent */
+html[data-theme="light-blue"] .v-block > details > summary,
+html[data-theme="light-blue"] .v-block-header {
+  color: #1565c0;
+  border-bottom-color: rgba(21, 101, 192, 0.25);
+}
+html[data-theme="light-blue"] .v-block > details > summary:hover {
+  background: rgba(21, 101, 192, 0.05);
+  color: #0d47a1;
 }
 /* Loading spinner for panels */
 .panel-loading {
@@ -1247,17 +1269,22 @@ summary { list-style: none; }
   font-weight: 700;
 }
 .settings-fieldset {
-  margin: .7rem 0;
-  border: 1px solid var(--vn-green-border);
-  border-radius: 7px;
-  padding: .6rem;
-  background: rgba(0,0,0,.26);
+  border: 1px solid var(--vn-border);
+  border-radius: 6px;
+  padding: .75rem 1rem;
+  margin-bottom: 1rem;
 }
 .settings-fieldset legend {
-  font-size: .78rem;
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: 0 .4rem;
   color: var(--vn-green);
-  padding: 0 .25rem;
+  opacity: .8;
 }
+html[data-theme="dark-blue"] .settings-fieldset legend { color: rgba(79, 195, 247, 0.85); opacity: 1; }
+html[data-theme="light-blue"] .settings-fieldset legend { color: #1565c0; opacity: 1; }
 .settings-vms {
   margin-top: .6rem;
 }
@@ -2009,6 +2036,9 @@ html[data-theme="dark-blue"] details {
 html[data-theme="vnodes"] summary,
 html[data-theme="dark-blue"] summary {
   color: var(--vn-text);
+}
+html[data-theme="dark-blue"] .v-block > details > summary {
+  color: rgba(79, 195, 247, 0.85) !important;
 }
 
 /* Dark themes: settings list table rows stay dark */
