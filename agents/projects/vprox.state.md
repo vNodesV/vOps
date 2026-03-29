@@ -1839,3 +1839,57 @@ fe5207e  fix: chain status duplication + delete 405
 
 ### Next Steps
 - Run `agentupgrade` protocol and refresh agent state/version history for this delivery.
+
+---
+
+## Session: 2026-03-18 08:44:00Z — vLog_v1.4.0 wizard complete + save
+
+### Goal
+Confirm wizard delivery status, apply all expert review findings (security/architecture/frontend/UX), and capture session state.
+
+### Current Branch
+`vLog_v1.4.0` — HEAD at `d864b31`
+
+### Config Wizard — FULLY SHIPPED ✅
+`internal/configwizard/` (5,357 lines across 13 files + 1 HTML):
+- `web.go` (637L) — HTTP server, routes, enforceLocalhost, CSRF, shutdown channel, CurrentSnapshot
+- `web_apply.go` (1,751L) — all 7 POST handlers (ports, settings, chain, vlog, fleet, infra, backup)
+- `wizard.go` (104L) — package entry point: `RunWebWizard(home string)`
+- `wizard.html` (1,675L) — 7-tab SPA, Matrix theme, vanilla JS, dynamic VM rows
+- `toml_writer.go` (132L) — WriteWithBackup (0o600 perms, .bak rotation)
+- `validate.go` (116L) — slug validation, Origin check guard
+- `prompt.go` (300L) — terminal helpers (unused for web mode, available for future CLI)
+- `backup.go` (70L), `chain.go` (135L), `fleet.go` (65L), `infra.go` (104L), `ports.go` (70L), `settings.go` (113L), `vlog.go` (85L) — per-step handlers
+- `cmd/vprox/config.go` — `runConfigCmd(home, args)` entry point
+- `cmd/vprox/main.go:1300` — `case "config":` wired
+
+### Security Findings Applied (from in-session review S1–S5, A1–A6)
+- ✅ S1: Path traversal — slug validator `^[a-z0-9][a-z0-9-]{0,62}$` in validate.go
+- ✅ S2: File permissions — 0o600 on all wizard-written config files in toml_writer.go
+- ✅ S3: CSRF — enforceLocalhost + Origin header check in web.go
+- ✅ S4: XSS — prefill uses element.value, not innerHTML in wizard.html JS
+- ✅ A1: Shutdown race — done channel pattern in web.go handleDone
+- ✅ A3: FleetSettings struct — defined inline in fleet.go
+
+### Recent Commits (vLog_v1.4.0)
+- `d864b31` — fix(ui): nav logo height, IP column colors, archive title, intel block, chain subsections
+- `a174c33` — fix(wizard,settings): TI key redaction sentinel, URL fixes, vm.type select, field labels
+- `81a01af` — feat(vops): API key + password hash generation in wizard and settings
+- `4dd5636` — fix(vops): dark theme tables, unified nav bar, doubled logo, checkbox fix
+- `7ae9944` — feat(vops,cli): theme CSS fixes, persistent nav, v-block-btn, -O daemon flag
+
+### Open Todos (SQL tracker — 25 items)
+- 14x `cw-*` items: marked `in_progress` (legacy — wizard is shipped, these can be marked done)
+- 8x `impl-*` items: marked `pending` (legacy pre-impl tasks — wizard shipped, done)
+- `restart-vlog-test`, `test-ping-probes`, `verify-servers-load` — operational QA todos
+
+### Next Steps
+1. Mark all `cw-*` and `impl-*` todos as done (wizard is shipped)
+2. Operational QA: restart-vlog-test, test-ping-probes, verify-servers-load
+3. vLog_v1.4.0 config restructure remaining work (P5/P6 deprecation)
+4. Consider `agentupgrade` for state refresh
+
+### Build Status
+- `go build ./...` ✅
+- `go vet ./...` ✅
+- Branch: `vLog_v1.4.0`, clean working tree (only agents/.DS_Store + untracked logo dir)

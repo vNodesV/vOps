@@ -431,6 +431,19 @@
 
 ---
 
+## 21. Infrastructure Knowledge Base Engineering
+
+| Skill | Depth | Notes |
+|-------|-------|-------|
+| sosreport analysis | 3 | Extract + parse Linux sosreport archives (tar.xz); read `uname -a`, `free`, `df`, `ip addr`, `ss`, `lsblk`, PCI devices, loaded modules, systemd service states |
+| KVM/libvirt VM inventory | 4 | Parse `virsh list --all`, `virsh dumpxml`, `virsh net-dumpxml default`; map VMs to MACs/IPs/DHCP reservations; identify disk image naming conventions (qcow2, date-stamps, clone suffixes) |
+| Host topology documentation | 3 | Map: physical NICs → bridges → VMs; DHCP reservation table; macvtap bridging (VM gets public IP directly); identify static vs DHCP VM IPs; surface IP anomalies in proxy configs |
+| Apache/vhost audit | 3 | Read `sites-enabled/*.conf` → extract ProxyPass backends; cross-reference with VM IP map; surface backend IP discrepancies; validate TLS cert coverage via certbot |
+| Host security posture | 4 | Enumerate: SSH port/auth, fail2ban rules, firewall active zones, exposed ports (`ss -tlnp`), internal-only services; assess attack surface |
+| Infrastructure KB authoring | 3 | Synthesize raw sosreport data into structured `_host_<name>.md` knowledge base (host identity, hardware, network map, VM inventory table, Apache routing table, services, security posture, anomalies); format for agent loading |
+
+---
+
 ## Growth Target
 
 | Area | Current | Target | Notes |
@@ -473,11 +486,12 @@ Web GUI Eng:          ████████████████     3.5/4
 Log Analysis & Intel: ████████████████████ 4/4  (production: auth, Matrix theme, SSE intel, accounts, ingestion, vLog v1.2.0)
 UI/UX Design Systems: ████████████████████ 4/4  (CSS tokens, glass morphism, viewport-fill, sticky footer, session auth UX — production)
 Infrastructure Deploy:████████████████     3.5/4  (SSH dispatcher, VM registry, chain scripts, check-host.net probe, SSH metrics — active)
-Binary Consolidation: ████████████         3/4    (multi-binary awareness, cmd/ layout, go:embed, module lifecycle — planned for v1.4.0)
+Binary Consolidation: ████████████████████ 4/4    (vLog→vOps SHIPPED v1.4.0; cmd/vops/, configwizard 7-step SPA, go:embed, errgroup multi-server)
 Strategic Thinking:   ████████████         3/4    (RICE/ICE, tech debt, build/buy, MVP, North Star metrics)
+Infrastructure KB:    ████████████         3/4    (sosreport analysis, KVM/libvirt, Apache vhost audit, host topology — production delivered _host_qc.md)
 ```
 
 ---
 
 *Skills are living documentation. Update this file when capabilities change or new domains are acquired.*
-*Last updated: 2026-03-13 (rev21: settings/wizard lifecycle capability reinforced — inline editor UX, chain-service tree controls, legacy TOML field-parity import/apply bridge, and proxy `features.mask_rpc` rewrite parity captured as active delivery patterns.)*
+*Last updated: 2026-03-22 (rev24: §21 Infrastructure Knowledge Base Engineering added; Binary Consolidation 3→4 (vOps SHIPPED); Capability Index updated with Infrastructure KB 3/4.)*

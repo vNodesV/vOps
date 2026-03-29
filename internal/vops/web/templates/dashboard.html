@@ -146,7 +146,7 @@
         <button id="chain-refresh-btn" onclick="doRefresh()" class="v-block-btn">Refresh</button>
         <button id="chain-hcol-btn" onclick="toggleHcol('left')" class="v-block-btn v-block-btn-muted">More &gt;</button>
         <button id="chain-lock-btn" onclick="toggleLock('left')"
-          style="display:none;background:rgba(0,0,0,0.40);border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.30);padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
+          class="v-block-btn lock-expand-btn" style="display:none"
           title="Lock expanded">🔓</button>
       </div>
     </summary>
@@ -163,7 +163,7 @@
       <div class="v-block-actions">
         <button id="server-hcol-btn" onclick="toggleHcol('right')" class="v-block-btn v-block-btn-muted">&lt; More</button>
         <button id="server-lock-btn" onclick="toggleLock('right')"
-          style="display:none;background:rgba(0,0,0,0.40);border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.30);padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
+          class="v-block-btn lock-expand-btn" style="display:none"
           title="Lock expanded">🔓</button>
         <button id="vm-ping-btn" onclick="doVMPing()" class="v-block-btn">Ping</button>
         <button id="vm-refresh-btn" onclick="doVMRefresh()" class="v-block-btn">Refresh</button>
@@ -190,12 +190,12 @@
   <div class="v-block-body">
     <table style="width:100%;border-collapse:collapse;font-size:.8rem;font-family:Inter,sans-serif">
       <thead>
-        <tr style="border-bottom:1px solid rgba(255,255,255,0.08)">
-          <th style="text-align:left;padding:.3rem .5rem;opacity:.5;font-weight:500">Archives</th>
-          <th style="text-align:left;padding:.3rem .5rem;opacity:.5;font-weight:500">Total Data</th>
-          <th style="text-align:left;padding:.3rem .5rem;opacity:.5;font-weight:500">Requests</th>
-          <th style="text-align:left;padding:.3rem .5rem;opacity:.5;font-weight:500">Rate Events</th>
-          <th style="text-align:left;padding:.3rem .5rem;opacity:.5;font-weight:500">Last Import</th>
+        <tr style="border-bottom:1px solid var(--vn-border)">
+          <th style="text-align:left;padding:.3rem .5rem;color:var(--vn-text-muted);font-weight:500">Archives</th>
+          <th style="text-align:left;padding:.3rem .5rem;color:var(--vn-text-muted);font-weight:500">Total Data</th>
+          <th style="text-align:left;padding:.3rem .5rem;color:var(--vn-text-muted);font-weight:500">Requests</th>
+          <th style="text-align:left;padding:.3rem .5rem;color:var(--vn-text-muted);font-weight:500">Rate Events</th>
+          <th style="text-align:left;padding:.3rem .5rem;color:var(--vn-text-muted);font-weight:500">Last Import</th>
         </tr>
       </thead>
       <tbody>
@@ -220,6 +220,12 @@
 (function() {
   var BASE = '{{.BasePath}}';
   var instances = {};
+
+  // Returns theme-appropriate grid line color for Chart.js
+  function chartGridColor() {
+    var theme = document.documentElement.dataset.theme || '';
+    return theme === 'light-blue' ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.07)';
+  }
 
   var chartMeta = {
     top_countries:        { type: 'bar',      label: 'IPs',         color: '#4e8cf7', fill: false },
@@ -273,8 +279,8 @@
           tooltip: { mode: 'index' },
         },
         scales: {
-          x:  { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { maxRotation: 45 } },
-          y:  { position: 'left',  beginAtZero: true, grid: { color: 'rgba(255,255,255,0.07)' },
+          x:  { grid: { color: chartGridColor() }, ticks: { maxRotation: 45 } },
+          y:  { position: 'left',  beginAtZero: true, grid: { color: chartGridColor() },
                 title: { display: true, text: leftLabel } },
           y1: { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false },
                 title: { display: true, text: rightLabel } },
@@ -324,8 +330,8 @@
               tooltip: { mode: 'index', intersect: false },
             },
             scales: meta.type === 'doughnut' ? {} : {
-              x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { maxRotation: 45 } },
-              y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.07)' } },
+              x: { grid: { color: chartGridColor() }, ticks: { maxRotation: 45 } },
+              y: { beginAtZero: true, grid: { color: chartGridColor() } },
             },
           },
         });
@@ -347,13 +353,13 @@
 
   function statusCell(st) {
     if (st === 'synced' || st === 'syncing') {
-      return '<span style="font-size:.68rem;padding:.06rem .32rem;border-radius:3px;border:1px solid rgba(0,255,0,0.5);color:#00ff00;font-weight:600">ONLINE</span>';
+      return '<span style="font-size:.68rem;padding:.06rem .32rem;border-radius:3px;border:1px solid var(--vn-green-border);color:var(--vn-green);font-weight:600">ONLINE</span>';
     }
     return '<span style="font-size:.68rem;padding:.06rem .32rem;border-radius:3px;border:1px solid rgba(239,83,80,0.5);color:#ef5350;font-weight:600">OFFLINE</span>';
   }
   function syncedCell(st) {
     if (st === 'synced') {
-      return '<span style="font-size:.68rem;padding:.06rem .32rem;border-radius:3px;border:1px solid rgba(0,255,0,0.4);color:#00ff00;font-weight:600">SYNCED</span>';
+      return '<span style="font-size:.68rem;padding:.06rem .32rem;border-radius:3px;border:1px solid var(--vn-green-border);color:var(--vn-green);font-weight:600">SYNCED</span>';
     }
     if (st === 'syncing') {
       return '<span style="font-size:.68rem;padding:.06rem .32rem;border-radius:3px;border:1px solid rgba(255,167,38,0.5);color:#ffa726;font-weight:600">CATCHING UP</span>';
@@ -467,7 +473,7 @@
       var monikerPfx = isChild ? '<span style="opacity:.3;font-size:.65rem;margin-right:.25rem">└</span>' : '';
       var monikerContent = monikerPfx + escH(c.dashboard_name || c.moniker || c.chain || c.chain_name || 'unknown');
 
-      var row = '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">' +
+      var row = '<tr style="border-bottom:1px solid var(--vn-border)">' +
         '<td style="' + tdStyle + ';white-space:nowrap;' + indentPfx + '">' + monikerContent + '</td>' +
         '<td style="' + tdStyle + '">' + servicesPills(c.type) + '</td>' +
         '<td style="' + tdStyle + '">' + statusCell(c.node_status) + '</td>' +
@@ -516,7 +522,7 @@
       var parentEntry  = entries.find(function(e){ return e.has_validator; }) || entries[0];
       var parentLabel  = parentEntry.dashboard_name || parentEntry.chain_name || group.label;
 
-      var headerRow = '<tr style="border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer;background:rgba(255,255,255,.025)" onclick="toggleChainGroup(\'' + escH(key) + '\')">' +
+      var headerRow = '<tr style="border-bottom:1px solid var(--vn-border);cursor:pointer;background:rgba(255,255,255,.025)" onclick="toggleChainGroup(\'' + escH(key) + '\')">' +
         '<td style="' + tdStyle + ';white-space:nowrap">' +
           '<span style="color:rgba(255,255,255,.4);font-size:.65rem;margin-right:.3rem">' + toggleIcon + '</span>' +
           '<span style="font-weight:600">' + escH(parentLabel) + '</span>' +
@@ -748,7 +754,7 @@
     return '<a href="#" onclick="toggleAptRow(' + idx + ');return false" style="color:#ffa726;font-weight:600;text-decoration:none" title="' + vm.apt_count + ' pending upgrades">' + vm.apt_count + '</a>';
   }
   function vmStatusTag(online) {
-    if (online) return '<span style="font-size:.68rem;padding:.06rem .32rem;border-radius:3px;border:1px solid rgba(0,255,0,0.5);color:#00ff00;font-weight:600">ONLINE</span>';
+    if (online) return '<span style="font-size:.68rem;padding:.06rem .32rem;border-radius:3px;border:1px solid var(--vn-green-border);color:var(--vn-green);font-weight:600">ONLINE</span>';
     return '<span style="font-size:.68rem;padding:.06rem .32rem;border-radius:3px;border:1px solid rgba(239,83,80,0.5);color:#ef5350;font-weight:600">OFFLINE</span>';
   }
 
@@ -769,7 +775,7 @@
 
     var rows = vms.map(function(vm, idx) {
       var errTitle = vm.error ? ' title="' + escH(vm.error) + '"' : '';
-      var row = '<tr id="vm-row-' + idx + '" style="border-bottom:1px solid rgba(255,255,255,.04)"' + errTitle + '>' +
+      var row = '<tr id="vm-row-' + idx + '" style="border-bottom:1px solid var(--vn-border)"' + errTitle + '>' +
         '<td style="' + tdStyle + ';white-space:nowrap">' + escH(vm.name) +
           (vm.host_ref ? '<span style="font-size:.58rem;opacity:.4;margin-left:.3rem">' + escH(vm.host_ref) + '</span>' : '') + '</td>' +
         '<td style="' + tdStyle + '">' + vmStatusTag(vm.online) + '</td>' +
@@ -1022,17 +1028,13 @@
   function setLockStyle(btn, locked) {
     if (!btn) return;
     if (locked) {
-      btn.style.background  = 'rgba(0,255,0,0.12)';
-      btn.style.borderColor = 'rgba(0,255,0,0.55)';
-      btn.style.color       = '#00ff00';
-      btn.textContent       = '\uD83D\uDD12'; // 🔒
-      btn.title             = 'Unlock';
+      btn.classList.add('is-locked');
+      btn.textContent = '\uD83D\uDD12'; // 🔒
+      btn.title       = 'Unlock';
     } else {
-      btn.style.background  = 'rgba(0,0,0,0.40)';
-      btn.style.borderColor = 'rgba(255,255,255,0.15)';
-      btn.style.color       = 'rgba(255,255,255,0.30)';
-      btn.textContent       = '\uD83D\uDD13'; // 🔓
-      btn.title             = 'Lock expanded';
+      btn.classList.remove('is-locked');
+      btn.textContent = '\uD83D\uDD13'; // 🔓
+      btn.title       = 'Lock expanded';
     }
   }
 

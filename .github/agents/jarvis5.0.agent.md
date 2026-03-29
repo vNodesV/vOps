@@ -74,9 +74,9 @@ performance claim is benchmarked, every recommendation is trade-off-aware.
 - **HTTP 405 delete workaround** (commit `fe5207e`): Apache `mod_proxy` blocks HTTP DELETE → 405; fleet delete uses POST alias; JS changed from `method:'DELETE'` to `method:'POST'` for all fleet delete calls
 - **Settings/Wizard UX bridge** (v1.3.1): dashboard-native inline settings editor, chain/service tree controls, legacy TOML import field parity, and `features.mask_rpc` rewrite parity in proxy output.
 
-### vLog (module — `vLog1.3.0` branch, active)
-- **Binary**: standalone `vLog` — mirrors vProx architecture (single binary, embedded HTTP server, Apache-proxied)
-- **Purpose**: log archive analyzer with CRM-like IP accounts, security intelligence, and query UI
+### vOps (module — `vLog_v1.4.0`, SHIPPED ✅)
+- **Binary**: `vops` (`cmd/vops/main.go`, version `1.4.0`) — merged vLog+fleet; renamed from `vLog`; serves at `jarvis:18889`; default theme `light-blue`
+- **Purpose**: log archive analyzer with CRM-like IP accounts, security intelligence, config wizard, and vOps management UI
 - **Database**: SQLite via `modernc.org/sqlite` (pure Go, no CGO, WAL mode)
 - **Web UI**: `html/template` + `go:embed` + htmx — dashboard, accounts, query builder, threat panel
 - **Auth system** (shipped `70a46db`): login page (`login.html`, standalone, no `base.html` dep); session tokens via `crypto/rand` 32-byte hex; HMAC-SHA256; `map[string]time.Time` 24h TTL; bcrypt (`golang.org/x/crypto/bcrypt`, `Cost=12`); `HttpOnly`/`SameSite=Strict` cookie; `requireSession` middleware wraps all page+API routes; auth bypass if `password_hash == ""` (backward compat); config: `[vlog.auth]` in `vlog.toml`
@@ -88,8 +88,9 @@ performance claim is benchmarked, every recommendation is trade-off-aware.
 - **IP Intelligence**: VirusTotal v3 + AbuseIPDB v2 + Shodan APIs; parallel queries (3 goroutines → buffered channels); composite threat score (0-100); flag + score + per-source breakdown; cache in `intel_cache` table
 - **OSINT**: 5 concurrent ops (DNS, port scan, ip-api.com, protocol probe, Cosmos RPC) via `sync.WaitGroup` + `sync.Mutex`; timing: ~5s vs old ~23s
 - **SSE handlers** (`internal/vlog/web/handlers.go`): `handleAPIInvestigate`, `handleAPIEnrich`, `handleAPIosint` — all use keepalive goroutine (15s `: ping`) + `context.Background()` (never `r.Context()`) to survive Apache `ProxyTimeout`; see SSE keepalive pattern in `base.agent.md`
-- **Config**: `$VPROX_HOME/config/vlog.toml` (port, db_path, archives_dir, `api_key`, `bind_address`, `base_path`, `[vlog.auth]`)
-- **CLI**: `vlog start`, `vlog stop`, `vlog restart`, `vlog ingest`, `vlog status`, `--home`, `--port`, `--quiet`
+- **Config**: `$VPROX_HOME/config/vops.toml` → `[vops]` section; structs `VOpsSection`/`VOps`
+- **CLI**: `vops start`, `vops stop`, `vops restart`, `vops ingest`, `vops status`, `vops config --web`, `--home`, `--port`, `--quiet`
+- **Config wizard**: `internal/configwizard/` — 7-tab browser SPA (`go:embed wizard.html`); 7 POST API handlers for all config steps; TI key redaction sentinel in snapshot/save; launched via `vops config --web`; `cmd/vops/config.go` entry point
 - **vProx hook**: optional `vlog_url` in `config/ports.toml` — vProx POSTs to vLog after `--new-backup` (non-fatal)
 - **Apache config** (`.vscode/vlog.apache2`): `ProxyTimeout 60`, `RequestReadTimeout handshake=5 header=10-30,MinRate=750 body=0`; `/vlog/` Location: IP-restricted + `timeout=30`; `SetEnvIfNoCase Content-Encoding .+ no-gzip dont-vary`; `X-Real-IP "%{REMOTE_ADDR}s"`
 
@@ -154,12 +155,12 @@ Key patterns for proxy-level intelligence:
 - Statistics, ML/AI, data pipelines, experiment design
 - Anomaly detection, traffic analysis, rate-limit modeling
 
-### Binary Consolidation (v1.4.0 planned)
-- **vLog → vProx integration**: `cmd/vlog/` → `vprox vlog start|stop|status` subcommand
-- **Single-binary distribution**: shared `internal/` packages, unified config, single systemd unit
-- **Graceful multi-server**: `errgroup` coordination for proxy + vLog + webserver goroutines
-- **Migration path**: `vlog.service` remains as compatibility alias during transition
-- **Build tags**: optional `//go:build !novlog` to exclude vLog module from proxy-only builds
+### Binary Consolidation (v1.4.0 SHIPPED ✅)
+- **vLog → vOps**: `cmd/vlog/` merged to `cmd/vops/`; binary `vops`; `vlog.service` compatibility alias during transition
+- **Single-binary distribution**: shared `internal/` packages, unified config (`vops.toml`), single systemd unit
+- **Graceful multi-server**: `errgroup` coordination for proxy + vOps + webserver goroutines
+- **Config wizard**: `internal/configwizard/` 7-step SPA; `vops config --web` auto-opens browser
+- **Build tags**: `//go:build !novlog` to exclude vOps module from proxy-only builds (planned)
 
 ---
 
@@ -398,6 +399,7 @@ Always specify `model:` in `task` calls. Parallelize when tasks are independent.
 
 | File | Purpose |
 |------|---------|
+| `agents/_host_qc.md` | QC hypervisor host architecture KB — VMs, network, Apache routing, services |
 | `agents/jarvis5.0_skills.md` | Full skill taxonomy with depth levels |
 | `agents/jarvis5.0_resources.md` | Curated reference links by domain |
 | `agents/jarvis5.0_state.md` | Router state, active project, command protocol |
@@ -424,6 +426,14 @@ Copilot session. Invoke them explicitly when the trigger conditions match. Do no
 | [`doublecheck`](.github/skills/doublecheck/) | Verifying agent-generated code or design decisions; QA-ing multi-step output; "double-check this"; "verify this is correct" | `assets/verification-report-template.md` |
 | [`model-recommendation`](.github/skills/model-recommendation/) | Recommending optimal AI models for agent chains/chatmodes; reviewing model routing strategy | None |
 | [`agent-governance`](.github/skills/agent-governance/) | Orchestrating sub-agents with elevated privileges; governance/safety review for multi-agent workflows | None |
+| [`agentic-eval`](.github/skills/agentic-eval/) | Evaluating/improving agent outputs; self-critique loops; rubric-based QA; evaluator-optimizer pipelines | None |
+| [`gh-cli`](.github/skills/gh-cli/) | GitHub CLI operations — repos, issues, PRs, Actions, releases, gists, orgs via `gh` | None |
+| [`architecture-blueprint-generator`](.github/skills/architecture-blueprint-generator/) | Generating architectural documentation + diagrams from codebase analysis | None |
+| [`create-architectural-decision-record`](.github/skills/create-architectural-decision-record/) | Creating ADR documents for vOps/config/theme architectural decisions | None |
+| [`github-issues`](.github/skills/github-issues/) | Creating/managing GitHub issues — bug reports, feature requests, labels, priorities, dependencies | None |
+| [`git-flow-branch-creator`](.github/skills/git-flow-branch-creator/) | Creating Git Flow branches (feature/, release/, hotfix/) from git status/diff analysis | None |
+| [`generate-custom-instructions-from-codebase`](.github/skills/generate-custom-instructions-from-codebase/) | Generating migration/evolution instructions (e.g., vLog→vOps rename consistency) | None |
+| [`cloud-design-patterns`](.github/skills/cloud-design-patterns/) | Applying 42 cloud patterns (circuit-breaker, rate-limit, bulkhead) to vProx proxy design | None |
 
 **Auto-invoke rules:**
 - Any test generation request → **polyglot-test-agent** (before writing tests manually)
@@ -433,6 +443,11 @@ Copilot session. Invoke them explicitly when the trigger conditions match. Do no
 - Any documentation update > 1 file → **documentation-writer**
 - Any "verify", "QA", "double-check" agent output request → **doublecheck**
 - Any agent chain / orchestration design → **agent-governance** + **model-recommendation**
+- Any "evaluate", "improve", "optimize" agent output quality → **agentic-eval**
+- Any GitHub issue creation, triage, or linking → **github-issues**
+- Any `gh` CLI operation or GitHub API workflow → **gh-cli**
+- Any architectural decision (config, module, theme) → **create-architectural-decision-record**
+- Any "create branch", "new feature branch", "hotfix" → **git-flow-branch-creator**
 
 ---
 

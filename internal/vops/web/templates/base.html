@@ -166,7 +166,7 @@
     localStorage.setItem('vprox_theme', theme);
     _swapFavicons(theme);
     // Persist to server config + set cookie.
-    fetch('/settings/api/config/preferences', {
+    fetch('{{.BasePath}}/settings/api/config/preferences', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({theme: theme})

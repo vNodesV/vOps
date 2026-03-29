@@ -603,6 +603,7 @@
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
   const apiPath = (path) => `${BASE}${path}`;
+  window.apiPath = apiPath; // expose for out-of-IIFE helpers (settingsGenAPIKey, settingsHashPassword)
 
   const forms = {
     ports: $("#settings-form-ports"),
