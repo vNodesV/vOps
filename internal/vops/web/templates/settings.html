@@ -12,6 +12,7 @@
     <a href="#sec-fleet">Fleet Defaults</a>
     <a href="#sec-infra">Infra Datacenters</a>
     <a href="#sec-backup">Backups</a>
+    <a href="#sec-access">SSH Access Keys</a>
     <div id="settings-status" class="settings-status">Loading current configuration…</div>
     <button id="settings-apply-btn" type="button" class="settings-pill settings-pill-save" disabled>APPLY CHANGES</button>
     <p class="settings-apply-note">Turns green when saved changes need runtime apply/restart.</p>
@@ -260,6 +261,62 @@
           <table class="settings-list-table">
             <tbody id="settings-list-backup"></tbody>
           </table>
+        </div>
+      </details>
+    </article>
+
+    <!-- ── SSH Access Keys ─────────────────────────────────────────────── -->
+    <article id="sec-access" class="v-block settings-block">
+      <details open>
+        <summary>
+          <span class="v-block-title">SSH Access Keys</span>
+        </summary>
+        <div class="v-block-body">
+          <p style="font-size:0.85rem;color:var(--vn-text-muted);margin-bottom:1rem;">
+            vOps uses an <strong>ed25519</strong> key pair stored in <code>~/.vprox/secret/</code>.
+            Generate a key, then add the public key to <code>~/.ssh/authorized_keys</code>
+            on each VM or host that vOps manages via SSH.
+          </p>
+
+          <!-- Public key display -->
+          <div class="ssh-key-section">
+            <div style="font-size:0.75rem;font-weight:600;letter-spacing:0.05em;opacity:0.55;margin-bottom:0.5rem;">PUBLIC KEY</div>
+            <div class="ssh-pubkey-wrap">
+              <textarea id="ssh-pubkey-display" class="ssh-pubkey-box" readonly
+                placeholder="No key found — click Generate below to create one."></textarea>
+              <div class="ssh-pubkey-actions">
+                <button type="button" class="v-block-btn key-gen-btn" id="ssh-gen-btn"
+                  onclick="settingsGenSSHKey()">⟳ Generate New Key</button>
+                <button type="button" class="v-block-btn key-gen-copy" id="ssh-copy-btn"
+                  onclick="settingsCopySSHKey()" title="Copy public key to clipboard" disabled>⎘ Copy</button>
+              </div>
+            </div>
+            <div id="ssh-key-path" style="font-size:0.75rem;color:var(--vn-text-muted);margin-top:0.4rem;"></div>
+            <div class="key-gen-hint" style="margin-top:0.6rem;">
+              ⚠ Generating a new key <strong>replaces</strong> the existing one.
+              Update <code>authorized_keys</code> on all managed hosts after regenerating.
+            </div>
+          </div>
+
+          <!-- Authorized_keys instructions -->
+          <details style="margin-top:1.2rem;">
+            <summary style="font-size:0.8rem;cursor:pointer;color:var(--vn-text-muted);">How to add to authorized_keys</summary>
+            <div style="margin-top:0.6rem;font-size:0.82rem;line-height:1.7;color:var(--vn-text-muted);">
+              <ol style="margin:0;padding-left:1.2rem;">
+                <li>Generate a key above and copy the public key.</li>
+                <li>On each VM/host, run:<br>
+                  <code style="display:block;margin:.3rem 0;padding:.3rem .6rem;background:var(--vn-bg-card);border-radius:4px;font-size:0.78rem;">
+                    echo "ssh-ed25519 AAAA..." >> ~/.ssh/authorized_keys
+                  </code>
+                </li>
+                <li>Set the private key path in <em>Fleet Defaults → ssh_key_path</em>:<br>
+                  <code style="display:block;margin:.3rem 0;padding:.3rem .6rem;background:var(--vn-bg-card);border-radius:4px;font-size:0.78rem;">
+                    ~/.vprox/secret/vops_ssh_key
+                  </code>
+                </li>
+              </ol>
+            </div>
+          </details>
         </div>
       </details>
     </article>
@@ -2176,6 +2233,60 @@ function settingsCopyKey(inputId) {
   });
 }
 
+// ── SSH key management ────────────────────────────────────────────────────────
+async function settingsLoadSSHPubKey() {
+  try {
+    const res = await fetch(apiPath('/settings/api/ssh-pub-key'));
+    const data = await res.json();
+    const ta = document.getElementById('ssh-pubkey-display');
+    const copyBtn = document.getElementById('ssh-copy-btn');
+    const pathEl = document.getElementById('ssh-key-path');
+    if (!ta) return;
+    if (data.exists && data.pub_key) {
+      ta.value = data.pub_key;
+      if (copyBtn) copyBtn.disabled = false;
+      if (pathEl) pathEl.textContent = '🔑 Key stored at ~/.vprox/secret/vops_ssh_key';
+    } else {
+      ta.value = '';
+      ta.placeholder = 'No key found — click Generate below to create one.';
+      if (copyBtn) copyBtn.disabled = true;
+      if (pathEl) pathEl.textContent = '';
+    }
+  } catch(e) { /* non-fatal */ }
+}
+
+async function settingsGenSSHKey() {
+  const btn = document.getElementById('ssh-gen-btn');
+  const ta = document.getElementById('ssh-pubkey-display');
+  const copyBtn = document.getElementById('ssh-copy-btn');
+  const pathEl = document.getElementById('ssh-key-path');
+  if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
+  try {
+    const res = await fetch(apiPath('/settings/api/gen-ssh-key'), {method: 'POST'});
+    const data = await res.json();
+    if (data.pub_key) {
+      if (ta) { ta.value = data.pub_key; }
+      if (copyBtn) copyBtn.disabled = false;
+      if (pathEl) pathEl.textContent = '✓ Key stored at ' + (data.path || '~/.vprox/secret/vops_ssh_key');
+    } else {
+      alert('Error: ' + (data.error || 'unknown'));
+    }
+  } catch(e) {
+    alert('Failed to generate SSH key: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '⟳ Generate New Key'; }
+  }
+}
+
+function settingsCopySSHKey() {
+  const ta = document.getElementById('ssh-pubkey-display');
+  const btn = document.getElementById('ssh-copy-btn');
+  if (!ta || !ta.value) return;
+  navigator.clipboard.writeText(ta.value).then(() => {
+    if (btn) { btn.textContent = '✓ Copied!'; setTimeout(() => btn.textContent = '⎘ Copy', 1800); }
+  });
+}
+
 // ── Preferences: localStorage persistence ────────────────────────────────
 // Refresh interval and column visibility are stored client-side only (v1.4.0).
 // Theme is handled by setTheme() in base.html.
@@ -2206,6 +2317,9 @@ function loadPrefs() {
   });
 }
 
-document.addEventListener('DOMContentLoaded', loadPrefs);
+document.addEventListener('DOMContentLoaded', function() {
+  loadPrefs();
+  settingsLoadSSHPubKey();
+});
 </script>
 {{end}}

@@ -2,9 +2,11 @@ package web
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"io"
 	"log"
@@ -16,12 +18,108 @@ import (
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/crypto/ssh"
 
 	"github.com/pelletier/go-toml/v2"
 	"github.com/vNodesV/vProx/internal/configwizard"
 	fleetcfg "github.com/vNodesV/vProx/internal/fleet/config"
 	vopscfg "github.com/vNodesV/vProx/internal/vops/config"
 )
+
+// vopsSecretDir returns the path to ~/.vprox/secret and ensures it exists (0700).
+func vopsSecretDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Join(home, ".vprox", "secret")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return "", err
+	}
+	return dir, nil
+}
+
+// sshKeyPaths returns the private and public key file paths inside the secret dir.
+func sshKeyPaths() (priv, pub string, err error) {
+	dir, err := vopsSecretDir()
+	if err != nil {
+		return "", "", err
+	}
+	return filepath.Join(dir, "vops_ssh_key"),
+		filepath.Join(dir, "vops_ssh_key.pub"),
+		nil
+}
+
+// handleAPIGetSSHPubKey returns the current vOps SSH public key (if any).
+// GET /settings/api/ssh-pub-key → {"pub_key":"ssh-ed25519 ...", "exists":true}
+func (s *Server) handleAPIGetSSHPubKey(w http.ResponseWriter, _ *http.Request) {
+	_, pubPath, err := sshKeyPaths()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	data, err := os.ReadFile(pubPath)
+	if os.IsNotExist(err) {
+		writeJSON(w, http.StatusOK, map[string]any{"exists": false, "pub_key": ""})
+		return
+	}
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"exists": true, "pub_key": strings.TrimSpace(string(data))})
+}
+
+// handleAPIGenSSHKey generates a new ed25519 SSH key pair, stores it in
+// ~/.vprox/secret/ and returns the public key.
+// POST /settings/api/gen-ssh-key → {"pub_key":"ssh-ed25519 ...", "path":"~/.vprox/secret/vops_ssh_key"}
+func (s *Server) handleAPIGenSSHKey(w http.ResponseWriter, _ *http.Request) {
+	privPath, pubPath, err := sshKeyPaths()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "cannot create secret dir: " + err.Error()})
+		return
+	}
+
+	// Generate ed25519 key pair.
+	pubKey, privKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "key generation failed: " + err.Error()})
+		return
+	}
+
+	// Marshal private key to OpenSSH PEM format.
+	privPEM, err := ssh.MarshalPrivateKey(privKey, "vops_ssh_key")
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "marshal private key: " + err.Error()})
+		return
+	}
+	privBytes := pem.EncodeToMemory(privPEM)
+
+	// Marshal public key to OpenSSH authorized_keys format.
+	sshPub, err := ssh.NewPublicKey(pubKey)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "marshal public key: " + err.Error()})
+		return
+	}
+	pubBytes := ssh.MarshalAuthorizedKey(sshPub)
+
+	// Write private key (0600).
+	if err := os.WriteFile(privPath, privBytes, 0600); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "write private key: " + err.Error()})
+		return
+	}
+	// Write public key (0644).
+	if err := os.WriteFile(pubPath, pubBytes, 0644); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "write public key: " + err.Error()})
+		return
+	}
+
+	log.Printf("[vops] SSH key pair generated → %s", privPath)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"pub_key": strings.TrimSpace(string(pubBytes)),
+		"path":    privPath,
+	})
+}
 
 type settingsData struct {
 	pageBase

@@ -168,6 +168,8 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	mux.Handle("POST /settings/api/config/preferences", s.requireSession(http.HandlerFunc(s.handleAPISettingsPreferences)))
 	mux.Handle("GET /settings/api/gen-api-key", s.requireSession(http.HandlerFunc(s.handleAPIGenAPIKey)))
 	mux.Handle("POST /settings/api/hash-password", s.requireSession(http.HandlerFunc(s.handleAPIHashPassword)))
+	mux.Handle("GET /settings/api/ssh-pub-key", s.requireSession(http.HandlerFunc(s.handleAPIGetSSHPubKey)))
+	mux.Handle("POST /settings/api/gen-ssh-key", s.requireSession(http.HandlerFunc(s.handleAPIGenSSHKey)))
 
 	// API routes — session-protected.
 	mux.Handle("POST /api/v1/ingest", s.requireSession(http.HandlerFunc(s.handleAPIIngest)))

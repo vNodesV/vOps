@@ -1234,6 +1234,27 @@ html[data-theme="light-blue"] .v-block > details > summary:hover {
   line-height: 1.35;
   margin-top: .1rem;
 }
+
+/* SSH Access Keys section */
+.ssh-key-section { margin-top: 0.2rem; }
+.ssh-pubkey-wrap { display: flex; flex-direction: column; gap: 0.5rem; }
+.ssh-pubkey-box {
+  width: 100%;
+  min-height: 72px;
+  max-height: 90px;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.73rem;
+  line-height: 1.5;
+  resize: none;
+  background: var(--vn-bg-card);
+  border: 1px solid var(--vn-border);
+  border-radius: 4px;
+  color: var(--vn-text);
+  padding: 0.5rem 0.7rem;
+  word-break: break-all;
+}
+.ssh-pubkey-box::placeholder { color: var(--vn-text-muted); opacity: 0.6; font-family: var(--font-sans); }
+.ssh-pubkey-actions { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
 .settings-import-row {
   margin: .35rem 0 .65rem;
 }
