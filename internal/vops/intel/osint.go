@@ -248,8 +248,29 @@ func (e *Enricher) OSINTStream(ctx context.Context, ip string, emit func(EnrichP
 			emit(EnrichProgress{Step: "proto_none", Msg: "Protocol: no HTTP/HTTPS response", Pct: 65})
 		}
 
+		// Cosmos RPC — if the concurrent probe didn't get a moniker but a cosmos
+		// port is confirmed open by TCP scan, do a sequential retry with a longer
+		// timeout now that we know the port is actually reachable.
+		if osint.Moniker == "" && osint.ChainID == "" && cosmosPortOpen(osint.OpenPorts) {
+			emit(EnrichProgress{Step: "cosmos_retry", Msg: "Cosmos port open — retrying RPC probe…", Pct: 72})
+			rpcClient := &http.Client{Timeout: 6 * time.Second}
+			for _, base := range []string{
+				"http://" + ip + ":26657",
+				"https://" + ip + ":26657",
+			} {
+				m, c, err := checkCosmosRPC(ctx, rpcClient, base)
+				if err == nil {
+					osint.Moniker = m
+					osint.ChainID = c
+					break
+				}
+			}
+		}
+
 		if osint.Moniker != "" || osint.ChainID != "" {
 			emit(EnrichProgress{Step: "cosmos_done", Msg: fmt.Sprintf("Cosmos node: %s / %s", osint.Moniker, osint.ChainID), Pct: 78})
+		} else if cosmosPortOpen(osint.OpenPorts) {
+			emit(EnrichProgress{Step: "cosmos_port", Msg: "Cosmos ports open (RPC probe unreachable — node detected by ports)", Pct: 78})
 		} else {
 			emit(EnrichProgress{Step: "cosmos_none", Msg: "Cosmos RPC: not a node", Pct: 78})
 		}
@@ -300,6 +321,8 @@ func (e *Enricher) OSINTStream(ctx context.Context, ip string, emit func(EnrichP
 		summary := fmt.Sprintf("%d port(s) open", len(osint.OpenPorts))
 		if osint.Moniker != "" {
 			summary += " \u2022 Cosmos: " + osint.Moniker
+		} else if cosmosPortOpen(osint.OpenPorts) {
+			summary += " \u2022 Cosmos node (ports detected)"
 		}
 		emit(EnrichProgress{Step: "done", Msg: "Complete \u2022 " + summary, Pct: 100})
 		return acc, nil
@@ -374,4 +397,15 @@ func checkIPInfo(ctx context.Context, client *http.Client, ip string) (*ipAPIRes
 		return nil, fmt.Errorf("ip-api: status %s", result.Status)
 	}
 	return &result, nil
+}
+
+// cosmosPortOpen returns true if the open ports list contains a canonical
+// Cosmos SDK port (26657 CometRPC or 26656 P2P).
+func cosmosPortOpen(ports []int) bool {
+	for _, p := range ports {
+		if p == 26657 || p == 26656 {
+			return true
+		}
+	}
+	return false
 }

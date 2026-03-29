@@ -63,6 +63,7 @@ type accountDetailData struct {
 	ThreatFlagsArr []string
 	Ports          []portInfo // pre-computed port status for display
 	ShodanResult   *intel.ShodanResult
+	IsCosmosNode   bool // true if Moniker/ChainID set OR cosmos ports confirmed open
 }
 
 // portInfo holds display state for a single scanned port.
@@ -96,6 +97,19 @@ func buildPortInfo(openPortsJSON string) []portInfo {
 		out[i] = portInfo{Port: sp.Port, Label: sp.Label, Open: openSet[sp.Port]}
 	}
 	return out
+}
+
+// hasCosmosPort returns true if the JSON-encoded open-ports list contains a
+// canonical Cosmos SDK port (26657 CometRPC or 26656 P2P).
+func hasCosmosPort(openPortsJSON string) bool {
+	var open []int
+	_ = json.Unmarshal([]byte(openPortsJSON), &open)
+	for _, p := range open {
+		if p == 26657 || p == 26656 {
+			return true
+		}
+	}
+	return false
 }
 
 // newPageBase returns a pageBase initialized from server config.
@@ -253,6 +267,7 @@ func (s *Server) handleAccountDetail(w http.ResponseWriter, r *http.Request) {
 		ThreatFlagsArr: flags,
 		Ports:          buildPortInfo(account.OpenPorts),
 		ShodanResult:   intel.ParseShodanJSON(account.ShodanData),
+		IsCosmosNode:   account.Moniker != "" || account.ChainID != "" || hasCosmosPort(account.OpenPorts),
 	}
 	data.pageBase.CurrentPage = "accounts"
 	if err := s.pages["account.html"].ExecuteTemplate(w, "base", data); err != nil {

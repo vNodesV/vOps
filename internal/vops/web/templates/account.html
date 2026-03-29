@@ -53,10 +53,14 @@
         {{end}}
         {{if not .Ports}}<em style="font-size:0.8rem;opacity:0.5;">No scan data yet</em>{{end}}
       </div>
-      {{if .Account.Moniker}}
+      {{if .IsCosmosNode}}
       <div style="margin-top:1rem;font-size:0.85rem;">
         <div style="font-size:0.75rem;opacity:0.55;margin-bottom:0.4rem;font-weight:600;letter-spacing:0.05em;">COSMOS NODE</div>
+        {{if .Account.Moniker}}
         <div><strong>{{.Account.Moniker}}</strong> &nbsp;·&nbsp; {{.Account.ChainID}}</div>
+        {{else}}
+        <div style="opacity:0.6;font-size:0.8rem;">Detected via ports — RPC probe unreachable</div>
+        {{end}}
       </div>
       {{end}}
     </div>
