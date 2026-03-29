@@ -1906,18 +1906,19 @@ html {
   --vn-text-muted:   #888888;
   --vn-border:       rgba(0, 255, 0, 0.10);
   /* Pico overrides */
-  --pico-background-color:              var(--vn-bg);
-  --pico-card-background-color:         var(--vn-bg-card);
-  --pico-card-border-color:             var(--vn-green-border);
-  --pico-primary:                       var(--vn-green);
-  --pico-primary-hover:                 var(--vn-green-hover);
-  --pico-color:                         var(--vn-text);
-  --pico-muted-color:                   var(--vn-text-muted);
-  --pico-muted-border-color:            var(--vn-border);
-  --pico-table-border-color:            var(--vn-border);
-  --pico-form-element-background-color: rgba(0, 255, 0, 0.04);
-  --pico-form-element-border-color:     var(--vn-green-border);
-  --pico-form-element-color:            var(--vn-text);
+  --pico-background-color:                  var(--vn-bg);
+  --pico-card-background-color:             var(--vn-bg-card);
+  --pico-card-sectioning-background-color:  var(--vn-green-dim);
+  --pico-card-border-color:                 var(--vn-green-border);
+  --pico-primary:                           var(--vn-green);
+  --pico-primary-hover:                     var(--vn-green-hover);
+  --pico-color:                             var(--vn-text);
+  --pico-muted-color:                       var(--vn-text-muted);
+  --pico-muted-border-color:                var(--vn-border);
+  --pico-table-border-color:                var(--vn-border);
+  --pico-form-element-background-color:     rgba(0, 255, 0, 0.04);
+  --pico-form-element-border-color:         var(--vn-green-border);
+  --pico-form-element-color:                var(--vn-text);
 }
 
 /* ── Theme 2: Dark Blue ── */
@@ -1935,18 +1936,19 @@ html {
   --vn-text-muted:   #7f8cb0;
   --vn-border:       rgba(79, 195, 247, 0.12);
   /* Pico overrides */
-  --pico-background-color:              var(--vn-bg);
-  --pico-card-background-color:         var(--vn-bg-card);
-  --pico-card-border-color:             var(--vn-green-border);
-  --pico-primary:                       var(--vn-green);
-  --pico-primary-hover:                 var(--vn-green-hover);
-  --pico-color:                         var(--vn-text);
-  --pico-muted-color:                   var(--vn-text-muted);
-  --pico-muted-border-color:            var(--vn-border);
-  --pico-table-border-color:            var(--vn-border);
-  --pico-form-element-background-color: rgba(79, 195, 247, 0.05);
-  --pico-form-element-border-color:     var(--vn-green-border);
-  --pico-form-element-color:            var(--vn-text);
+  --pico-background-color:                  var(--vn-bg);
+  --pico-card-background-color:             var(--vn-bg-card);
+  --pico-card-sectioning-background-color:  var(--vn-green-dim);
+  --pico-card-border-color:                 var(--vn-green-border);
+  --pico-primary:                           var(--vn-green);
+  --pico-primary-hover:                     var(--vn-green-hover);
+  --pico-color:                             var(--vn-text);
+  --pico-muted-color:                       var(--vn-text-muted);
+  --pico-muted-border-color:                var(--vn-border);
+  --pico-table-border-color:                var(--vn-border);
+  --pico-form-element-background-color:     rgba(79, 195, 247, 0.05);
+  --pico-form-element-border-color:         var(--vn-green-border);
+  --pico-form-element-color:                var(--vn-text);
 }
 
 /* ── vNodes body background ── */
@@ -2096,6 +2098,45 @@ html[data-theme="light-blue"] .settings-editor-host {
   background: rgba(21, 101, 192, 0.04) !important;
 }
 
+/* ── All themes: article > header (Pico card sectioning) — explicit overrides ── */
+/* Pico v2 uses --pico-card-sectioning-background-color for article headers;
+   adding --pico-card-sectioning-background-color to theme blocks handles most cases,
+   but an explicit rule ensures correct color/border even if Pico's specificity wins */
+html[data-theme="vnodes"] article > header,
+html[data-theme="vnodes"] article > footer,
+html[data-theme="dark-blue"] article > header,
+html[data-theme="dark-blue"] article > footer {
+  background: var(--vn-green-dim) !important;
+  border-color: var(--vn-green-border) !important;
+  color: var(--vn-text) !important;
+}
+html[data-theme="light-blue"] article > header,
+html[data-theme="light-blue"] article > footer {
+  background: rgba(21, 101, 192, 0.07) !important;
+  border-color: rgba(21, 101, 192, 0.18) !important;
+  color: #1a237e !important;
+}
+
+/* ── All themes: Investigate / Enrich popup modal ── */
+html[data-theme="vnodes"] .enrich-popup,
+html[data-theme="dark-blue"] .enrich-popup {
+  background: var(--vn-bg-card) !important;
+  border-color: var(--vn-green-border) !important;
+  color: var(--vn-text) !important;
+}
+html[data-theme="light-blue"] .enrich-popup {
+  background: #ffffff !important;
+  border-color: rgba(21, 101, 192, 0.20) !important;
+  color: #263238 !important;
+}
+/* Popup inner text/labels inherit theme color */
+html[data-theme="vnodes"] .enrich-popup h4,
+html[data-theme="vnodes"] .enrich-popup .inv-phase-label,
+html[data-theme="dark-blue"] .enrich-popup h4,
+html[data-theme="dark-blue"] .enrich-popup .inv-phase-label {
+  color: var(--vn-text-muted) !important;
+}
+
 /* ── Theme 3: Light Blue (Classic) ── */
 [data-theme="light-blue"] {
   color-scheme: light;
@@ -2111,18 +2152,19 @@ html[data-theme="light-blue"] .settings-editor-host {
   --vn-text-muted:   #455a64;
   --vn-border:       rgba(0, 0, 0, 0.12);
   /* Pico overrides */
-  --pico-background-color:              var(--vn-bg);
-  --pico-card-background-color:         var(--vn-bg-card);
-  --pico-card-border-color:             var(--vn-green-border);
-  --pico-primary:                       var(--vn-green);
-  --pico-primary-hover:                 var(--vn-green-hover);
-  --pico-color:                         var(--vn-text);
-  --pico-muted-color:                   var(--vn-text-muted);
-  --pico-muted-border-color:            var(--vn-border);
-  --pico-table-border-color:            var(--vn-border);
-  --pico-form-element-background-color: #ffffff;
-  --pico-form-element-border-color:     rgba(21, 101, 192, 0.30);
-  --pico-form-element-color:            #263238;
+  --pico-background-color:                  var(--vn-bg);
+  --pico-card-background-color:             var(--vn-bg-card);
+  --pico-card-sectioning-background-color:  rgba(21, 101, 192, 0.07);
+  --pico-card-border-color:                 var(--vn-green-border);
+  --pico-primary:                           var(--vn-green);
+  --pico-primary-hover:                     var(--vn-green-hover);
+  --pico-color:                             var(--vn-text);
+  --pico-muted-color:                       var(--vn-text-muted);
+  --pico-muted-border-color:                var(--vn-border);
+  --pico-table-border-color:                var(--vn-border);
+  --pico-form-element-background-color:     #ffffff;
+  --pico-form-element-border-color:         rgba(21, 101, 192, 0.30);
+  --pico-form-element-color:                #263238;
 }
 
 /* ── Light Blue: body ── */
