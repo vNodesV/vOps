@@ -189,13 +189,14 @@
         <a href="{{.BasePath}}/accounts"{{if eq .CurrentPage "accounts"}} class="active"{{end}}>Intel</a>
         <a href="{{.BasePath}}/settings"{{if eq .CurrentPage "settings"}} class="active"{{end}}>Settings</a>
       </div>
-      <span class="nav-spacer"></span>
-      <span class="nav-chain-badge" title="Web3 / dApps — coming soon">⬡ Web3</span>
-      {{if .AuthEnabled}}
-      <form method="POST" action="{{.BasePath}}/logout" class="nav-logout-form">
-        <button type="submit" class="nav-logout-btn">↪ Logout</button>
-      </form>
-      {{end}}
+      <div class="nav-right">
+        <span class="nav-chain-badge" title="Web3 / dApps — coming soon">⬡ Web3</span>
+        {{if .AuthEnabled}}
+        <form method="POST" action="{{.BasePath}}/logout" class="nav-logout-form">
+          <button type="submit" class="nav-logout-btn">↪ Logout</button>
+        </form>
+        {{end}}
+      </div>
     </div>
   </nav>
   <main class="container">

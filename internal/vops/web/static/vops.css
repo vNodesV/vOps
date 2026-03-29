@@ -74,35 +74,31 @@ input[type="checkbox"] {
 /* ── Page nav — full-width sticky bar with framed inner content ── */
 .page-nav {
   border-bottom: 1px solid var(--vn-green-border);
-  position: sticky;
-  top: 0;
-  z-index: 9;
   background: var(--vn-bg-card);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
 
-/* Inner wrapper matches .container width */
+/* 3-column grid: left=logo  center=nav-links  right=actions */
 .nav-inner {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0 1.2rem;
-  display: flex;
+  padding: 4px 1.2rem;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  gap: 0.2rem;
 }
 
 .vops-logo-link {
   display: block;
   text-decoration: none;
-  flex-shrink: 0;
-  margin-right: .6rem;
+  line-height: 0;
 }
 
-/* Logo: sized to 80px height, auto width; CSS bg-image swapped per theme */
+/* Logo: slim — height matches menu bar; CSS bg-image swapped per theme */
 .vops-logo {
-  height: 80px;
-  width: auto;
+  height: 38px;
+  width: 88px; /* aspect-ratio of the logo PNG ~2.3:1 */
   background: url('2026_logos/default/logo/logo.png') left center / contain no-repeat;
 }
 [data-theme="dark-blue"] .vops-logo {
@@ -112,10 +108,11 @@ input[type="checkbox"] {
   background-image: url('2026_logos/white_blue/logo/logo.png');
 }
 
-/* Nav links group */
+/* Center column — nav links */
 .nav-links {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.15rem;
 }
 .nav-links a {
@@ -130,7 +127,13 @@ input[type="checkbox"] {
 .nav-links a:hover { color: var(--vn-text); background: var(--vn-green-dim); }
 .nav-links a.active { font-weight: 700; color: var(--vn-green); background: var(--vn-green-dim); }
 
-.nav-spacer { flex: 1; }
+/* Right column — badge + logout */
+.nav-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}
 .nav-chain-badge {
   font-size: .72rem;
   font-weight: 500;
