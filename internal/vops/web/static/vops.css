@@ -1246,15 +1246,20 @@ html[data-theme="light-blue"] .v-block > details > summary:hover {
   font-size: 0.73rem;
   line-height: 1.5;
   resize: none;
-  background: var(--vn-bg-card);
-  border: 1px solid var(--vn-border);
+  background: var(--vn-bg-card) !important;
+  border: 1px solid var(--vn-border) !important;
   border-radius: 4px;
-  color: var(--vn-text);
+  color: var(--vn-text) !important;
   padding: 0.5rem 0.7rem;
   word-break: break-all;
 }
 .ssh-pubkey-box::placeholder { color: var(--vn-text-muted); opacity: 0.6; font-family: var(--font-sans); }
 .ssh-pubkey-actions { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+html[data-theme="light-blue"] .ssh-pubkey-box {
+  background: rgba(255,255,255,0.92) !important;
+  color: #263238 !important;
+  border-color: rgba(21,101,192,0.25) !important;
+}
 .settings-import-row {
   margin: .35rem 0 .65rem;
 }
