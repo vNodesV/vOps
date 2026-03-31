@@ -529,7 +529,7 @@ padding: 0.2rem 0.6rem;
 border-radius: 3px;
 border: 1px solid var(--vn-green);
 cursor: pointer;
-background: #001700;
+background: var(--vn-btn-bg, #001700);
 color: var(--vn-green);
 transition: background 0.15s;
 }
@@ -803,8 +803,8 @@ border-radius: 3px;
   min-height: 2.5rem;
 }
 .chain-card {
-  background: var(--vn-card-bg, #1a1a1a);
-  border: 1px solid rgba(255,255,255,.08);
+  background: var(--vn-bg-card, #1a1a1a);
+  border: 1px solid var(--vn-border, rgba(255,255,255,.08));
   border-radius: 8px;
   padding: .6rem 1rem;
   min-width: 160px;
@@ -1195,6 +1195,34 @@ html[data-theme="light-blue"] .v-block > details > summary:hover {
   gap: .5rem;
   flex-wrap: wrap;
 }
+
+/* ── Smart input widths — base settings-grid ── */
+/* Port numbers (max 65535 = 5 digits) */
+.settings-grid input[type="number"][max="65535"],
+.settings-grid input[name$="port"],
+.settings-grid input[name*="_port"] {
+  max-width: 80px !important;
+  flex: none !important;
+}
+/* Short numeric fields */
+.settings-grid input[type="number"]:not([max="65535"]) {
+  max-width: 110px !important;
+  flex: none !important;
+}
+/* Country / provider 2-letter codes */
+.settings-grid input[name*="country"],
+.settings-grid input[name*="provider"] {
+  max-width: 70px !important;
+  flex: none !important;
+}
+/* URL / path / key fields — wider */
+.settings-grid input[name$="_url"],
+.settings-grid input[name$="_path"],
+.settings-grid input[name$="_key"] {
+  max-width: 100% !important;
+  flex: 1 !important;
+}
+
 
 /* ── API-key / password-hash generation row ── */
 .key-gen-row {
