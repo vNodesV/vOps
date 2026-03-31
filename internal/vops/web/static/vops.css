@@ -318,7 +318,7 @@ letter-spacing: 0.01em;
 .threat-bar {
 height: 6px;
 border-radius: 3px;
-background: rgba(255,255,255,0.1);
+background: var(--vn-border, rgba(255,255,255,0.1));
 overflow: hidden;
 }
 .threat-fill {
@@ -412,7 +412,7 @@ z-index: 9999;
 }
 .enrich-popup {
 background: var(--pico-card-background-color, #1a1a2e);
-border: 1px solid rgba(255,255,255,0.08);
+border: 1px solid var(--vn-border, rgba(255,255,255,0.08));
 border-radius: 8px;
 padding: 1.5rem 1.75rem;
 width: min(420px, 92vw);
@@ -434,7 +434,7 @@ min-height: 1.3em;
 .enrich-bar-wrap {
 height: 5px;
 border-radius: 3px;
-background: rgba(255,255,255,0.08);
+background: var(--vn-border, rgba(255,255,255,0.08));
 overflow: hidden;
 margin-bottom: 1rem;
 }
@@ -466,7 +466,7 @@ gap: 0.2rem;
 margin-top: 0.9rem;
 width: 100%;
 padding: 0.4rem;
-border: 1px solid rgba(255,255,255,0.12);
+border: 1px solid var(--vn-border, rgba(255,255,255,0.12));
 border-radius: 4px;
 background: transparent;
 color: inherit;
@@ -475,7 +475,7 @@ font-size: 0.78rem;
 opacity: 0.6;
 display: none;
 }
-.enrich-dismiss:hover { opacity: 1; background: rgba(255,255,255,0.06); }
+.enrich-dismiss:hover { opacity: 1; background: var(--vn-green-dim, rgba(255,255,255,0.06)); }
 .enrich-dismiss.visible { display: block; }
 
 /* Investigate popup phase labels */
@@ -498,10 +498,10 @@ margin-bottom: 0.85rem;
 @media (max-width: 700px) { .intel-grid { grid-template-columns: 1fr; } }
 
 .intel-card {
-border: 1px solid var(--border, rgba(255,255,255,0.08));
+border: 1px solid var(--vn-border, rgba(255,255,255,0.08));
 border-radius: 6px;
 padding: 0.85rem;
-background: var(--card-bg, rgba(255,255,255,0.02));
+background: var(--vn-bg-card, rgba(255,255,255,0.02));
 }
 .intel-card-header {
 display: flex;
@@ -552,12 +552,13 @@ gap: 2px;
 min-width: 50px;
 padding: 0.3rem 0.4rem;
 border-radius: 5px;
-border: 1px solid rgba(255,255,255,0.08);
+border: 1px solid var(--vn-border, rgba(255,255,255,0.08));
 font-size: 0.68rem;
 }
 .port-open   { background: rgba(0,255,0,0.06); border-color: rgba(0,255,0,0.25); }
 .port-closed { background: rgba(255,255,255,0.02); }
 .port-dot    { font-size: 0.9rem; line-height: 1; }
+
 .port-open  .port-dot  { color: var(--vn-green); }
 .port-closed .port-dot { color: #6c757d; }
 .port-num   { font-weight: 700; font-size: 0.72rem; }
@@ -656,7 +657,7 @@ white-space: nowrap;
 font-size: 0.78rem;
 padding: 0.15rem 0.4rem;
 border-radius: 4px;
-border: 1px solid rgba(255,255,255,0.15);
+border: 1px solid var(--vn-border, rgba(255,255,255,0.15));
 background: transparent;
 color: inherit;
 cursor: pointer;
@@ -669,10 +670,10 @@ min-width: 60px;
 display: flex;
 align-items: center;
 gap: 0;
-border: 1px solid rgba(255,255,255,0.15);
+border: 1px solid var(--vn-border, rgba(255,255,255,0.15));
 border-radius: 5px;
 overflow: hidden;
-background: rgba(255,255,255,0.04);
+background: var(--vn-bg-card, rgba(255,255,255,0.04));
 }
 .search-input {
 border: none;
@@ -1011,8 +1012,8 @@ html[data-theme="light-blue"] .v-block > details > summary:hover {
   font-size: .59rem;
   padding: .03rem .22rem;
   border-radius: 3px;
-  border: 1px solid rgba(255,255,255,.12);
-  color: rgba(255,255,255,.22);
+  border: 1px solid var(--vn-border, rgba(255,255,255,.12));
+  color: var(--vn-text-muted, rgba(255,255,255,.22));
   display: inline-block;
   line-height: 1.5;
   margin: 0 1px;
@@ -2338,6 +2339,35 @@ html[data-theme="light-blue"] .vlog-footer {
 html[data-theme="light-blue"] ::-webkit-scrollbar-track { background: #e0e6ed; }
 html[data-theme="light-blue"] ::-webkit-scrollbar-thumb { background: #90a4ae; border-radius: 4px; }
 html[data-theme="light-blue"] ::-webkit-scrollbar-thumb:hover { background: #607d8b; }
+
+/* ── Light Blue: search bar ── */
+html[data-theme="light-blue"] .search-wrap {
+  border-color: rgba(21, 101, 192, 0.22) !important;
+  background: rgba(21, 101, 192, 0.03) !important;
+}
+
+/* ── Light Blue: service pills (inactive base state) ── */
+html[data-theme="light-blue"] .svc-pill {
+  border-color: rgba(0, 0, 0, 0.18);
+  color: rgba(0, 0, 0, 0.45);
+}
+
+/* ── Light Blue: investigate popup internals ── */
+html[data-theme="light-blue"] .enrich-bar-wrap {
+  background: rgba(21, 101, 192, 0.12);
+}
+html[data-theme="light-blue"] .enrich-dismiss {
+  border-color: rgba(21, 101, 192, 0.22) !important;
+}
+html[data-theme="light-blue"] .enrich-dismiss:hover {
+  background: rgba(21, 101, 192, 0.07) !important;
+}
+
+/* ── Light Blue: intel-card (account detail) ── */
+html[data-theme="light-blue"] .intel-card {
+  border-color: rgba(21, 101, 192, 0.18);
+  background: rgba(255, 255, 255, 0.85);
+}
 
 /* ── Light Blue: page-nav ── */
 html[data-theme="light-blue"] .page-nav {
