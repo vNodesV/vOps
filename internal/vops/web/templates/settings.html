@@ -286,7 +286,7 @@
                 placeholder="No key found — click Generate below to create one."></textarea>
               <div class="ssh-pubkey-actions">
                 <button type="button" class="v-block-btn key-gen-btn" id="ssh-gen-btn"
-                  onclick="settingsGenSSHKey()">⟳ Generate New Key</button>
+                  onclick="settingsGenSSHKey()">↺ Renew Key</button>
                 <button type="button" class="v-block-btn key-gen-copy" id="ssh-copy-btn"
                   onclick="settingsCopySSHKey()" title="Copy public key to clipboard" disabled>⎘ Copy</button>
               </div>
@@ -521,7 +521,7 @@
       <label class="full key-gen-row" title="Path to SSH private key for fleet push operations (vops.toml [vops.push.defaults].key_path)">push_ssh_key_path (fleet push default)
         <div class="key-gen-wrap">
           <input name="push_key_path" type="text">
-          <button type="button" class="v-block-btn key-gen-btn" onclick="settingsUseVOpsKey(this)" tabindex="-1">⬡ vOps Key</button>
+          <button type="button" class="v-block-btn key-gen-btn" onclick="settingsUseVOpsKey(this)" tabindex="-1">↺ New Key</button>
         </div>
       </label>
       <label>poll_interval_sec<input name="poll_interval_sec" type="number" min="1" value="60"></label>
@@ -539,7 +539,7 @@
       <label class="full key-gen-row" title="SSH private key path for fleet module to connect to VMs (fleet/settings.toml [ssh].key_path)">ssh_key_path (fleet SSH key) <span class="required-dot">*</span>
         <div class="key-gen-wrap">
           <input name="ssh_key_path" type="text" required>
-          <button type="button" class="v-block-btn key-gen-btn" onclick="settingsUseVOpsKey(this)" tabindex="-1">⬡ vOps Key</button>
+          <button type="button" class="v-block-btn key-gen-btn" onclick="settingsUseVOpsKey(this)" tabindex="-1">↺ New Key</button>
         </div>
       </label>
       <label>ssh_port<input name="ssh_port" type="number" min="1" max="65535" value="22"></label>
@@ -566,7 +566,7 @@
         <label class="full key-gen-row" title="SSH private key path for connecting to the proxy host server (infra.toml [host].ssh_key_path)">host_ssh_key_path (host SSH key)
           <div class="key-gen-wrap">
             <input name="host_ssh_key_path" type="text">
-            <button type="button" class="v-block-btn key-gen-btn" onclick="settingsUseVOpsKey(this)" tabindex="-1">⬡ vOps Key</button>
+            <button type="button" class="v-block-btn key-gen-btn" onclick="settingsUseVOpsKey(this)" tabindex="-1">↺ New Key</button>
           </div>
         </label>
       </div>
@@ -580,13 +580,13 @@
         <label class="full key-gen-row" title="SSH private key path for vProx instance authentication (infra.toml [vprox].key)">vprox_key (vProx SSH key path)
           <div class="key-gen-wrap">
             <input name="vprox_key" type="text" autocomplete="off">
-            <button type="button" class="v-block-btn key-gen-btn" onclick="settingsUseVOpsKey(this)" tabindex="-1">⬡ vOps Key</button>
+            <button type="button" class="v-block-btn key-gen-btn" onclick="settingsUseVOpsKey(this)" tabindex="-1">↺ New Key</button>
           </div>
         </label>
         <label class="full key-gen-row" title="Alternative SSH key path for fleet-managed vProx access (infra.toml [vprox].ssh_key_path)">vprox_ssh_key_path (vProx fleet key)
           <div class="key-gen-wrap">
             <input name="vprox_ssh_key_path" type="text">
-            <button type="button" class="v-block-btn key-gen-btn" onclick="settingsUseVOpsKey(this)" tabindex="-1">⬡ vOps Key</button>
+            <button type="button" class="v-block-btn key-gen-btn" onclick="settingsUseVOpsKey(this)" tabindex="-1">↺ New Key</button>
           </div>
         </label>
       </div>
@@ -632,7 +632,7 @@
       <label class="full key-gen-row" title="SSH private key path for this VM (used by fleet for deployments)">vm.key_path (VM SSH key)
         <div class="key-gen-wrap">
           <input class="vm-field" data-field="key_path" type="text">
-          <button type="button" class="v-block-btn key-gen-btn" onclick="settingsUseVOpsKey(this)" tabindex="-1">⬡ vOps Key</button>
+          <button type="button" class="v-block-btn key-gen-btn" onclick="settingsUseVOpsKey(this)" tabindex="-1">↺ New Key</button>
         </div>
       </label>
       <label>vm.datacenter<input class="vm-field" data-field="datacenter" type="text"></label>
@@ -2304,7 +2304,7 @@ async function settingsGenSSHKey() {
   } catch(e) {
     alert('Failed to generate SSH key: ' + e.message);
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '⟳ Generate New Key'; }
+    if (btn) { btn.disabled = false; btn.textContent = '↺ Renew Key'; }
   }
 }
 
@@ -2318,16 +2318,41 @@ function settingsCopySSHKey() {
 }
 
 // ── SSH key path quick-fill ────────────────────────────────────────────────────
-// Fills the nearest input in the same key-gen-wrap with the vOps SSH private key path.
-function settingsUseVOpsKey(btn) {
+// Generates a new vOps SSH key pair, fills the nearest path input, and
+// refreshes the public key display in the SSH Access Keys section.
+async function settingsUseVOpsKey(btn) {
   const wrap = btn.closest('.key-gen-wrap');
-  if (!wrap) return;
-  const inp = wrap.querySelector('input');
-  if (!inp) return;
-  inp.value = '~/.vprox/secret/vops_ssh_key';
-  inp.dispatchEvent(new Event('input', {bubbles: true}));
+  const inp = wrap ? wrap.querySelector('input') : null;
   const orig = btn.textContent;
-  btn.textContent = '✓ Set'; setTimeout(() => btn.textContent = orig, 1500);
+  btn.disabled = true; btn.textContent = '…';
+  try {
+    const res = await fetch(apiPath('/settings/api/gen-ssh-key'), {method: 'POST'});
+    const data = await res.json();
+    if (data.pub_key) {
+      // Fill the private key path in the field that triggered the action.
+      if (inp) {
+        inp.value = data.path || '~/.vprox/secret/vops_ssh_key';
+        inp.dispatchEvent(new Event('input', {bubbles: true}));
+      }
+      // Refresh public key display in the SSH Access Keys section (if on page).
+      const ta = document.getElementById('ssh-pubkey-display');
+      const copyBtn = document.getElementById('ssh-copy-btn');
+      const pathEl = document.getElementById('ssh-key-path');
+      if (ta) ta.value = data.pub_key;
+      if (copyBtn) copyBtn.disabled = false;
+      if (pathEl) pathEl.textContent = '✓ Key stored at ' + (data.path || '~/.vprox/secret/vops_ssh_key');
+      btn.textContent = '✓ Done';
+    } else {
+      alert('Error: ' + (data.error || 'unknown'));
+      btn.textContent = orig;
+    }
+  } catch(e) {
+    alert('Failed to generate key: ' + e.message);
+    btn.textContent = orig;
+  } finally {
+    btn.disabled = false;
+    setTimeout(() => { if (btn.textContent !== orig) btn.textContent = orig; }, 2000);
+  }
 }
 
 // ── Preferences: localStorage persistence ────────────────────────────────
