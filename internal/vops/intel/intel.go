@@ -305,7 +305,10 @@ func (e *Enricher) EnrichStream(ctx context.Context, ip string, force bool, emit
 			acc.ASN = shodanResult.ASN
 		}
 		acc.Hostnames = hostnamesToJSON(shodanResult.Hostnames)
-		acc.OpenPorts = portsToJSON(shodanResult.Ports)
+		// Merge Shodan ports with existing OSINT-scanned ports (union) so that
+		// directly-probed ports (e.g. cosmos 26657) are never silently discarded
+		// when Shodan hasn't indexed them yet.
+		acc.OpenPorts = mergeOpenPorts(acc.OpenPorts, shodanResult.Ports)
 	}
 
 	shodanFlags := ExtractShodanRiskFlags(acc.ShodanData)

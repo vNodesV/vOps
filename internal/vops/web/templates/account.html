@@ -3,6 +3,7 @@
 <div class="detail-header">
   <h2 style="margin:0;">{{.Account.IP}}</h2>
   <span class="badge badge-{{.Account.Status}}">{{.Account.Status}}</span>
+  <button class="btn-update" onclick="startUpdate('{{.Account.IP}}','{{.BasePath}}','/api/v1/investigate/','Investigate')">🔍 INVESTIGATE</button>
   {{if eq .Account.Status "blocked"}}
   <button class="btn-block btn-unblock" onclick="doBlock('{{.Account.IP}}','{{.BasePath}}',false)">⊘ UNBLOCK</button>
   {{else}}
@@ -312,7 +313,8 @@ function startUpdate(ip, base, endpoint, title) {
                     'shodan_done','shodan_err','shodan_skip','shodan_cached',
                     'org_done','org_none',
                     'rdns_done','rdns_none','ports_done','ports_none',
-                    'proto_done','proto_none','cosmos_done','cosmos_none',
+                    'proto_done','proto_none',
+                'cosmos_retry','cosmos_port','cosmos_done','cosmos_none',
                     'score','save','done','error'];
     if (logSteps.indexOf(ev.step) !== -1) addLog(ev.msg, cls);
 

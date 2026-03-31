@@ -2,6 +2,7 @@ package intel
 
 import (
 	"encoding/json"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -266,6 +267,29 @@ func ExtractRiskFlagsFromResult(sr *ShodanResult) int64 {
 }
 
 // portsToJSON converts a slice of ints to a JSON array string.
+// mergeOpenPorts merges Shodan-reported ports with an existing JSON port list,
+// returning the union. Existing (OSINT-scanned) ports are always preserved.
+func mergeOpenPorts(existingJSON string, shodanPorts []int) string {
+	var existing []int
+	_ = json.Unmarshal([]byte(existingJSON), &existing)
+	seen := make(map[int]bool, len(existing)+len(shodanPorts))
+	merged := make([]int, 0, len(existing)+len(shodanPorts))
+	for _, p := range existing {
+		if !seen[p] {
+			seen[p] = true
+			merged = append(merged, p)
+		}
+	}
+	for _, p := range shodanPorts {
+		if !seen[p] {
+			seen[p] = true
+			merged = append(merged, p)
+		}
+	}
+	sort.Ints(merged)
+	return portsToJSON(merged)
+}
+
 func portsToJSON(ports []int) string {
 	if len(ports) == 0 {
 		return "[]"
