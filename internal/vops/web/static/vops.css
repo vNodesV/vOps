@@ -201,7 +201,15 @@ h2 { font-size: 1.15rem; font-weight: 600; margin-bottom: 0.75rem; }
 h3 { font-size: 1rem; font-weight: 600; }
 h4 { font-size: 0.85rem; font-weight: 600; }
 p  { font-size: 0.85rem; }
-code { font-family: var(--font-mono); font-size: 0.82rem; }
+code {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  background: rgba(255,255,255,0.07) !important;
+  color: var(--vn-text) !important;
+  padding: 0.1em 0.38em;
+  border-radius: 3px;
+  border: 1px solid var(--vn-border);
+}
 a  { color: var(--vn-green); text-decoration: none; }
 a:hover { color: var(--vn-green-hover); }
 
@@ -2168,6 +2176,12 @@ html[data-theme="dark-blue"] article > footer {
   border-color: var(--vn-green-border) !important;
   color: var(--vn-text) !important;
 }
+/* dark-blue: code chips use subtle blue tint */
+html[data-theme="dark-blue"] code {
+  background: rgba(79,195,247,0.09) !important;
+  color: #82cfff !important;
+  border-color: rgba(79,195,247,0.18);
+}
 html[data-theme="light-blue"] article > header,
 html[data-theme="light-blue"] article > footer {
   background: rgba(21, 101, 192, 0.07) !important;
@@ -2247,6 +2261,11 @@ html[data-theme="light-blue"] h4 {
 html[data-theme="light-blue"] a { color: #1565c0; }
 html[data-theme="light-blue"] a:hover { color: #1976d2; }
 html[data-theme="light-blue"] nav strong { color: #1565c0; }
+html[data-theme="light-blue"] code {
+  background: rgba(21,101,192,0.10) !important;
+  color: #1565c0 !important;
+  border-color: rgba(21,101,192,0.22);
+}
 
 /* ── Light Blue: cards / glass blocks — semi-transparent with blur ── */
 html[data-theme="light-blue"] .stat-card,
