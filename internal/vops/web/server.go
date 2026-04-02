@@ -1,9 +1,9 @@
 // Package web provides an embedded HTTP server for the vOps dashboard.
 //
-// It serves an html/template + htmx UI for browsing IP accounts,
-// viewing threat intelligence, querying log events, and triggering
-// archive ingestion. All assets are embedded via go:embed for
-// single-binary deployment.
+// It serves a React 19 + TypeScript SPA (built by Vite into dist/) embedded
+// via go:embed for single-binary deployment. All /api/* and /settings/api/*
+// routes are served by Go handlers; all other GET routes serve the SPA index.html
+// so that React Router can handle client-side navigation.
 package web
 
 import (
@@ -14,9 +14,11 @@ import (
 	"embed"
 	"encoding/hex"
 	"fmt"
-	"html/template"
 	"io/fs"
 	"net/http"
+	"net/url"
+	"path"
+	"strings"
 	"sync"
 	"time"
 
@@ -30,30 +32,11 @@ import (
 	"github.com/vNodesV/vProx/internal/vops/intel"
 )
 
-//go:embed templates static
+//go:embed static dist
 var webFS embed.FS
 
-// templateFuncs provides arithmetic helpers for pagination in templates.
-var templateFuncs = template.FuncMap{
-	"add":      func(a, b int) int { return a + b },
-	"subtract": func(a, b int) int { return a - b },
-	"multiply": func(a, b int) int { return a * b },
-	"intSlice": func(vals ...int) []int { return vals },
-	// threatClass returns a CSS class name for a threat score (int64).
-	"threatClass": func(score int64) string {
-		switch {
-		case score <= 30:
-			return "threat-fill-low"
-		case score <= 60:
-			return "threat-fill-medium"
-		default:
-			return "threat-fill-high"
-		}
-	},
-}
-
-// Server is the vOps HTTP server. It owns the ServeMux, parsed
-// templates, and references to the database and enrichment subsystems.
+// Server is the vOps HTTP server. It owns the ServeMux and references
+// to the database and enrichment subsystems.
 type Server struct {
 	db       *db.DB
 	enricher *intel.Enricher
@@ -63,7 +46,6 @@ type Server struct {
 	cfgPath  string // resolved path to vops.toml (may be legacy or new layout)
 	version  string // binary version string, set at startup
 	httpSrv  *http.Server
-	pages    map[string]*template.Template
 	fleet    *api.Handlers // nil when fleet module is not configured
 	fleetSvc *fleet.Service
 
@@ -83,30 +65,15 @@ type loginAttempt struct {
 	lockedUntil time.Time
 }
 
-// New creates a Server, parses embedded templates, registers all routes,
-// and returns a server ready to Start().
+// New creates a Server, registers all routes, and returns a server ready to Start().
 // fleetSvc is optional — pass nil to disable the fleet module routes.
 func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg config.Config, fleetSvc *fleet.Service, cfgPath, appVersion string) (*Server, error) {
-	// Each page template is parsed together with the base layout so
-	// that block overrides (title, content) are scoped per page.
-	pageFiles := []string{"dashboard.html", "accounts.html", "account.html", "settings.html"}
-	pages := make(map[string]*template.Template, len(pageFiles))
-	for _, pf := range pageFiles {
-		t, err := template.New("").Funcs(templateFuncs).ParseFS(
-			webFS, "templates/base.html", "templates/"+pf,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("web: parse template %s: %w", pf, err)
-		}
-		pages[pf] = t
-	}
-
-	// Parse standalone login template (not based on base.html).
-	loginTmpl, err := template.New("login.html").Funcs(templateFuncs).ParseFS(webFS, "templates/login.html")
+	// Build a sub-filesystem over the embedded dist/ directory so the SPA
+	// handler can serve Vite build artifacts directly.
+	distFS, err := fs.Sub(webFS, "dist")
 	if err != nil {
-		return nil, fmt.Errorf("web: parse template login.html: %w", err)
+		return nil, fmt.Errorf("web: embed dist sub: %w", err)
 	}
-	pages["login.html"] = loginTmpl
 
 	// Generate session HMAC key.
 	sessionKey := make([]byte, 32)
@@ -122,7 +89,6 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		home:          config.FindHome(),
 		cfgPath:       cfgPath,
 		version:       appVersion,
-		pages:         pages,
 		sessions:      make(map[string]time.Time),
 		sessionKey:    sessionKey,
 		loginAttempts: make(map[string]*loginAttempt),
@@ -135,24 +101,25 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	mux := http.NewServeMux()
 
 	// Login/logout routes — exempt from session check.
-	mux.HandleFunc("GET /login", s.handleLoginPage)
 	mux.HandleFunc("POST /login", s.handleLoginSubmit)
 	mux.HandleFunc("POST /logout", s.handleLogout)
 
 	// Static assets — exempt from session check.
-	// Serve only the "static/" subtree to prevent path traversal to templates/.
+	// Serve only the "static/" subtree to prevent path traversal to dist/.
 	staticSub, err := fs.Sub(webFS, "static")
 	if err != nil {
 		return nil, fmt.Errorf("web: embed static sub: %w", err)
 	}
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticSub))))
 
-	// Page routes — session-protected.
-	mux.Handle("GET /", s.requireSession(http.HandlerFunc(s.handleDashboard)))
-	mux.Handle("GET /accounts", s.requireSession(http.HandlerFunc(s.handleAccountList)))
-	mux.Handle("GET /accounts/{ip}", s.requireSession(http.HandlerFunc(s.handleAccountDetail)))
-	mux.Handle("GET /settings", s.requireSession(http.HandlerFunc(s.handleSettingsPage)))
+	// SPA handler — serves the React app for all page routes.
+	// GET /login is served without session check so users can access the login page.
+	// GET /settings/wizard serves the embedded configwizard HTML (bypasses React Router).
+	// GET / (catch-all) enforces session; Go redirects to /login if unauthenticated.
+	spa := buildSPAHandler(distFS)
+	mux.HandleFunc("GET /login", spa)
 	mux.Handle("GET /settings/wizard", s.requireSession(http.HandlerFunc(s.handleWizardPage)))
+	mux.Handle("GET /", s.requireSession(http.HandlerFunc(spa)))
 	mux.Handle("GET /settings/api/config/current", s.requireSession(http.HandlerFunc(s.handleAPISettingsCurrent)))
 	mux.Handle("POST /settings/api/config/import", s.requireSession(http.HandlerFunc(s.handleAPISettingsImport)))
 	mux.Handle("POST /settings/api/config/remove", s.requireSession(http.HandlerFunc(s.handleAPISettingsRemove)))
@@ -393,11 +360,11 @@ func securityHeaders(next http.Handler) http.Handler {
 		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		h.Set("Content-Security-Policy",
 			"default-src 'self';"+
-				" script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com;"+
-				" style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com;"+
-				" font-src 'self' https://fonts.gstatic.com;"+
+				" script-src 'self';"+
+				" style-src 'self' 'unsafe-inline';"+
 				" img-src 'self' data:;"+
-				" connect-src 'self' https://cdn.jsdelivr.net")
+				" connect-src 'self';"+
+				" font-src 'self';")
 		next.ServeHTTP(w, r)
 	})
 }
@@ -406,4 +373,37 @@ func securityHeaders(next http.Handler) http.Handler {
 // to complete or the context to expire.
 func (s *Server) Shutdown(ctx context.Context) error {
 	return s.httpSrv.Shutdown(ctx)
+}
+
+// buildSPAHandler returns an http.HandlerFunc that serves the React SPA.
+//
+// Requests for files that exist in distFS (JS bundles, CSS, images) are served
+// directly. All other paths fall back to index.html so that React Router can
+// handle client-side navigation.
+func buildSPAHandler(distFS fs.FS) http.HandlerFunc {
+	fileServer := http.FileServer(http.FS(distFS))
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Normalise the URL path and resolve the file name relative to dist/.
+		upath := path.Clean("/" + strings.TrimPrefix(r.URL.Path, "/"))
+		name := strings.TrimPrefix(upath, "/")
+		if name == "" {
+			name = "."
+		}
+
+		// If the file exists in dist/ and is not a directory, serve it directly.
+		f, err := distFS.Open(name)
+		if err == nil {
+			st, statErr := f.Stat()
+			f.Close()
+			if statErr == nil && !st.IsDir() {
+				fileServer.ServeHTTP(w, r)
+				return
+			}
+		}
+
+		// Fallback: serve index.html for all React Router paths.
+		r2 := r.Clone(r.Context())
+		r2.URL = &url.URL{Path: "/index.html"}
+		fileServer.ServeHTTP(w, r2)
+	}
 }

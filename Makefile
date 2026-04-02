@@ -426,7 +426,18 @@ systemd:
 
 ## Build vOps binary to .build/vOps  (does NOT rebuild vProx)
 
-build-vops:
+## Build the React + Vite frontend SPA (output goes to internal/vops/web/dist/)
+frontend:
+	@echo "Building vOps frontend (React + Vite)..."
+	@if ! command -v node >/dev/null 2>&1; then \
+		if [ -s "$$HOME/.nvm/nvm.sh" ]; then \
+			export NVM_DIR="$$HOME/.nvm" && . "$$NVM_DIR/nvm.sh"; \
+		fi; \
+	fi; \
+	cd internal/vops/web/frontend && npm run build
+	@echo "✓ Frontend built → internal/vops/web/dist/"
+
+build-vops: frontend
 	@echo "Stopping $(VOPS_NAME) service (if running)..."
 	@sudo systemctl stop "$(VOPS_NAME)" 2>/dev/null && echo "  ✓ $(VOPS_NAME) stopped" || echo "  ○ $(VOPS_NAME) was not running"
 	@echo "Building $(VOPS_NAME)..."

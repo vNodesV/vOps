@@ -24,7 +24,7 @@ import (
 	"github.com/vNodesV/vProx/internal/vops/web"
 )
 
-const version = "1.4.0"
+const version = "1.4.5"
 
 // ---------------------------------------------------------------------------
 // Help / usage

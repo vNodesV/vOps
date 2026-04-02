@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+:root {
+  --vn-primary: #2563eb;
+  --vn-primary-hover: #1d4ed8;
+  --vn-accent: #0ea5e9;
+  --vn-bg: #f8fafc;
+  --vn-surface: #ffffff;
+  --vn-surface-2: #f1f5f9;
+  --vn-border: #e2e8f0;
+  --vn-text: #0f172a;
+  --vn-text-muted: #64748b;
+  --vn-text-subtle: #94a3b8;
+  --vn-success: #16a34a;
+  --vn-warning: #d97706;
+  --vn-danger: #dc2626;
+  --vn-info: #0284c7;
+  --vn-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --vn-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --vn-radius: 0.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --vn-primary: #3b82f6;
+    --vn-primary-hover: #2563eb;
+    --vn-accent: #38bdf8;
+    --vn-bg: #0f172a;
+    --vn-surface: #1e293b;
+    --vn-surface-2: #334155;
+    --vn-border: #334155;
+    --vn-text: #f1f5f9;
+    --vn-text-muted: #94a3b8;
+    --vn-text-subtle: #64748b;
+    --vn-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.3), 0 1px 2px -1px rgb(0 0 0 / 0.3);
+    --vn-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+  }
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body {
+  background: var(--vn-bg);
+  color: var(--vn-text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+a { color: var(--vn-primary); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--vn-bg); }
+::-webkit-scrollbar-thumb { background: var(--vn-border); border-radius: 3px; }

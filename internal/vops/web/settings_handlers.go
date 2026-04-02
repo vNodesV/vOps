@@ -121,18 +121,6 @@ func (s *Server) handleAPIGenSSHKey(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
-type settingsData struct {
-	pageBase
-}
-
-func (s *Server) handleSettingsPage(w http.ResponseWriter, _ *http.Request) {
-	data := settingsData{pageBase: s.newPageBase()}
-	data.pageBase.CurrentPage = "settings"
-	if err := s.pages["settings.html"].ExecuteTemplate(w, "base", data); err != nil {
-		log.Printf("[web] settings render: %v", err)
-	}
-}
-
 func (s *Server) handleAPISettingsCurrent(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, configwizard.CurrentSnapshot(s.home, r.URL.Query().Get("mode")))
 }
@@ -337,10 +325,8 @@ func (s *Server) handleAPISettingsPreferences(w http.ResponseWriter, r *http.Req
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "theme": req.Theme})
 }
 
-// handleWizardPage serves the embedded configwizard HTML at /settings/wizard.
-// The wizard uses relative API paths (e.g. "api/config/ports") which, when served
-// from /settings/wizard, resolve to /settings/api/config/ports — matching the
-// existing settings API routes registered on this server.
+// handleWizardPage serves the embedded configwizard SPA at GET /settings/wizard.
+// It bypasses the React SPA so the wizard's self-contained HTML/JS runs directly.
 func (s *Server) handleWizardPage(w http.ResponseWriter, _ *http.Request) {
 	html, err := configwizard.WizardHTML()
 	if err != nil {
@@ -348,7 +334,6 @@ func (s *Server) handleWizardPage(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(html)
 }
 
