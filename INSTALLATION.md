@@ -18,7 +18,7 @@ This guide covers building, installing, and configuring vProx from source on a L
 - [Running vProx](#running-vprox)
 - [Observability](#observability)
 - [Upgrading](#upgrading)
-- [Installing vLog](#installing-vlog)
+- [Installing vOps](#installing-vops)
 - [Troubleshooting](#troubleshooting)
 
 ---
@@ -33,6 +33,7 @@ This guide covers building, installing, and configuring vProx from source on a L
 | gzip / gunzip | Standard | MMDB decompression (part of coreutils) |
 | Linux | systemd host | For service installation |
 | macOS | Any | Dev/build only; systemd not applicable |
+| Node.js + npm | 18+ | **Frontend development only** — not required for standard install; the pre-built vOps UI is embedded in the repo |
 
 Install Go: <https://go.dev/doc/install>
 
@@ -42,6 +43,8 @@ Verify:
 go version   # go version go1.25.x linux/amd64
 make --version
 ```
+
+> **Node.js note**: The vOps web UI is a React/TypeScript SPA built with Vite. The compiled output (`internal/vops/web/dist/`) is committed to the repository so a standard `make install` requires **no Node.js**. Node.js is only needed if you modify the frontend source under `internal/vops/web/frontend/src/`. Install via [nvm](https://github.com/nvm-sh/nvm) or `brew install node` on macOS.
 
 ---
 
@@ -415,30 +418,68 @@ For migration guidance when upgrading between major versions, see [`docs/UPGRADE
 
 ---
 
-## Installing vLog
+## Installing vOps
 
-vLog is a companion binary for analyzing vProx log archives. It is built and installed separately from vProx.
+vOps (formerly vLog) is the vProx management and intelligence binary. It embeds a React SPA web UI,
+a log archive analyzer, IP threat intelligence, config wizard, and fleet management all in a single Go binary.
+
+> **Backward compatibility**: `vlog` is a symlink alias to `vops` — existing scripts using `vlog start` continue to work.
 
 ### Build and install
 
 ```bash
-make install-vlog
+make install
 ```
 
-This will:
-1. Build `vLog` binary to `.build/vLog` and install to `$GOPATH/bin/vLog`
-2. Copy `config/vlog/vlog.sample.toml` → `$VPROX_HOME/config/vlog/vlog.toml` (only if absent)
-3. Optionally install the systemd service unit
+`make install` builds **both** `vProx` and `vOps` and installs them to `$GOPATH/bin/`. The vOps binary
+embeds the pre-built React SPA from `internal/vops/web/dist/` — no Node.js required for a standard install.
+
+To build vOps alone (e.g. after a frontend change):
+
+```bash
+make build-vops    # builds frontend + Go binary → .build/vOps + $GOPATH/bin/vops
+```
+
+`make build-vops` runs `make frontend` first (requires Node.js 18+) to rebuild the React SPA, then
+compiles the Go binary embedding the fresh `dist/`.
+
+#### Frontend-only rebuild
+
+Only needed if you modify files under `internal/vops/web/frontend/src/`:
+
+```bash
+# Install Node.js (one-time, if not present)
+brew install node          # macOS
+# or: curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt install -y nodejs
+
+# Install npm dependencies (first time only)
+cd internal/vops/web/frontend && npm install
+
+# Rebuild the SPA → internal/vops/web/dist/
+make frontend
+
+# Then rebuild the Go binary to embed the new dist/
+make build-vops
+```
 
 ### Configure
 
-Edit `$VPROX_HOME/config/vlog/vlog.toml`:
+Copy the sample config and edit:
+
+```bash
+# Done automatically by make install / make config-vops
+cp .samples/vops/vops.sample $HOME/.vProx/config/vops/vops.toml
+```
+
+Edit `$HOME/.vProx/config/vops/vops.toml`:
 
 ```toml
-[vlog]
-port     = 8889
-db_path  = "~/.vProx/data/vlog.db"
-archives_dir = "~/.vProx/data/logs/archives"
+[vops]
+port         = 8889
+bind_address = "127.0.0.1"   # keep loopback when behind Apache
+base_path    = ""             # set to "/vops" if proxied at a sub-path
+api_key      = ""             # generate: openssl rand -hex 32
+db_path      = ""             # default: $VPROX_HOME/data/vlog.db
 
 [intel]
 abuseipdb_key  = "your-key"
@@ -447,106 +488,120 @@ shodan_key     = "your-key"
 auto_enrich    = true
 ```
 
-### Dashboard authentication (optional)
+### Dashboard authentication
 
-By default the vLog dashboard is open with no login required. To enable password protection, generate a bcrypt password hash and configure it in `vlog.toml`.
+By default the dashboard is open with no login required. To enable password protection:
 
-**Why bcrypt?** Bcrypt is a one-way hash — the plaintext password is never stored. The cost factor (12) means each hash verification takes ~250ms. This is intentional: it rate-limits brute-force attacks even if the hash file is compromised. Bcrypt is the OWASP-recommended algorithm for password storage, and Cost=12 is their minimum recommended work factor.
-
-**Generating the hash with `htpasswd`:**
-
-The `htpasswd` utility ships with the `apache2-utils` package (Debian/Ubuntu) or `httpd-tools` (RHEL/Fedora). We use only its bcrypt output format (`-B` flag) — Apache itself is not required. It is the most widely available CLI tool for generating bcrypt hashes on Linux and macOS.
+**Generate a bcrypt hash:**
 
 ```bash
-# Install htpasswd (Debian/Ubuntu)
-sudo apt install apache2-utils
-
-# Generate bcrypt hash
+# Using htpasswd (ships with apache2-utils / httpd-tools)
 htpasswd -nbBC 12 admin yourpassword | cut -d: -f2
-```
 
-Flag breakdown:
-
-| Flag | Purpose |
-|------|---------|
-| `-n` | Print output to stdout (don't write to a file) |
-| `-b` | Read the password from the command line argument |
-| `-B` | Use bcrypt algorithm (not MD5 or SHA) |
-| `-C 12` | Bcrypt cost factor 12 (~250ms per hash; OWASP minimum recommendation) |
-
-The `cut -d: -f2` strips the `admin:` username prefix, leaving only the `$2y$12$...` hash string.
-
-**Alternative if `htpasswd` is unavailable:**
-
-```bash
+# Or with Python if htpasswd is unavailable
 python3 -c "import bcrypt; print(bcrypt.hashpw(b'yourpassword', bcrypt.gensalt(rounds=12)).decode())"
 ```
 
-Requires the `bcrypt` Python package (`pip3 install bcrypt`).
+| Flag | Purpose |
+|------|---------|
+| `-n` | Print to stdout (don't write a file) |
+| `-b` | Read password from the command line |
+| `-B` | Use bcrypt algorithm |
+| `-C 12` | Cost factor 12 — OWASP minimum recommendation (~250ms/hash) |
 
-**Configure the hash in `vlog.toml`:**
-
-Paste the hash into the `[vlog.auth]` block:
+**Add to `vops.toml`:**
 
 ```toml
-[vlog.auth]
+[vops.auth]
 username      = "admin"
 password_hash = "$2y$12$..."   # paste hash here
 ```
 
-Restart vLog for the change to take effect.
+Restart vOps after changing the hash. If `password_hash` is empty, authentication is bypassed — always set one in production.
 
-> **Security note**: If `password_hash` is empty or the `[vlog.auth]` block is absent, authentication is bypassed entirely. This is a convenience for development — always set a password hash in production.
+### vOps API key
 
-### vLog API key
-
-The `/api/v1/ingest` endpoint is a machine-to-machine (M2M) call — vProx pushes log data to vLog after each backup, not a browser user. API keys are the correct auth pattern for M2M communication: stateless, no session cookie overhead, and easy to rotate independently of user credentials.
-
-**Generate a secure key:**
+The `/api/v1/ingest` endpoint is a machine-to-machine (M2M) call. vProx pushes log archives to vOps after each backup using this key in the `X-API-Key` header.
 
 ```bash
+# Generate a secure key
 openssl rand -hex 32
 ```
 
-**Set the key in `vlog.toml`:**
-
 ```toml
-[vlog]
+# vops.toml
+[vops]
 api_key = "your-generated-key-here"
 ```
 
-**How vProx uses it:** When `vlog_url` is configured in `config/ports.toml`, vProx sends the API key in the `X-API-Key` header when POSTing to `/api/v1/ingest` after `--new-backup`. See [vProx integration](#vprox-integration) below.
-
-> **Note**: The API key protects only the ingest endpoint. Block/unblock actions and other dashboard operations from the vLog web UI use session authentication (login), not the API key.
+> The API key protects only the ingest endpoint. All dashboard and browser actions use session auth (login cookie), not the API key.
 
 ### Block and unblock
 
-The accounts page in the vLog dashboard provides block/unblock controls for individual IP addresses. These actions require only an active login session — no API key is needed from the browser UI. If dashboard authentication is disabled (no `password_hash` set), block/unblock is available without login.
+IP block/unblock controls are on the Accounts page. They require only an active login session — no API key needed from the browser.
+
+### Systemd service
+
+```bash
+make service-vops    # render vOps.service; optionally install to /etc/systemd/system/
+```
+
+Or install the full service in one step:
+
+```bash
+make install        # includes service-vops prompt at the end
+```
 
 ### Run
 
 ```bash
-vlog start            # foreground server on :8889
-vlog start -d         # background daemon (sudo service vLog start)
-vlog stop             # stop the service
-vlog restart          # restart the service
-vlog status           # show database stats
-vlog ingest           # one-shot: scan archives and ingest new entries
+vops start            # foreground server on :8889
+vops start -d         # background daemon (sudo service vOps start)
+vops stop             # stop the service
+vops restart          # restart the service
+vops status           # show database stats
+vops ingest           # one-shot: scan archives and ingest
+vops config --web     # open the config wizard in your browser
+
+# Legacy aliases (backward compat)
+vlog start            # same as vops start
 ```
+
+### Config wizard
+
+The config wizard is a 7-step browser SPA for configuring all vOps settings without editing TOML files directly.
+
+```bash
+vops config --web
+```
+
+Opens at `http://localhost:8889/settings/wizard`. Covers: Ports, Chains, vOps, Fleet, Infra, Backup, and Access settings. All changes are applied to the live config files.
 
 ### Apache reverse proxy
 
-Proxy vLog behind Apache with IP restriction (admin-only). See `.vscode/vlog.apache2` in the repo for a validated configuration template.
+Proxy vOps behind Apache with IP restriction (admin-only). See `.vscode/vops.apache2` in the repo for a validated configuration template.
+
+Key directives:
+
+```apache
+ProxyPass        /vops/ http://127.0.0.1:8889/
+ProxyPassReverse /vops/ http://127.0.0.1:8889/
+ProxyTimeout     60
+# Allow only your admin IPs:
+<Location /vops/>
+  Require ip 10.0.0.0/8
+</Location>
+```
 
 ### vProx integration
 
-To enable automatic ingest after each vProx backup, add to `$HOME/.vProx/config/ports.toml`:
+To enable automatic archive ingest after each vProx backup, add to `$HOME/.vProx/config/ports.toml`:
 
 ```toml
 vlog_url = "http://localhost:8889"
 ```
 
-When `vlog_url` is set, vProx POSTs to `/api/v1/ingest` with the `X-API-Key` header after each `--new-backup`. Ensure the key matches the `api_key` value in `vlog.toml` (see [vLog API key](#vlog-api-key)). The call is non-fatal — if vLog is unavailable, vProx continues normally.
+When `vlog_url` is set, vProx POSTs to `/api/v1/ingest` with the `X-API-Key` header after `--new-backup`. Ensure the key matches `api_key` in `vops.toml`. The call is non-fatal — if vOps is unavailable, vProx continues normally.
 
 ---
 
