@@ -83,10 +83,10 @@ help:
 	@echo ""
 
 ## Full install — build + config + systemd for vProx and vOps.
-## Phases: validate-go → dirs → geo → config → env → samples → build → symlinks → systemd
+## Phases: validate-go → dirs → geo → config → env → samples → frontend → build → symlinks → systemd
 ## Each optional step (symlinks, service registration, sudoers) prompts for confirmation.
 
-install: validate-go dirs geo config config-vops config-vprox config-modules env samples-fleet
+install: validate-go dirs geo config config-vops config-vprox config-modules env samples-fleet frontend
 	@echo ""
 	@echo "── Building vProx + vOps ────────────────────────────────────────────────"
 	GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(GOPATH_BIN)/$(APP_NAME)" "$(BUILD_SRC)"
@@ -448,9 +448,15 @@ build-vops: frontend
 	mkdir -p "$(BUILD_DIR)"
 	GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(VOPS_BUILD)" "$(VOPS_SRC)"
 	@cp "$(VOPS_BUILD)" "$(GOPATH_BIN)/$(VOPS_NAME)"
+	@if [ -e "/usr/local/bin/$(VOPS_NAME)" ]; then \
+		sudo cp "$(VOPS_BUILD)" "/usr/local/bin/$(VOPS_NAME)"; \
+		echo "  Updated → /usr/local/bin/$(VOPS_NAME)"; \
+	fi
 	@echo "✓ Build complete"
 	@echo "  Binary:  $(VOPS_BUILD)"
 	@echo "  Copied → $(GOPATH_BIN)/$(VOPS_NAME)"
+	@echo "Restarting $(VOPS_NAME) service..."
+	@sudo systemctl start "$(VOPS_NAME)" 2>/dev/null && echo "  ✓ $(VOPS_NAME) started" || echo "  ○ Could not start $(VOPS_NAME) — start manually: sudo service $(VOPS_NAME) start"
 
 ## Install .samples/vops/vops.sample → ~/.vProx/config/vops/vops.toml (only if absent)
 
