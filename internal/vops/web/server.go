@@ -120,6 +120,15 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	mux.HandleFunc("GET /login", spa)
 	mux.Handle("GET /settings/wizard", s.requireSession(http.HandlerFunc(s.handleWizardPage)))
 	mux.Handle("GET /", s.requireSession(http.HandlerFunc(spa)))
+
+	// When base_path is set (e.g. "/vops" for sub-path proxy without prefix stripping),
+	// also register the base_path-prefixed login and root routes without session checks.
+	// Without this, the redirect to "<base_path>/login" hits the catch-all GET /,
+	// which requires a session and immediately redirects again → infinite loop.
+	if bp := s.cfg.VOps.BasePath; bp != "" {
+		mux.HandleFunc("POST "+bp+"/login", s.handleLoginSubmit)
+		mux.HandleFunc("GET "+bp+"/login", spa)
+	}
 	mux.Handle("GET /settings/api/config/current", s.requireSession(http.HandlerFunc(s.handleAPISettingsCurrent)))
 	mux.Handle("POST /settings/api/config/import", s.requireSession(http.HandlerFunc(s.handleAPISettingsImport)))
 	mux.Handle("POST /settings/api/config/remove", s.requireSession(http.HandlerFunc(s.handleAPISettingsRemove)))

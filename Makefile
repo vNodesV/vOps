@@ -429,13 +429,17 @@ systemd:
 ## Build the React + Vite frontend SPA (output goes to internal/vops/web/dist/)
 frontend:
 	@echo "Building vOps frontend (React + Vite)..."
-	@if ! command -v node >/dev/null 2>&1; then \
-		if [ -s "$$HOME/.nvm/nvm.sh" ]; then \
-			export NVM_DIR="$$HOME/.nvm" && . "$$NVM_DIR/nvm.sh"; \
-		fi; \
+	@HAVE_NODE=0; \
+	if command -v node >/dev/null 2>&1; then HAVE_NODE=1; \
+	elif [ -s "$$HOME/.nvm/nvm.sh" ]; then \
+		export NVM_DIR="$$HOME/.nvm" && . "$$NVM_DIR/nvm.sh" && HAVE_NODE=1; \
 	fi; \
-	cd internal/vops/web/frontend && npm run build
-	@echo "✓ Frontend built → internal/vops/web/dist/"
+	if [ "$$HAVE_NODE" = "0" ]; then \
+		echo "  ℹ  Node.js not found — skipping frontend build (using committed dist/)"; \
+	else \
+		cd internal/vops/web/frontend && npm install && npm run build; \
+		echo "✓ Frontend built → internal/vops/web/dist/"; \
+	fi
 
 build-vops: frontend
 	@echo "Stopping $(VOPS_NAME) service (if running)..."
