@@ -13,8 +13,10 @@
   --vn-text-subtle: #94a3b8;
   --vn-success: #16a34a;
   --vn-warning: #d97706;
+  --vn-warning-medium: #ea580c;
   --vn-danger: #dc2626;
   --vn-info: #0284c7;
+  --vn-on-primary: #ffffff;
   --vn-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
   --vn-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   --vn-radius: 0.5rem;
@@ -48,6 +50,79 @@ body {
 }
 a { color: var(--vn-primary); text-decoration: none; }
 a:hover { text-decoration: underline; }
+
+/* Focus visible — WCAG 2.4.7 */
+:focus-visible {
+  outline: 2px solid var(--vn-primary);
+  outline-offset: 2px;
+}
+
+/* Skip link — WCAG 2.4.1 bypass block */
+.skip-to-content {
+  position: absolute;
+  top: -100%;
+  left: 0.5rem;
+  z-index: 9999;
+  padding: 0.5rem 1rem;
+  background: var(--vn-primary);
+  color: var(--vn-on-primary);
+  border-radius: var(--vn-radius);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: top 0.1s;
+}
+.skip-to-content:focus { top: 0.5rem; }
+
+/* Reduced motion — WCAG 2.3.3 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Hamburger button — hidden on desktop */
+.hamburger-btn {
+  display: none;
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  z-index: 300;
+  border: none;
+  background: var(--vn-surface);
+  border-radius: var(--vn-radius);
+  padding: 0.4rem;
+  cursor: pointer;
+  box-shadow: var(--vn-shadow-md);
+  color: var(--vn-text);
+}
+
+/* Mobile sidebar overlay */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 199;
+}
+
+/* Responsive sidebar */
+@media (max-width: 768px) {
+  .hamburger-btn { display: flex; }
+  .app-sidebar { display: none !important; }
+  .app-sidebar.open {
+    display: flex !important;
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 200;
+    width: 220px;
+    box-shadow: var(--vn-shadow-md);
+  }
+  .sidebar-overlay { display: block; }
+  .app-main { padding: 1rem 1rem 1rem 1rem !important; }
+}
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }

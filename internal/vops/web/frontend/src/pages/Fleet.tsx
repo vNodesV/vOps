@@ -52,7 +52,7 @@ const btn: React.CSSProperties = {
   border: 'none',
   borderRadius: 'var(--vn-radius)',
   background: 'var(--vn-primary)',
-  color: '#fff',
+  color: 'var(--vn-on-primary)',
   fontSize: '0.8rem',
   fontWeight: 500,
   cursor: 'pointer',

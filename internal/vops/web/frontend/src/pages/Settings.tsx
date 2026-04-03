@@ -86,7 +86,7 @@ function ConfigEditor({ section, config }: { section: SectionDef; config: Config
             }}
             className="mt-2 px-3 py-1.5 text-xs font-medium rounded-md cursor-pointer
                        focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-            style={{ backgroundColor: 'var(--vn-primary)', color: '#fff' }}
+            style={{ backgroundColor: 'var(--vn-primary)', color: 'var(--vn-on-primary)' }}
           >
             Edit
           </button>
@@ -367,7 +367,7 @@ export default function SettingsPage() {
                          focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
               style={{
                 backgroundColor: activeSection === s.id ? 'var(--vn-primary)' : 'transparent',
-                color: activeSection === s.id ? '#fff' : 'var(--vn-text)',
+                color: activeSection === s.id ? 'var(--vn-on-primary)' : 'var(--vn-text)',
               }}
               aria-current={activeSection === s.id ? 'page' : undefined}
             >

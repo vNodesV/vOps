@@ -5,37 +5,37 @@ interface BadgeProps {
 const COLOR_MAP: Record<string, { bg: string; text: string; label: string }> = {
   allowed: {
     bg: 'var(--vn-success)',
-    text: '#fff',
+    text: 'var(--vn-on-primary)',
     label: 'Allowed',
   },
   blocked: {
     bg: 'var(--vn-danger)',
-    text: '#fff',
+    text: 'var(--vn-on-primary)',
     label: 'Blocked',
   },
   flagged: {
     bg: 'var(--vn-warning)',
-    text: '#fff',
+    text: 'var(--vn-on-primary)',
     label: 'Flagged',
   },
   synced: {
     bg: 'var(--vn-success)',
-    text: '#fff',
+    text: 'var(--vn-on-primary)',
     label: 'Synced',
   },
   syncing: {
     bg: 'var(--vn-warning)',
-    text: '#fff',
+    text: 'var(--vn-on-primary)',
     label: 'Syncing',
   },
   down: {
     bg: 'var(--vn-danger)',
-    text: '#fff',
+    text: 'var(--vn-on-primary)',
     label: 'Down',
   },
 };
 
-const DEFAULT_COLOR = { bg: 'var(--vn-text-subtle)', text: '#fff', label: '' };
+const DEFAULT_COLOR = { bg: 'var(--vn-text-subtle)', text: 'var(--vn-on-primary)', label: '' };
 
 export default function Badge({ status }: BadgeProps) {
   const display = status || 'unknown';

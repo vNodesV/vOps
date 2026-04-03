@@ -306,7 +306,7 @@ export default function AccountDetailPage() {
                          focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
               style={{
                 backgroundColor: activeStream === 'enrich' ? 'var(--vn-primary)' : 'var(--vn-surface-2)',
-                color: activeStream === 'enrich' ? '#fff' : 'var(--vn-text)',
+                color: activeStream === 'enrich' ? 'var(--vn-on-primary)' : 'var(--vn-text)',
                 border: '1px solid var(--vn-border)',
               }}
             >
@@ -320,7 +320,7 @@ export default function AccountDetailPage() {
                          focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
               style={{
                 backgroundColor: activeStream === 'osint' ? 'var(--vn-primary)' : 'var(--vn-surface-2)',
-                color: activeStream === 'osint' ? '#fff' : 'var(--vn-text)',
+                color: activeStream === 'osint' ? 'var(--vn-on-primary)' : 'var(--vn-text)',
                 border: '1px solid var(--vn-border)',
               }}
             >
@@ -334,7 +334,7 @@ export default function AccountDetailPage() {
                          focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
               style={{
                 backgroundColor: activeStream === 'investigate' ? 'var(--vn-primary)' : 'var(--vn-surface-2)',
-                color: activeStream === 'investigate' ? '#fff' : 'var(--vn-text)',
+                color: activeStream === 'investigate' ? 'var(--vn-on-primary)' : 'var(--vn-text)',
                 border: '1px solid var(--vn-border)',
               }}
             >
