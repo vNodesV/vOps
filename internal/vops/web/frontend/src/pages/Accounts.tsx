@@ -121,7 +121,7 @@ export default function AccountsPage() {
           <button
             onClick={() => ufwMut.mutate()}
             disabled={ufwMut.isPending}
-            className="px-3 py-1.5 text-xs font-medium rounded-md text-white
+            className="px-3 py-1.5 text-xs font-medium rounded-md btn-vn-primary
                        disabled:opacity-50 cursor-pointer
                        focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
             style={{ backgroundColor: 'var(--vn-primary)' }}
@@ -218,13 +218,13 @@ export default function AccountsPage() {
                   <SortableHeader label="IP" column="IP" currentSort={sort} currentDir={dir} onClick={handleSort} />
                   <SortableHeader label="Country" column="Country" currentSort={sort} currentDir={dir} onClick={handleSort} />
                   <SortableHeader label="Org" column="Org" currentSort={sort} currentDir={dir} onClick={handleSort} />
-                  <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--vn-text-muted)' }}>ASN</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--vn-text-muted)' }}>ASN</th>
                   <SortableHeader label="Requests" column="TotalRequests" currentSort={sort} currentDir={dir} onClick={handleSort} />
                   <SortableHeader label="Rate Limits" column="RatelimitEvents" currentSort={sort} currentDir={dir} onClick={handleSort} />
                   <SortableHeader label="Threat" column="ThreatScore" currentSort={sort} currentDir={dir} onClick={handleSort} />
                   <SortableHeader label="Status" column="Status" currentSort={sort} currentDir={dir} onClick={handleSort} />
                   <SortableHeader label="Last Seen" column="LastSeen" currentSort={sort} currentDir={dir} onClick={handleSort} />
-                  <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--vn-text-muted)' }}>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--vn-text-muted)' }}>
                     <span className="sr-only">Actions</span>
                   </th>
                 </tr>

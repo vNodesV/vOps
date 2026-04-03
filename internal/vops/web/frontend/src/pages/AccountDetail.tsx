@@ -266,7 +266,7 @@ export default function AccountDetailPage() {
             <button
               onClick={handleBlockToggle}
               disabled={blockMut.isPending || unblockMut.isPending}
-              className="w-full px-4 py-2 text-sm font-medium rounded-md text-white
+              className="w-full px-4 py-2 text-sm font-medium rounded-md btn-vn-primary
                          disabled:opacity-50 cursor-pointer
                          focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
               style={{

@@ -159,7 +159,7 @@ function RegisteredChainsSection() {
           <thead>
             <tr>
               {['Chain', 'RPC URL', 'REST URL', 'Note', ''].map((h) => (
-                <th key={h} style={th}>{h}</th>
+                <th key={h} scope="col" style={th}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -210,7 +210,7 @@ function VMsSection() {
           <thead>
             <tr>
               {['Name', 'Host', 'Datacenter', 'Type'].map((h) => (
-                <th key={h} style={th}>{h}</th>
+                <th key={h} scope="col" style={th}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -255,7 +255,7 @@ function DeploymentsSection() {
           <thead>
             <tr>
               {['VM', 'Chain', 'Component', 'Script', 'Status', 'Started', 'Finished'].map((h) => (
-                <th key={h} style={th}>{h}</th>
+                <th key={h} scope="col" style={th}>{h}</th>
               ))}
             </tr>
           </thead>

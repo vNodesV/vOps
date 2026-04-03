@@ -200,6 +200,7 @@ function FleetTable() {
               (h) => (
                 <th
                   key={h}
+                  scope="col"
                   className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider whitespace-nowrap"
                   style={{ color: 'var(--vn-text-muted)' }}
                 >
@@ -321,7 +322,7 @@ function IngestSection() {
         <button
           onClick={() => ingestMut.mutate()}
           disabled={ingestMut.isPending}
-          className="px-3 py-1.5 text-xs font-medium rounded-md text-white
+          className="px-3 py-1.5 text-xs font-medium rounded-md btn-vn-primary
                      disabled:opacity-50 cursor-pointer
                      focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
           style={{ backgroundColor: 'var(--vn-primary)' }}

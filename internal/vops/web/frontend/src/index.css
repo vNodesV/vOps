@@ -124,6 +124,10 @@ a:hover { text-decoration: underline; }
   .app-main { padding: 1rem 1rem 1rem 1rem !important; }
 }
 
+/* Primary action button — token-aware text + hover */
+.btn-vn-primary { color: var(--vn-on-primary); }
+.btn-vn-primary:hover:not(:disabled) { background-color: var(--vn-primary-hover) !important; }
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--vn-bg); }

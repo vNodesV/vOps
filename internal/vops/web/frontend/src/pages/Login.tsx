@@ -161,18 +161,12 @@ export default function LoginPage() {
             type="submit"
             disabled={loading || !username || !password}
             className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-md
-                       text-sm font-medium text-white cursor-pointer
+                       text-sm font-medium btn-vn-primary cursor-pointer
                        disabled:opacity-50 disabled:cursor-not-allowed
                        focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)] focus-visible:ring-offset-2"
             style={{
               backgroundColor: 'var(--vn-primary)',
             }}
-            onMouseOver={(e) =>
-              (e.currentTarget.style.backgroundColor = 'var(--vn-primary-hover)')
-            }
-            onMouseOut={(e) =>
-              (e.currentTarget.style.backgroundColor = 'var(--vn-primary)')
-            }
           >
             {loading ? (
               <>

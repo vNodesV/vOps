@@ -113,7 +113,7 @@ function ConfigEditor({ section, config }: { section: SectionDef; config: Config
             <button
               onClick={handleSave}
               disabled={saveMut.isPending}
-              className="px-3 py-1.5 text-xs font-medium rounded-md text-white
+              className="px-3 py-1.5 text-xs font-medium rounded-md btn-vn-primary
                          disabled:opacity-50 cursor-pointer
                          focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
               style={{ backgroundColor: 'var(--vn-primary)' }}
@@ -229,7 +229,7 @@ function SecurityPanel() {
         <button
           onClick={() => genSSHMut.mutate()}
           disabled={genSSHMut.isPending}
-          className="px-3 py-1.5 text-xs font-medium rounded-md text-white
+          className="px-3 py-1.5 text-xs font-medium rounded-md btn-vn-primary
                      disabled:opacity-50 cursor-pointer
                      focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
           style={{ backgroundColor: 'var(--vn-primary)' }}
@@ -252,7 +252,7 @@ function SecurityPanel() {
         <button
           onClick={() => apiKeyMut.mutate()}
           disabled={apiKeyMut.isPending}
-          className="px-3 py-1.5 text-xs font-medium rounded-md text-white
+          className="px-3 py-1.5 text-xs font-medium rounded-md btn-vn-primary
                      disabled:opacity-50 cursor-pointer
                      focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
           style={{ backgroundColor: 'var(--vn-primary)' }}
@@ -298,7 +298,7 @@ function SecurityPanel() {
           <button
             onClick={() => hashMut.mutate()}
             disabled={hashMut.isPending || !passwordInput}
-            className="px-3 py-1.5 text-xs font-medium rounded-md text-white
+            className="px-3 py-1.5 text-xs font-medium rounded-md btn-vn-primary
                        disabled:opacity-50 cursor-pointer
                        focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
             style={{ backgroundColor: 'var(--vn-primary)' }}
@@ -345,7 +345,7 @@ export default function SettingsPage() {
         </h2>
         <button
           onClick={() => navigate('/settings/wizard')}
-          className="px-3 py-1.5 text-xs font-medium rounded-md text-white cursor-pointer
+          className="px-3 py-1.5 text-xs font-medium rounded-md btn-vn-primary cursor-pointer
                      focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
           style={{ backgroundColor: 'var(--vn-primary)' }}
         >
