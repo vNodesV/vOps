@@ -17,6 +17,7 @@ import SettingsPage from './pages/Settings';
 import FleetPage from './pages/Fleet';
 import ChainsPage from './pages/Chains';
 import { logout } from './api';
+import { BASE } from './api/client';
 
 /* ── Query client ─────────────────────────────────────────────── */
 const queryClient = new QueryClient({
@@ -226,7 +227,7 @@ function Shell({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
+      <BrowserRouter basename={BASE || ''}>
         <Shell>
           <Routes>
             <Route path="/login" element={<LoginPage />} />

@@ -112,6 +112,14 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	}
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticSub))))
 
+	// Vite-built JS/CSS bundles — served directly from dist/assets/, no session required.
+	// These must be session-exempt: the login page loads them before the user authenticates.
+	assetsSub, err := fs.Sub(distFS, "assets")
+	if err != nil {
+		return nil, fmt.Errorf("web: embed dist/assets sub: %w", err)
+	}
+	mux.Handle("GET /assets/", http.StripPrefix("/assets/", http.FileServer(http.FS(assetsSub))))
+
 	// SPA handler — serves the React app for all page routes.
 	// GET /login is served without session check so users can access the login page.
 	// GET /settings/wizard serves the embedded configwizard HTML (bypasses React Router).

@@ -19,6 +19,11 @@ export default defineConfig({
     outDir: '../dist',
     emptyOutDir: true,
   },
+  // Relative base so asset paths work when served under any sub-path proxy
+  // (e.g. Apache ProxyPass /vlog/ → http://127.0.0.1:8889/ with prefix stripping).
+  // Absolute base ('/') breaks when Apache only proxies /vlog/ — the browser
+  // would request /assets/... which is NOT under /vlog/ and hits WordPress instead.
+  base: './',
   // Dev server proxies API calls to the running vOps Go server
   server: {
     proxy: {
