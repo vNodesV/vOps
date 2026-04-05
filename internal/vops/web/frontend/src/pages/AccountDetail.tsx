@@ -43,6 +43,11 @@ export default function AccountDetailPage() {
   const [activeStream, setActiveStream] = useState<StreamAction>(null);
   const [confirmBlock, setConfirmBlock] = useState(false);
 
+  // Stable callback — prevents SSEStream useEffect from looping on re-render.
+  const handleStreamDone = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['account', ip] });
+  }, [queryClient, ip]);
+
   const { data: account, isLoading, isError, error } = useQuery({
     queryKey: ['account', ip],
     queryFn: () => getAccount(ip!),
@@ -364,7 +369,7 @@ export default function AccountDetailPage() {
               <SSEStream
                 url={`${BASE}/api/v1/${activeStream}/${encodeURIComponent(ip)}`}
                 method="POST"
-                onDone={() => queryClient.invalidateQueries({ queryKey: ['account', ip] })}
+                onDone={handleStreamDone}
               />
             </div>
           )}

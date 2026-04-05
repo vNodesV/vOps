@@ -6,6 +6,7 @@ import Badge from '../components/Badge';
 import ThreatScore from '../components/ThreatScore';
 import SortableHeader from '../components/SortableHeader';
 import Spinner from '../components/Spinner';
+import InvestigateModal from '../components/InvestigateModal';
 
 const PAGE_SIZES = [25, 50, 100, 200, 0] as const;
 
@@ -26,6 +27,9 @@ function fmtDate(iso: string): string {
 export default function AccountsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+
+  // Modal state for inline investigation popup.
+  const [investigateIP, setInvestigateIP] = useState<string | null>(null);
 
   // URL-driven state
   const page = Number(searchParams.get('page') || '1');
@@ -111,6 +115,7 @@ export default function AccountsPage() {
   const rangeEnd = Math.min(offset + effectiveLimit, totalItems);
 
   return (
+    <>
     <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -269,7 +274,7 @@ export default function AccountsPage() {
                     </td>
                     <td className="px-3 py-2">
                       <button
-                        onClick={(e) => { e.stopPropagation(); navigate(`/accounts/${encodeURIComponent(acct.IP)}`); }}
+                        onClick={(e) => { e.stopPropagation(); setInvestigateIP(acct.IP); }}
                         className="px-2 py-1 text-xs rounded cursor-pointer
                                    focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
                         style={{ color: 'var(--vn-primary)', backgroundColor: 'transparent' }}
@@ -332,5 +337,13 @@ export default function AccountsPage() {
         </>
       )}
     </div>
+
+    {investigateIP && (
+      <InvestigateModal
+        ip={investigateIP}
+        onClose={() => setInvestigateIP(null)}
+      />
+    )}
+    </>
   );
 }
