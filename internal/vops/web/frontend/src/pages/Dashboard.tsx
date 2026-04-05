@@ -224,7 +224,7 @@ function FleetTable() {
                 {c.network_type || c.type || '\u2014'}
               </td>
               <td className="px-3 py-2"><Badge status={c.node_status} /></td>
-              <td className="px-3 py-2 tabular-nums">{c.height.toLocaleString()}</td>
+              <td className="px-3 py-2 tabular-nums">{(c.height ?? 0).toLocaleString()}</td>
               <td className="px-3 py-2 tabular-nums" style={{ color: 'var(--vn-text-muted)' }}>
                 {c.avg_block_sec != null ? `${c.avg_block_sec.toFixed(1)}s` : '\u2014'}
               </td>
@@ -360,7 +360,7 @@ function IngestSection() {
           </div>
           <div>
             <span style={{ color: 'var(--vn-text-muted)' }}>Total Events:</span>{' '}
-            <span className="font-medium">{archiveStats.total_events.toLocaleString()}</span>
+            <span className="font-medium">{(archiveStats.total_events ?? 0).toLocaleString()}</span>
           </div>
         </div>
       ) : (

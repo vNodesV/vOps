@@ -74,7 +74,7 @@ function ChainCard({ chain }: { chain: ChainStatus }) {
       <dl style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem 1rem', fontSize: '0.8125rem', margin: 0 }}>
         <dt style={{ color: 'var(--vn-text-muted)' }}>Height</dt>
         <dd style={{ margin: 0, color: 'var(--vn-text)', fontVariantNumeric: 'tabular-nums' }}>
-          {chain.height.toLocaleString()}
+          {(chain.height ?? 0).toLocaleString()}
         </dd>
 
         <dt style={{ color: 'var(--vn-text-muted)' }}>Type</dt>

@@ -254,9 +254,9 @@ export default function AccountsPage() {
                     <td className="px-3 py-2 text-xs" style={{ color: 'var(--vn-text-muted)' }}>
                       {acct.ASN || '\u2014'}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums">{acct.TotalRequests.toLocaleString()}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{(acct.TotalRequests ?? 0).toLocaleString()}</td>
                     <td className="px-3 py-2 text-right tabular-nums" style={{ color: acct.RatelimitEvents > 0 ? 'var(--vn-warning)' : 'var(--vn-text-muted)' }}>
-                      {acct.RatelimitEvents.toLocaleString()}
+                      {(acct.RatelimitEvents ?? 0).toLocaleString()}
                     </td>
                     <td className="px-3 py-2">
                       <ThreatScore score={acct.ThreatScore} />
