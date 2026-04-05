@@ -1,4 +1,5 @@
 import { useState, useCallback, type FormEvent } from 'react';
+import { BASE } from '../api/client';
 import Spinner from '../components/Spinner';
 
 export default function LoginPage() {
@@ -18,7 +19,7 @@ export default function LoginPage() {
         formData.append('username', username);
         formData.append('password', password);
 
-        const res = await fetch('/login', {
+        const res = await fetch(BASE + '/login', {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -29,9 +30,9 @@ export default function LoginPage() {
         // opaqueredirect: browser prevented reading redirect target
         if (res.status === 0 || res.type === 'opaqueredirect') {
           // Try to determine if login succeeded by hitting a protected route
-          const check = await fetch('/api/v1/stats', { credentials: 'include' });
+          const check = await fetch(BASE + '/api/v1/stats', { credentials: 'include' });
           if (check.ok) {
-            window.location.href = '/';
+            window.location.href = BASE + '/';
             return;
           }
           setError('Invalid credentials');
@@ -40,7 +41,7 @@ export default function LoginPage() {
         }
 
         if (res.ok) {
-          window.location.href = '/';
+          window.location.href = BASE + '/';
           return;
         }
 
