@@ -425,6 +425,10 @@ func buildSPAHandler(distFS fs.FS, basePath string) http.HandlerFunc {
 			st, statErr := f.Stat()
 			f.Close()
 			if statErr == nil && !st.IsDir() {
+				// Vite content-hashes JS/CSS filenames → safe to cache forever.
+				if strings.HasPrefix(upath, "/assets/") {
+					w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+				}
 				fileServer.ServeHTTP(w, r)
 				return
 			}
