@@ -11,12 +11,12 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"bytes"
 	"embed"
 	"encoding/hex"
 	"fmt"
 	"io/fs"
 	"net/http"
-	"net/url"
 	"path"
 	"strings"
 	"sync"
@@ -116,7 +116,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	// GET /login is served without session check so users can access the login page.
 	// GET /settings/wizard serves the embedded configwizard HTML (bypasses React Router).
 	// GET / (catch-all) enforces session; Go redirects to /login if unauthenticated.
-	spa := buildSPAHandler(distFS)
+	spa := buildSPAHandler(distFS, s.cfg.VOps.BasePath)
 	mux.HandleFunc("GET /login", spa)
 	mux.Handle("GET /settings/wizard", s.requireSession(http.HandlerFunc(s.handleWizardPage)))
 	mux.Handle("GET /", s.requireSession(http.HandlerFunc(spa)))
@@ -389,7 +389,19 @@ func (s *Server) Shutdown(ctx context.Context) error {
 // Requests for files that exist in distFS (JS bundles, CSS, images) are served
 // directly. All other paths fall back to index.html so that React Router can
 // handle client-side navigation.
-func buildSPAHandler(distFS fs.FS) http.HandlerFunc {
+//
+// basePath is injected as <meta name="vops-base" content="..."> into index.html
+// so the SPA client can build correct API URLs when served under a sub-path proxy
+// (e.g. Apache ProxyPass /vlog/ → http://127.0.0.1:8889/ with prefix stripping).
+func buildSPAHandler(distFS fs.FS, basePath string) http.HandlerFunc {
+	// Pre-read and patch index.html once at startup.
+	indexHTML, err := fs.ReadFile(distFS, "index.html")
+	if err != nil {
+		panic("web: dist/index.html missing from embed: " + err.Error())
+	}
+	metaTag := `<meta name="vops-base" content="` + basePath + `">`
+	patchedHTML := bytes.ReplaceAll(indexHTML, []byte("</head>"), []byte(metaTag+"</head>"))
+
 	fileServer := http.FileServer(http.FS(distFS))
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Normalise the URL path and resolve the file name relative to dist/.
@@ -410,9 +422,9 @@ func buildSPAHandler(distFS fs.FS) http.HandlerFunc {
 			}
 		}
 
-		// Fallback: serve index.html for all React Router paths.
-		r2 := r.Clone(r.Context())
-		r2.URL = &url.URL{Path: "/index.html"}
-		fileServer.ServeHTTP(w, r2)
+		// Fallback: serve patched index.html for all React Router paths.
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader(patchedHTML))
 	}
 }

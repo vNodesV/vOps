@@ -1,4 +1,8 @@
-const BASE = '';  // same origin
+// BASE is the sub-path prefix vOps is served under (e.g. "/vlog").
+// Injected by the Go server as <meta name="vops-base"> in index.html so that
+// API calls resolve correctly when Apache uses prefix-stripping ProxyPass.
+const meta = document.querySelector<HTMLMetaElement>('meta[name="vops-base"]');
+export const BASE = (meta?.content ?? '').replace(/\/$/, '');
 
 export class APIError extends Error {
   status: number;
@@ -18,7 +22,7 @@ export async function apiFetch<T>(
     ...options,
   });
   if (res.status === 302 || res.redirected) {
-    window.location.href = '/login';
+    window.location.href = BASE + '/login';
     throw new APIError(401, 'Not authenticated');
   }
   if (!res.ok) {

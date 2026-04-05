@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getAccount, blockIP, unblockIP } from '../api';
+import { BASE } from '../api/client';
 import Badge from '../components/Badge';
 import ThreatScore from '../components/ThreatScore';
 import PortGrid from '../components/PortGrid';
@@ -361,7 +362,7 @@ export default function AccountDetailPage() {
                 </button>
               </div>
               <SSEStream
-                url={`/api/v1/${activeStream}/${encodeURIComponent(ip)}`}
+                url={`${BASE}/api/v1/${activeStream}/${encodeURIComponent(ip)}`}
                 method="POST"
                 onDone={() => queryClient.invalidateQueries({ queryKey: ['account', ip] })}
               />
