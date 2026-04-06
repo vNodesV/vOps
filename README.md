@@ -122,14 +122,19 @@ For the full module-by-module reference, see [`MODULES.md`](./MODULES.md).
 
 ## vOps
 
-vOps is a standalone companion binary for analyzing vProx log archives (renamed from vLog in v1.4.0). It provides a web-based dashboard with:
+vOps is a standalone companion binary for analyzing vProx log archives (renamed from vLog in v1.4.0). It provides a **React 18 + TypeScript SPA** dashboard with:
 
-- Per-IP account profiles with request history and block/unblock controls
-- Threat intelligence scoring (AbuseIPDB + VirusTotal + Shodan) — composite score 0–100
-- OSINT engine: concurrent DNS, port scan, org/geo, protocol probe, Cosmos RPC (~5s)
-- Multi-location endpoint probing (local + 🇨🇦 Canada + 🌍 worldwide)
-- Dashboard authentication with bcrypt password hashing
-- Machine-to-machine ingest API with API key auth
+- **IP Account CRM**: per-IP profiles with request history, block/unblock, notes, and threat badges
+- **Threat Intelligence**: AbuseIPDB v2 + VirusTotal v3 + Shodan — composite score 0–100 (parallel, ~10 s)
+- **OSINT engine**: concurrent DNS, port scan, org/geo, protocol probe, Cosmos RPC (~5 s)
+- **InvestigateModal**: two-phase SSE investigation with animated progress bars; Org / Requests / Rate Limits / Score in the modal header; table order preserved after scan
+- **Scan badge**: `IntelUpdatedAt` timestamp displayed per-row — see at a glance which IPs have been investigated
+- **UFW Sync**: syncs blocked IPs to UFW rules; optional sudo password popup
+- **Dashboard Servers panel** *(v1.4.5)*: live VM metric cards (OS, CPU / Memory / Disk, Load, pending updates, per-VM upgrade SSE stream)
+- **Fleet page** *(v1.4.5)*: live server metrics section + registered chains + deployment history
+- **Multi-location endpoint probing**: local + 🇨🇦 Canada + 🌍 worldwide via check-host.net
+- **Dashboard authentication**: bcrypt password hashing, HMAC-SHA256 session tokens (24 h TTL)
+- **Config Wizard**: 7-step browser wizard (`vops config --web`) for full vOps + vProx setup
 
 ### Install and run
 

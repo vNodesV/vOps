@@ -7,6 +7,117 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [v1.4.5] — 2026-04-06 (branch: `vLog_v1.4.5`)
+
+### Added — vOps v1.4.5
+
+**IP Accounts UX**
+- **Scan badge**: `IntelUpdatedAt` timestamp displayed as a green dot + formatted date in the Accounts table "Scanned" column; dash when never scanned
+- **Investigate modal metadata**: Org, Requests, Rate Limits, and Threat Score now populate in the modal header under the IP address (populated from the `IPAccount` record, no extra fetch required)
+- **UFW Sync modal**: clicking "Sync UFW" now opens a password-input popup for optional `sudo -S` piping; empty password falls back to NOPASSWD path (`sudo -n`)
+- **No auto-sort after scan**: `invalidateQueries` called with `refetchType: 'none'` so table order is preserved until the next natural background poll
+
+**Dashboard — Servers Panel**
+- `ServersPanel` component added to the Dashboard page between the Chain Status and Ingest sections
+- Each VM rendered as a metric card: Name, OS, datacenter, LAN IP, CPU/Memory/Disk progress bars, Load Average, pending `apt` updates count, Status badge, and per-VM **Upgrade** button
+- Upgrade button opens `UpgradeModal` with streaming log output
+
+**Fleet — Live Servers Section**
+- `ServersLiveSection` component added to the top of the Fleet page (above registered chains)
+- Same metric-card grid as the Dashboard Servers Panel; queries `GET /api/v1/fleet/vms/status`; auto-refreshes every 60 s
+- `MiniBar` sub-component for inline CPU/Mem/Disk progress bars
+
+**UpgradeModal component**
+- New reusable component: three-phase state machine (`input` → `running` → `done/error`)
+- Phase 1: optional sudo password input field (omit for NOPASSWD systems)
+- Phase 2: SSE streaming log — color-coded step labels (`update:start`, `update:done`, `upgrade:start`, `upgrade:done`, `complete`); close button disabled during active upgrade
+- Phase 3: success or error summary with Dismiss
+
+**Backend — Fleet API**
+- `POST /api/v1/fleet/vms/{name}/upgrade` — SSE endpoint; runs `apt update` then `apt upgrade -y` on the target VM over SSH; accepts `{"sudo_password":"..."}` in the request body; streams structured events with `X-Accel-Buffering: no` for Apache compatibility
+- `RunInput(cmd, stdinData string)` method added to `internal/fleet/ssh` — pipes a string to the SSH session's stdin for non-interactive `sudo -S` without TTY
+- `OS string` field added to `VMStatus` struct — collected via `lsb_release -ds` as the 6th value in the single SSH compound command round-trip
+
+**Frontend API layer**
+- `VMStatus` TypeScript interface added to `api/types.ts` (20 fields matching Go struct)
+- `getVMStatus()` and `vmUpgradeURL(name)` helper functions added to `api/index.ts`
+- `openSSEStream()` extended with an optional `body?: unknown` parameter — when provided, the request is sent as `POST` with `Content-Type: application/json` (required for the upgrade endpoint)
+
+**SortableHeader**
+- `align?: 'left' | 'center' | 'right'` prop added; Requests and Rate Limits columns now centered in the Accounts table
+
+### Changed — vOps v1.4.5
+
+- Accounts page: `investigateIP` state replaced by `investigateAcct: IPAccount | null` — full account object forwarded to `InvestigateModal` so metadata is available without an extra API call
+- Accounts page: Requests and Rate Limits columns use `align="center"` via `SortableHeader`
+- InvestigateModal: accepts `acct?: IPAccount` prop and renders Org/Requests/Rate Limits/Score in the modal header
+
+### Skills
+
+- `debian-linux-triage` skill installed (`.github/skills/debian-linux-triage/`) — Ubuntu fleet management patterns
+
+---
+
+## [v1.4.0] — 2026-03-18 (branch: `vLog_v1.4.0`)
+
+This release ships **vOps v1.4.0** — a full ground-up rebuild of the vLog dashboard as a React/TypeScript SPA.
+
+### Added — vOps v1.4.0
+
+- **Binary rename**: `vlog` → `vops`; `vlog` alias symlink retained for backward compatibility
+- **React 18 + Vite SPA** — replaces htmx/html-template UI; TypeScript, `@tanstack/react-query`, Vite; built with `make frontend` and embedded via `go:embed`
+- **SPA routing under sub-path**: `BASE_URL = import.meta.env.BASE_URL` from Vite config; all `fetch()` and redirect calls prefixed — prevents blank-page under Apache `/vlog/` sub-path
+- **Config Wizard** (`internal/configwizard/`) — 7-step web wizard for full vOps/vProx configuration: ports, settings, chains, vOps keys, fleet, infra, backup; launched via `vops config --web`; auto-opens browser; `enforceLocalhost` + CSRF + `slug` validation
+- **Settings page** — inline per-section editor (replaces modal); covers chains, infra VMs, vOps/vProx keys, fleet SSH, ports, and backup
+- **Auth system**: 32-byte hex session tokens, HMAC-SHA256, 24 h TTL; bcrypt Cost=12; `HttpOnly`/`SameSite=Strict` cookie; `requireSession` middleware; `[vops.auth]` section in `vops.toml`
+- **IP Accounts / Threats page**: URL-driven sort, pagination, search; `InvestigateModal` with SSE two-phase investigation (TI 0–50 % + OSINT 50–100 %) and three animated progress bars
+- **Fleet backend** (`internal/fleet/`): `VMStatus` struct (`CPUPct`, `MemPct`, `StoragePct`, `LoadAvg`, `AptCount`, `PolledAt`); SSH compound command polling; `HandleVMStatus` → `GET /api/v1/fleet/vms/status`
+- **UFW sync**: `POST /api/v1/fleet/ufw/sync` — rebuilds UFW rules from blocked IPs in the database
+- **Theme system** — three CSS themes (vnodes / dark-blue / light-blue) with per-theme logo, favicon, background, and OG image assets in `internal/vops/web/static/2026_logos/`
+- **Dual-mode wizard** — `new` (fresh install) and `upgrade` / `migration` (import existing TOML) modes; VM deduplication on import; legacy `config/push/vms.toml` import support
+- **Chain Settings**: proxy_vhost_prefix/suffix fields; syncs to legacy `config/chains/<chain>.toml`; chain/infra remove unregisters aliases from fleet state DB
+
+### Changed — vOps v1.4.0
+
+- Config section renamed from `[vlog]` to `[vops]`; Go struct fields: `VOpsSection` / `VOps`; service name: `vOps`
+- Config file path: `config/vops/vops.toml` (was `config/vlog/vlog.toml`)
+- Fleet poll pruning: `pollAll()` now prunes stale statuses not in current VM or registered-chain active set
+- Settings snapshot/import APIs redact vOps/infra secrets; save preserves secrets from existing config or import source
+
+### Fixed — vOps v1.4.0
+
+- `GetIPAccount` returns `(nil, nil)` on no-rows; silently dropped all investigation results for first-time IPs — fixed: `if err != nil || acc == nil {`
+- Chain dedup: `chainBaseSlug` + `FindVMForChain` resolve `"cheqd-testnet"` (SQLite) vs `"cheqd"` (VM) double-rendering
+- Apache `DELETE` 405: fleet mutations use `POST` alias routes; JS client updated accordingly
+- `openFleetDB()`: reads `cfg.VLog.Push.DBPath` with safe fallback (was hardcoded `data/push.db`)
+
+---
+
+## [v1.3.0] — 2026-03-10 (branch: `vLog_v1.3.x`)
+
+### Added — vLog v1.3.0
+
+- **Fleet module** (`internal/fleet/`) — renamed from `push`; centralized SSH control plane
+  - SSH dispatcher (`internal/fleet/ssh/`) using `golang.org/x/crypto/ssh`
+  - Remote bash runner (`internal/fleet/runner/`)
+  - SQLite state store (`internal/fleet/state/`) — deployments + registered chains
+  - Cosmos RPC poller (`internal/fleet/status/`) — block height, governance, upgrade plan, sync status
+  - HTTP API (`internal/fleet/api/`) — VM status, chain registration, deploy, deployments list
+  - `VMStatus` struct: `Online bool`, `CPUPct`, `MemPct`, `StoragePct`, `LoadAvg`, `AptCount`, `PolledAt`
+- **Config restructure**: `config/fleet/settings.toml` replaces deprecated `config/push/vms.toml`; all `*.toml` files under `config/infra/` scanned for VM inventory; `[vm.ping]` subtable for per-VM probe country/provider
+- **`RemoveRegisteredChain`**: checks `RowsAffected()`, returns `state.ErrNotFound` when 0
+- **vLog dashboard**: Deploy Wizard panel + Chain Status Table panel; chain-delete moved to `vprox fleet unregister` CLI only
+- **vLog dashboard v2 auth**: bcrypt Cost=12 + HMAC-SHA256 session tokens (24 h TTL); `HttpOnly`/`SameSite=Strict` cookie
+- **Settings page** (inline editor): chain/service tree controls, legacy TOML import, `features.mask_rpc` rewrite parity
+
+### Changed — vLog v1.3.0
+
+- `FleetConfig` / `FleetDefaults` renamed from `PushConfig` / `PushDefaults` in config structs
+- `pollAll()` uses `FindVMForChain` with slug-dedup instead of `FindVM`
+- `wired ChainStatus.PingCountry` / `.PingProvider` from `[vm.ping]` subtable
+
+---
+
 ## [v1.2.0] — 2026-03-03
 
 This release ships **vProx v1.2.0** and **vLog v1.0.0** together as **vProxVL v1.2.0**.

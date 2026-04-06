@@ -1893,3 +1893,58 @@ Confirm wizard delivery status, apply all expert review findings (security/archi
 - `go build ./...` ✅
 - `go vet ./...` ✅
 - Branch: `vLog_v1.4.0`, clean working tree (only agents/.DS_Store + untracked logo dir)
+
+---
+
+## Session: 2026-04-06 11:45Z — vLog_v1.4.5 server metrics + IP accounts UX
+
+### Goal
+Ship IP Accounts UX polish, Dashboard Servers panel, Fleet live metrics section, backend upgrade SSE endpoint; update all repo documentation.
+
+### Branch
+`vLog_v1.4.5` — HEAD at `aaf8c43`
+
+### Completed
+
+**Backend (Go)**
+- `internal/fleet/ssh/ssh.go` — Added `RunInput(cmd, stdinData string)` for stdin-piped `sudo -S`
+- `internal/fleet/status/vmstatus.go` — Added `OS string` field; SSH compound command now 6 lines (added `lsb_release -ds`); parses `lines[5]` → `st.OS`
+- `internal/fleet/api/api.go` — Added `HandleVMUpgrade` SSE handler; added `fmt` + `fleetssh` imports; `upgradeRequest` struct; SSE events: `connected → update:start → update:done → upgrade:start → upgrade:done → complete`
+- `internal/vops/web/server.go` — Registered `POST /api/v1/fleet/vms/{name}/upgrade`
+
+**Frontend TypeScript**
+- `api/types.ts` — Added `VMStatus` interface (20 fields)
+- `api/index.ts` — Added `getVMStatus()`, `vmUpgradeURL(name)`, `BASE` import
+- `api/sse.ts` — Added optional `body?: unknown` param to `openSSEStream` (enables POST for upgrade endpoint)
+- `components/SortableHeader.tsx` — Added `align?: 'left' | 'center' | 'right'` prop
+- `components/UpgradeModal.tsx` — NEW: 3-phase upgrade modal with password input + SSE streaming log
+- `components/InvestigateModal.tsx` — Full rewrite: `acct?: IPAccount` prop; Org/Requests/RateLimits/Score header; `refetchType: 'none'`
+- `pages/Accounts.tsx` — Full rewrite: `UFWSyncModal`; `ScanBadge`; centered Requests/RateLimits; acct-based investigate state; no auto-sort after scan
+- `pages/Dashboard.tsx` — Added `MetricBar`, `ServersPanel`; wired into page JSX between Chain Status and Ingest
+- `pages/Fleet.tsx` — Added `MiniBar`, `ServersLiveSection`; wired at top of page; imports `UpgradeModal`
+
+**Skills**
+- `.github/skills/debian-linux-triage/SKILL.md` — installed from awesome-copilot registry
+
+**Docs**
+- `CHANGELOG.md` — Added v1.3.0, v1.4.0, v1.4.5 entries (was missing all three)
+- `MODULES.md` — Updated Dashboard section, Accounts section, Web UI Routes table (+3 routes), Internal Packages table, Fleet module version/description, Fleet API Routes (+3 routes), Fleet Internal Packages (+VMStatus fields table)
+- `README.md` — Updated vOps section: SPA mention, new v1.4.5 features (Servers panel, Fleet metrics, scan badge, UFW sync, InvestigateModal improvements, Config Wizard)
+
+### Verification
+- `go build ./...` ✅
+- `npm run build` ✅ (647 modules, no TS errors)
+- Commit: `aaf8c43` — `feat(fleet,dashboard,accounts): server metrics panel + upgrade SSE + IP accounts UX`
+
+### Open Todos (from SQL tracker)
+- `ufw-service-user` — Makefile `vops` system user + `sudoers.d` scoped NOPASSWD
+- `fleet-perf-graphs` — Fleet sparklines/history (needs SQLite time-series)
+- `fleet-servers-tab` — Additional Fleet server detail views
+- `vm-manager-libvirt` — go-libvirt SSH tunnel to hypervisor
+- `vm-manager-api` — `/api/v1/vm/*` routes
+- `vm-manager-ui` — `/vms` React page
+
+### Next Steps
+1. `ufw-service-user`: `useradd -r -s /usr/sbin/nologin vops`; `sudoers.d/vops` NOPASSWD for 3 ufw commands; `User=vops` in `vops.service.template`
+2. VM Manager Tier 1: `go get github.com/digitalocean/go-libvirt`; `internal/vops/vm/` package; SSH tunnel to `10.0.0.1:/var/run/libvirt/libvirt-sock`; list/start/stop/pause/resume/delete/snapshots
+3. Fleet sparklines: SQLite time-series table `vm_metrics_history`; Chart.js mini-graphs per VM

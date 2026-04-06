@@ -445,20 +445,12 @@ absolute_links      = "auto" # auto | always | never
 
 ### Dashboard
 
-The dashboard (`GET /`) provides:
+The React SPA dashboard (`GET /`) provides:
 
 - **Stats cards**: total IPs, total requests, rate-limit events, flagged IPs
-- **Dual-line Chart.js charts**: requests over time (left block) and IPs/rate-limits (right block) with chart-type dropdown
-- **Endpoint status panel**: table of proxied hosts with request counts, unique IPs, last seen, and 3 live probe columns:
-
-| Column | Source | Description |
-|---|---|---|
-| **Live** | — | Probe trigger button |
-| **Local** | vOps server | Direct HTTP probe from the vOps host; shows latency in green or error in red |
-| **🇨🇦** | check-host.net — Vancouver | External probe from Canada node |
-| **🌍** | check-host.net — random WW node | External probe from Europe/Asia/Americas |
-
-During probing, each cell shows a CSS spinner ring. On completion, cells show `NNms` (green) or error text (red). Hovering shows the probe node label and probed URL.
+- **Dual-line Chart.js charts**: requests over time and IPs/rate-limits with chart-type dropdown
+- **Chain Status panel**: table of proxied chains with block height, sync status, governance alerts, and 3 live probe columns (Local | 🇨🇦 | 🌍)
+- **Servers panel** *(v1.4.5)*: live VM metric cards showing OS, CPU / Memory / Disk bars, Load Average, pending `apt` updates, and a per-VM **Upgrade** button that streams the upgrade log via SSE
 
 ### Accounts Page
 
@@ -467,16 +459,19 @@ During probing, each cell shows a CSS spinner ring. On completion, cells show `N
 - **Search**: by IP, country code, or row ID
 - **Per-page**: 25 / 50 / 100 / 200 / All
 - **Sort**: any column; sort state persisted in URL (back-nav and direct URL sharing work correctly)
-- **Columns**: Org (ip-api.com) · IP · Country · Requests · Rate Limits · Threat Score · Last Seen · Actions · Status
+- **Columns**: Org · IP · Country · Requests (centered) · Rate Limits (centered) · Threat Score · Last Seen · Scanned · Actions · Status
+- **Scanned badge** *(v1.4.5)*: green dot + `IntelUpdatedAt` date when threat intel exists; dash otherwise
 - **Status badge**: ALLOWED (green) / BLOCKED (red)
-- **Investigate button**: turns green (`.btn-investigate-done`) when threat intel exists for that IP
+- **Investigate button**: opens popup with Org / Requests / Rate Limits / Score header; two-phase SSE investigation (TI 0–50 % + OSINT 50–100 %) with animated progress bars; table order is preserved after scan completes
+- **UFW Sync** *(v1.4.5)*: opens a password-input modal; optional sudo password piped via `sudo -S`
 
 ### Web UI Routes
 
 | Route | Description |
 |---|---|
-| `GET /` | Dashboard: stats, charts, endpoint probe panel |
-| `GET /accounts` | Paginated IP account list with search and sort |
+| `GET /` | Dashboard: stats, charts, chain status panel, servers panel |
+| `GET /accounts` | Paginated IP account list with search, sort, scan badge |
+| `GET /fleet` | Fleet page: live server metric cards + registered chains + deployments |
 | `GET /accounts/:ip` | CRM-like IP account detail |
 | `POST /api/v1/ingest` | Trigger archive ingest |
 | `GET /api/v1/accounts` | JSON account list |
@@ -489,6 +484,9 @@ During probing, each cell shows a CSS spinner ring. On completion, cells show `N
 | `POST /api/v1/block/:ip` | Flag IP as blocked |
 | `POST /api/v1/unblock/:ip` | Remove block flag |
 | `GET /api/v1/stats` | JSON dashboard stats |
+| `GET /api/v1/fleet/vms/status` | JSON live VMStatus list (CPU, Mem, Disk, Load, OS, apt count) |
+| `POST /api/v1/fleet/vms/{name}/upgrade` | SSE: `apt update` + `apt upgrade -y` on named VM; accepts `{"sudo_password":"..."}` |
+| `POST /api/v1/fleet/ufw/sync` | Rebuild UFW rules from blocked IPs |
 
 ### Internal Packages
 
@@ -498,7 +496,10 @@ During probing, each cell shows a CSS spinner ring. On completion, cells show `N
 | `internal/vops/db/` | SQLite schema, connection pool, query methods (5 tables + 6 indexes) |
 | `internal/vops/ingest/` | Archive scanner, log parser (`main.log` + `rate-limit.jsonl`), FS watcher |
 | `internal/vops/intel/` | AbuseIPDB v2, VirusTotal v3, Shodan API clients; parallel queries (3 goroutines); composite threat scoring (0–100); ~10s vs former ~30s |
-| `internal/vops/web/` | Embedded HTTP server, `html/template` + `go:embed` + htmx UI, SSE handlers, probe handler |
+| `internal/vops/web/` | React 18 / Vite SPA (`internal/vops/web/frontend/`), embedded via `go:embed dist/`; Go HTTP server, SSE handlers, probe handler |
+| `internal/vops/web/frontend/src/pages/` | `Dashboard.tsx`, `Accounts.tsx`, `Fleet.tsx`, `Threats.tsx` |
+| `internal/vops/web/frontend/src/components/` | `InvestigateModal.tsx`, `UpgradeModal.tsx`, `SortableHeader.tsx`, `Badge.tsx`, `Spinner.tsx` |
+| `internal/vops/web/frontend/src/api/` | `index.ts` (fetch helpers), `types.ts` (TypeScript interfaces), `sse.ts` (SSE stream helper) |
 
 ### OSINT Engine
 
@@ -553,8 +554,8 @@ vOps builds a composite threat score (0–100) for each IP using three external 
 
 ## 12) Fleet Module (`internal/fleet/`)
 
-**Version**: v1.3.0  
-**Purpose**: Centralized SSH control plane. vProx SSHes into validator VMs to execute chain maintenance scripts, monitor upgrade proposals, poll chain status (height, governance, sync), and dispatch deployments.
+**Version**: v1.4.5  
+**Purpose**: Centralized SSH control plane. vOps SSHes into managed VMs to collect live metrics, execute chain maintenance scripts, monitor upgrade proposals, poll chain status (height, governance, sync), and dispatch deployments.
 
 **Location:**
 - `internal/fleet/` — packages: `config/`, `ssh/`, `runner/`, `state/`, `status/`, `api/`
@@ -653,22 +654,42 @@ vprox fleet update [--host <name>]   # Run apt upgrade on VM(s) via SSH
 | Method | Route | Description |
 |---|---|---|
 | `GET` | `/api/v1/fleet/vms` | JSON list of all VMs with status |
+| `GET` | `/api/v1/fleet/vms/status` | JSON live VMStatus (CPU, Mem, Disk, Load Avg, OS, apt count) for all VMs |
+| `POST` | `/api/v1/fleet/vms/{name}/upgrade` | SSE: `apt update` + `apt upgrade -y` on named VM; body: `{"sudo_password":"..."}` |
 | `GET` | `/api/v1/fleet/chains` | JSON list of registered chains |
 | `POST` | `/api/v1/fleet/deploy` | Dispatch a script to a VM |
 | `GET` | `/api/v1/fleet/deployments` | Deployment history |
 | `POST` | `/api/v1/fleet/chains/registered` | Register a chain |
 | `POST` | `/api/v1/fleet/chains/registered/{chain}/unregister` | Unregister a chain |
+| `POST` | `/api/v1/fleet/ufw/sync` | Rebuild UFW rules from blocked IPs |
 
 ### Internal Packages
 
 | Package | Description |
 |---|---|
 | `internal/fleet/config/` | Infra loader (`LoadFromInfraFiles`, `LoadFromChainConfigs`); credential precedence resolution |
-| `internal/fleet/ssh/` | SSH client dispatcher using `golang.org/x/crypto/ssh` |
+| `internal/fleet/ssh/` | SSH client dispatcher using `golang.org/x/crypto/ssh`; `Run(cmd)` and `RunInput(cmd, stdinData)` methods |
 | `internal/fleet/runner/` | Remote bash execution over SSH; captures stdout/stderr |
 | `internal/fleet/state/` | SQLite persistence for deployments + registered chains |
-| `internal/fleet/status/` | Cosmos RPC poller: height, gov proposals, upgrade plan, sync status |
-| `internal/fleet/api/` | HTTP handlers wired into vProx router |
+| `internal/fleet/status/` | SSH compound-command poller: CPU, mem, disk, load avg, apt count, OS (`lsb_release -ds`); Cosmos RPC height/gov/sync |
+| `internal/fleet/api/` | HTTP handlers: VMStatus poll, upgrade SSE, UFW sync, chain registration, deploy |
+
+### VMStatus Fields
+
+`VMStatus` is collected in a single SSH round-trip via a compound command. Fields:
+
+| Go Field | Type | Source |
+|---|---|---|
+| `Name` | string | VM registry |
+| `Online` | bool | SSH reachability |
+| `OS` | string | `lsb_release -ds` |
+| `CPUPct` | float64 | `top -bn1` |
+| `MemPct` | float64 | `/proc/meminfo` |
+| `StoragePct` | float64 | `df /` |
+| `LoadAvg` | string | `/proc/loadavg` (1/5/15 min) |
+| `AptCount` | int | `apt list --upgradable 2>/dev/null \| wc -l` |
+| `PolledAt` | time.Time | collection timestamp |
+| `Error` | string | non-empty when SSH fails |
 
 ### Infra File Structure
 
