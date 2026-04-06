@@ -103,6 +103,18 @@ CREATE TABLE IF NOT EXISTS host_traffic (
 	http_count INTEGER NOT NULL DEFAULT 0,
 	ws_count   INTEGER NOT NULL DEFAULT 0
 );
+
+CREATE TABLE IF NOT EXISTS vm_metrics_history (
+	id          INTEGER PRIMARY KEY AUTOINCREMENT,
+	vm_name     TEXT NOT NULL,
+	polled_at   TEXT NOT NULL,
+	cpu_pct     REAL NOT NULL DEFAULT 0,
+	mem_pct     REAL NOT NULL DEFAULT 0,
+	storage_pct REAL NOT NULL DEFAULT 0,
+	load_avg    TEXT NOT NULL DEFAULT '',
+	apt_count   INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_vm_metrics_vm_polled ON vm_metrics_history(vm_name, polled_at);
 `
 
 // Migrate executes the schema DDL against db, creating all tables and

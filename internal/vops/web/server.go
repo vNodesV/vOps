@@ -30,6 +30,7 @@ import (
 	"github.com/vNodesV/vProx/internal/vops/db"
 	"github.com/vNodesV/vProx/internal/vops/ingest"
 	"github.com/vNodesV/vProx/internal/vops/intel"
+	"github.com/vNodesV/vProx/internal/vops/vm"
 )
 
 //go:embed static dist
@@ -48,6 +49,7 @@ type Server struct {
 	httpSrv  *http.Server
 	fleet    *api.Handlers // nil when fleet module is not configured
 	fleetSvc *fleet.Service
+	vmMgr    *vm.Handlers  // nil when no hypervisor hosts are configured
 
 	// Session state for dashboard login.
 	sessions   map[string]time.Time // token → expiry
@@ -94,8 +96,17 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		loginAttempts: make(map[string]*loginAttempt),
 	}
 	if fleetSvc != nil {
-		s.fleet = api.New(fleetSvc)
+		s.fleet = api.New(fleetSvc, d.DB)
 		s.fleetSvc = fleetSvc
+		// Wire VM manager when the fleet config has hypervisor hosts.
+		if len(fleetSvc.Config().Hosts) > 0 {
+			s.vmMgr = vm.NewHandlers(
+				fleetSvc.Config(),
+				22,
+				cfg.VOps.Push.Defaults.KeyPath,
+				cfg.VOps.Push.Defaults.KnownHostsPath,
+			)
+		}
 	}
 
 	mux := http.NewServeMux()
@@ -199,6 +210,31 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 			s.requireSession(http.HandlerFunc(s.fleet.HandlePoll)))
 		mux.Handle("POST /api/v1/fleet/vms/{name}/upgrade",
 			s.requireSession(http.HandlerFunc(s.fleet.HandleVMUpgrade)))
+		mux.Handle("GET /api/v1/fleet/vms/{name}/history",
+			s.requireSession(http.HandlerFunc(s.fleet.HandleVMHistory)))
+	}
+
+	// VM Manager routes — only registered when hypervisor hosts are configured.
+	if s.vmMgr != nil {
+		mux.Handle("GET /api/v1/vm/hosts",
+			s.requireSession(http.HandlerFunc(s.vmMgr.HandleListHosts)))
+		mux.Handle("GET /api/v1/vm/hosts/{host}/domains",
+			s.requireSession(http.HandlerFunc(s.vmMgr.HandleListDomains)))
+		mux.Handle("POST /api/v1/vm/hosts/{host}/domains/{domain}/action",
+			s.requireSession(http.HandlerFunc(s.vmMgr.HandleDomainAction)))
+		mux.Handle("GET /api/v1/vm/hosts/{host}/domains/{domain}/stats",
+			s.requireSession(http.HandlerFunc(s.vmMgr.HandleDomainStats)))
+		mux.Handle("GET /api/v1/vm/hosts/{host}/domains/{domain}/snapshots",
+			s.requireSession(http.HandlerFunc(s.vmMgr.HandleListSnapshots)))
+		mux.Handle("POST /api/v1/vm/hosts/{host}/domains/{domain}/snapshots",
+			s.requireSession(http.HandlerFunc(s.vmMgr.HandleCreateSnapshot)))
+		mux.Handle("POST /api/v1/vm/hosts/{host}/domains/{domain}/snapshots/{snap}/revert",
+			s.requireSession(http.HandlerFunc(s.vmMgr.HandleRevertSnapshot)))
+		mux.Handle("DELETE /api/v1/vm/hosts/{host}/domains/{domain}/snapshots/{snap}",
+			s.requireSession(http.HandlerFunc(s.vmMgr.HandleDeleteSnapshot)))
+		// POST alias for DELETE — useful behind Apache reverse proxies.
+		mux.Handle("POST /api/v1/vm/hosts/{host}/domains/{domain}/snapshots/{snap}/delete",
+			s.requireSession(http.HandlerFunc(s.vmMgr.HandleDeleteSnapshot)))
 	}
 
 	readTimeout := time.Duration(cfg.VOps.Server.ReadTimeoutSec) * time.Second

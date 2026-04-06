@@ -9,8 +9,9 @@ import {
   forcePoll,
   getVMStatus,
   vmUpgradeURL,
+  getVMHistory,
 } from '../api';
-import type { RegisteredChain, VMView, Deployment, VMStatus } from '../api/types';
+import type { RegisteredChain, VMView, Deployment, VMStatus, VMMetricPoint } from '../api/types';
 import Spinner from '../components/Spinner';
 import Badge from '../components/Badge';
 import UpgradeModal from '../components/UpgradeModal';
@@ -88,6 +89,50 @@ function MiniBar({ value, warn = 70, danger = 85, label }: { value: number; warn
 }
 
 /* ── Live Servers Section ────────────────────────────────────── */
+
+/* ── History Sparkline ───────────────────────────────────────── */
+function Sparkline({ pts, color, height = 28, width = 120 }: { pts: number[]; color: string; height?: number; width?: number }) {
+  if (pts.length < 2) return null;
+  const step = width / (pts.length - 1);
+  const points = pts.map((v, i) => {
+    const x = i * step;
+    const y = height - Math.min(100, Math.max(0, v)) / 100 * height;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  return (
+    <svg width={width} height={height} style={{ display: 'block' }}>
+      <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function HistorySparkline({ vmName }: { vmName: string }) {
+  const { data } = useQuery({
+    queryKey: ['vm-history', vmName],
+    queryFn: () => getVMHistory(vmName, 6),
+    staleTime: 60_000,
+    retry: false,
+  });
+  const pts: VMMetricPoint[] = data?.history ?? [];
+  if (pts.length < 2) return null;
+  const cpu = pts.map(p => p.cpu_pct);
+  const mem = pts.map(p => p.mem_pct);
+  const disk = pts.map(p => p.storage_pct);
+  return (
+    <div style={{ marginTop: '0.5rem', borderTop: '1px solid var(--vn-border)', paddingTop: '0.5rem' }}>
+      <div style={{ fontSize: '0.65rem', color: 'var(--vn-text-subtle)', marginBottom: '0.25rem' }}>
+        Last 6h — <span style={{ color: 'var(--vn-primary)' }}>■</span> CPU
+        {' '}<span style={{ color: 'var(--vn-success)' }}>■</span> Mem
+        {' '}<span style={{ color: 'var(--vn-warning)' }}>■</span> Disk
+      </div>
+      <div style={{ position: 'relative', height: 28 }}>
+        <div style={{ position: 'absolute', top: 0, left: 0 }}><Sparkline pts={disk} color="var(--vn-warning)" /></div>
+        <div style={{ position: 'absolute', top: 0, left: 0 }}><Sparkline pts={mem} color="var(--vn-success)" /></div>
+        <div style={{ position: 'absolute', top: 0, left: 0 }}><Sparkline pts={cpu} color="var(--vn-primary)" /></div>
+      </div>
+    </div>
+  );
+}
 
 function ServersLiveSection() {
   const [upgradeTarget, setUpgradeTarget] = useState<VMStatus | null>(null);
@@ -192,6 +237,7 @@ function ServersLiveSection() {
                       {vm.apt_count > 0 ? `⬆ Upgrade (${vm.apt_count})` : 'Upgrade'}
                     </button>
                   </div>
+                  <HistorySparkline vmName={vm.name} />
                 </>
               ) : (
                 <div style={{ fontSize: '0.8rem', color: 'var(--vn-danger)' }}>

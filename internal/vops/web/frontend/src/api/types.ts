@@ -151,3 +151,38 @@ export type ConfigSnapshot = Record<string, unknown>;
 
 // SSE event data
 export interface SSEEvent { type: string; data: string; }
+
+// VM Metrics History
+export interface VMMetricPoint {
+  polled_at: string;
+  cpu_pct: number;
+  mem_pct: number;
+  storage_pct: number;
+  load_avg: string;
+  apt_count: number;
+}
+
+// VM Manager — libvirt domains
+export interface LibvirtDomain {
+  name: string;
+  state: string;      // "running" | "shut off" | "paused" | "crashed"
+  cpus: number;
+  max_mem_kib: number;
+  used_mem_kib: number;
+  persistent: boolean;
+  autostart: boolean;
+  uuid?: string;
+}
+
+export interface LibvirtSnapshot {
+  name: string;
+  created_at?: string;
+  state?: string;
+}
+
+export interface HypervisorHost {
+  name: string;
+  lan_ip?: string;
+  datacenter?: string;
+  user?: string;
+}

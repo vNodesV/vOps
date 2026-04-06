@@ -4,12 +4,14 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,15 +19,18 @@ import (
 	"github.com/vNodesV/vProx/internal/fleet/config"
 	fleetssh "github.com/vNodesV/vProx/internal/fleet/ssh"
 	"github.com/vNodesV/vProx/internal/fleet/status"
+	opsdb "github.com/vNodesV/vProx/internal/vops/db"
 )
 
-// Handlers holds a reference to the fleet Service.
+// Handlers holds a reference to the fleet Service and an optional metrics DB.
 type Handlers struct {
 	svc *fleet.Service
+	db  *sql.DB // may be nil when metrics storage is not wired
 }
 
-// New returns an Handlers backed by svc.
-func New(svc *fleet.Service) *Handlers { return &Handlers{svc: svc} }
+// New returns a Handlers backed by svc. db is optional; when non-nil, VM
+// metrics are stored on each status poll and history endpoints are enabled.
+func New(svc *fleet.Service, db *sql.DB) *Handlers { return &Handlers{svc: svc, db: db} }
 
 // ── GET /api/v1/fleet/vms/status ──────────────────────────────────────────────
 
@@ -33,10 +38,51 @@ func New(svc *fleet.Service) *Handlers { return &Handlers{svc: svc} }
 // The response includes a "hosts" array for tree grouping in the dashboard.
 func (h *Handlers) HandleVMStatus(w http.ResponseWriter, r *http.Request) {
 	results := status.PollAllVMs(h.svc.Config())
+
+	// Store metrics in history table when DB is wired.
+	if h.db != nil {
+		for _, vm := range results {
+			if !vm.Online {
+				continue
+			}
+			_ = opsdb.InsertVMMetric(h.db, vm.Name,
+				vm.CPUPct, vm.MemPct, vm.StoragePct,
+				vm.LoadAvg, vm.AptCount,
+			)
+		}
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"vms":   results,
 		"hosts": h.svc.Hosts(),
 	})
+}
+
+// ── GET /api/v1/fleet/vms/{name}/history ─────────────────────────────────────
+
+// HandleVMHistory returns time-series metrics for a single VM.
+// Query param: hours (default 24, max 48).
+func (h *Handlers) HandleVMHistory(w http.ResponseWriter, r *http.Request) {
+	if h.db == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "metrics storage not available"})
+		return
+	}
+	name := r.PathValue("name")
+	hours := 24
+	if q := r.URL.Query().Get("hours"); q != "" {
+		if n, err := strconv.Atoi(q); err == nil && n > 0 && n <= 48 {
+			hours = n
+		}
+	}
+	pts, err := opsdb.GetVMHistory(h.db, name, hours)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	if pts == nil {
+		pts = []opsdb.VMMetricPoint{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"history": pts})
 }
 
 // ── GET /api/v1/fleet/vms ─────────────────────────────────────────────────────

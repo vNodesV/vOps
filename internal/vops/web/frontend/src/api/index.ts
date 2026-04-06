@@ -121,3 +121,47 @@ export const genSSHKey = () =>
   apiPost<{ public_key: string; private_key_path: string }>(
     '/settings/api/gen-ssh-key',
   );
+
+// Fleet — VM metrics history
+export const getVMHistory = (name: string, hours = 24) =>
+  apiFetch<{ history: import('./types').VMMetricPoint[] }>(
+    `/api/v1/fleet/vms/${encodeURIComponent(name)}/history?hours=${hours}`,
+  );
+
+// VM Manager
+export const getVMHosts = () =>
+  apiFetch<{ hosts: import('./types').HypervisorHost[] }>('/api/v1/vm/hosts');
+
+export const getVMDomains = (host: string) =>
+  apiFetch<{ host: string; domains: import('./types').LibvirtDomain[] }>(
+    `/api/v1/vm/hosts/${encodeURIComponent(host)}/domains`,
+  );
+
+export const vmDomainAction = (host: string, domain: string, action: string) =>
+  apiPost<{ result: string }>(
+    `/api/v1/vm/hosts/${encodeURIComponent(host)}/domains/${encodeURIComponent(domain)}/action`,
+    { action },
+  );
+
+export const getVMSnapshots = (host: string, domain: string) =>
+  apiFetch<{ snapshots: import('./types').LibvirtSnapshot[] }>(
+    `/api/v1/vm/hosts/${encodeURIComponent(host)}/domains/${encodeURIComponent(domain)}/snapshots`,
+  );
+
+export const createVMSnapshot = (host: string, domain: string, name: string) =>
+  apiPost<{ result: string }>(
+    `/api/v1/vm/hosts/${encodeURIComponent(host)}/domains/${encodeURIComponent(domain)}/snapshots`,
+    { name },
+  );
+
+export const revertVMSnapshot = (host: string, domain: string, snap: string) =>
+  apiPost<{ result: string }>(
+    `/api/v1/vm/hosts/${encodeURIComponent(host)}/domains/${encodeURIComponent(domain)}/snapshots/${encodeURIComponent(snap)}/revert`,
+    {},
+  );
+
+export const deleteVMSnapshot = (host: string, domain: string, snap: string) =>
+  apiPost<{ result: string }>(
+    `/api/v1/vm/hosts/${encodeURIComponent(host)}/domains/${encodeURIComponent(domain)}/snapshots/${encodeURIComponent(snap)}/delete`,
+    {},
+  );

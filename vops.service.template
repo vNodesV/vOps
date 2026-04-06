@@ -10,7 +10,7 @@ Environment=GOTRACEBACK=all
 EnvironmentFile=-__HOME__/.vProx/.env
 ExecStart=/usr/local/bin/vOps start
 Restart=no
-User=__USER__
+User=__VOPS_USER__
 WorkingDirectory=__HOME__/.vProx
 SyslogIdentifier=vOps
 StandardOutput=journal

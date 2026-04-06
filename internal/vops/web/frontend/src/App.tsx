@@ -16,6 +16,7 @@ import LoginPage from './pages/Login';
 import SettingsPage from './pages/Settings';
 import FleetPage from './pages/Fleet';
 import ChainsPage from './pages/Chains';
+import VMsPage from './pages/VMs';
 import { logout } from './api';
 import { BASE } from './api/client';
 
@@ -172,6 +173,14 @@ function Shell({ children }: { children: React.ReactNode }) {
             </svg>
             Fleet
           </SideLink>
+          <SideLink to="/vms">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <rect x="3" y="11" width="18" height="11" rx="1" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              <circle cx="12" cy="16" r="1" />
+            </svg>
+            VM Manager
+          </SideLink>
           <SideLink to="/settings">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
               <circle cx="12" cy="12" r="3" />
@@ -236,6 +245,7 @@ export default function App() {
             <Route path="/accounts/:ip" element={<AccountDetail />} />
             <Route path="/chains" element={<ChainsPage />} />
             <Route path="/fleet" element={<FleetPage />} />
+            <Route path="/vms" element={<VMsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

@@ -8,6 +8,9 @@ BUILD_OUT := $(BUILD_DIR)/$(APP_NAME)
 VOPS_NAME  := vOps
 VOPS_SRC   := ./cmd/vops
 VOPS_BUILD := $(BUILD_DIR)/$(VOPS_NAME)
+# System user that owns the vOps service (overridable: make service-vops VOPS_USER=myuser).
+# Run `make system-user-vops` once to create this user before enabling the service.
+VOPS_USER  ?= vops
 
 VPROX_HOME := $(HOME)/.vProx
 DATA_DIR := $(VPROX_HOME)/data
@@ -53,7 +56,7 @@ EFFECTIVE_GOROOT  := $(if $(_TOOLCHAIN_GOROOT),$(_TOOLCHAIN_GOROOT),$(GOROOT))
 
 .PHONY: all install clean ufw help \
         validate-go dirs geo config config-vops config-vprox config-modules \
-        build build-vops systemd service-vops samples-fleet \
+        build build-vops systemd service-vops system-user-vops samples-fleet \
         release release-vops deploy-jarvis
 
 all: help
@@ -509,7 +512,7 @@ service-vops:
 	@echo "Rendering vOps systemd service file..."
 	@mkdir -p "$(SERVICE_DIR)"
 	@TMP_RENDERED="$$(mktemp)"; \
-	sed "s|__HOME__|$(HOME)|g; s|__USER__|$(USER)|g" vops.service.template > "$$TMP_RENDERED"; \
+	sed "s|__HOME__|$(HOME)|g; s|__USER__|$(USER)|g; s|__VOPS_USER__|$(VOPS_USER)|g" vops.service.template > "$$TMP_RENDERED"; \
 	if [[ -f "$(VOPS_SERVICE)" ]]; then \
 		if cmp -s "$$TMP_RENDERED" "$(VOPS_SERVICE)"; then \
 			echo "✓ Local vOps.service already up to date"; \
@@ -542,10 +545,22 @@ service-vops:
 
 ## ─── UFW passwordless setup for vOps ─────────────────────────────────────────
 
-## Set up passwordless UFW block/unblock for vOps
+## Create dedicated vops system user (nologin) for running the vOps service.
+## Run once on the server before enabling the systemd service with User=vops.
+system-user-vops:
+	@if id vops &>/dev/null; then \
+		echo "✓ System user 'vops' already exists"; \
+	else \
+		echo "Creating system user 'vops' (nologin)..."; \
+		sudo useradd -r -s /usr/sbin/nologin -d /nonexistent -c "vOps service account" vops; \
+		echo "✓ User 'vops' created"; \
+	fi
+	@echo "  Tip: run 'make ufw' to grant vops the required sudoers entries."
+
+## Set up passwordless UFW + apt for vOps (writes /etc/sudoers.d/vops).
 ufw:
 	@SUDOERS_FILE="/etc/sudoers.d/vops"; \
-	SUDOERS_LINE="$(USER) ALL=(ALL) NOPASSWD: /usr/sbin/ufw deny from *, /usr/sbin/ufw delete deny from *"; \
+	SUDOERS_LINE="$(VOPS_USER) ALL=(ALL) NOPASSWD: /usr/sbin/ufw deny from *, /usr/sbin/ufw delete deny from *, /usr/bin/apt-get update, /usr/bin/apt-get upgrade -y"; \
 	if [[ -f "$$SUDOERS_FILE" ]]; then \
 		if grep -qF "$$SUDOERS_LINE" "$$SUDOERS_FILE"; then \
 			echo "✓ Sudoers rule already configured ($$SUDOERS_FILE)"; \
