@@ -7,11 +7,13 @@ interface SSEStreamProps {
   method?: 'GET' | 'POST';
   /** Called when the stream ends successfully. */
   onDone?: () => void;
+  /** Called for each incoming SSE data payload (raw JSON string). */
+  onMessage?: (data: string) => void;
 }
 
 type StreamState = 'connecting' | 'streaming' | 'done' | 'error';
 
-export default function SSEStream({ url, method = 'POST', onDone }: SSEStreamProps) {
+export default function SSEStream({ url, method = 'POST', onDone, onMessage }: SSEStreamProps) {
   const [lines, setLines] = useState<string[]>([]);
   const [state, setState] = useState<StreamState>('connecting');
   const [errorMsg, setErrorMsg] = useState('');
@@ -32,6 +34,7 @@ export default function SSEStream({ url, method = 'POST', onDone }: SSEStreamPro
       (msg) => {
         setState('streaming');
         setLines((prev) => [...prev, msg.data]);
+        onMessage?.(msg.data);
       },
       () => {
         setState('done');
@@ -44,7 +47,7 @@ export default function SSEStream({ url, method = 'POST', onDone }: SSEStreamPro
     );
 
     return cancel;
-  }, [url, method, onDone]);
+  }, [url, method, onDone, onMessage]);
 
   useEffect(() => {
     scrollToBottom();
