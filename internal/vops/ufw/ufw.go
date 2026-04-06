@@ -16,16 +16,34 @@ func IsAvailable() bool {
 	return err == nil
 }
 
+// sudoArgs builds the sudo argument list for a ufw command.
+// If sudoPass is non-empty, -S is prepended so the password can be piped via stdin.
+// Otherwise -n (non-interactive) is used to fail fast without blocking.
+func sudoArgs(pass string, ufwArgs ...string) (args []string, stdin string) {
+	if pass != "" {
+		args = append([]string{"-S"}, ufwArgs...)
+		stdin = pass + "\n"
+	} else {
+		args = append([]string{"-n"}, ufwArgs...)
+	}
+	return
+}
+
 // Block adds a UFW deny rule for ip. Returns nil if ufw is not installed (soft fail).
 // ip is validated with net.ParseIP before any exec call.
-func Block(ip string) error {
+// sudoPass is optional; when empty the command is run non-interactively (requires NOPASSWD).
+func Block(ip, sudoPass string) error {
 	if net.ParseIP(ip) == nil {
 		return fmt.Errorf("ufw: invalid IP address: %q", ip)
 	}
 	if !IsAvailable() {
 		return nil // ufw not installed — soft fail, DB block still applies
 	}
-	cmd := exec.Command("sudo", "/usr/sbin/ufw", "deny", "from", ip)
+	args, stdin := sudoArgs(sudoPass, "/usr/sbin/ufw", "deny", "from", ip)
+	cmd := exec.Command("sudo", args...)
+	if stdin != "" {
+		cmd.Stdin = strings.NewReader(stdin)
+	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("ufw deny %s: %w: %s", ip, err, string(out))
@@ -34,14 +52,19 @@ func Block(ip string) error {
 }
 
 // Unblock removes the UFW deny rule for ip. Returns nil if ufw is not installed.
-func Unblock(ip string) error {
+// sudoPass is optional; when empty the command is run non-interactively.
+func Unblock(ip, sudoPass string) error {
 	if net.ParseIP(ip) == nil {
 		return fmt.Errorf("ufw: invalid IP address: %q", ip)
 	}
 	if !IsAvailable() {
 		return nil
 	}
-	cmd := exec.Command("sudo", "/usr/sbin/ufw", "delete", "deny", "from", ip)
+	args, stdin := sudoArgs(sudoPass, "/usr/sbin/ufw", "delete", "deny", "from", ip)
+	cmd := exec.Command("sudo", args...)
+	if stdin != "" {
+		cmd.Stdin = strings.NewReader(stdin)
+	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("ufw delete deny %s: %w: %s", ip, err, string(out))
@@ -49,18 +72,23 @@ func Unblock(ip string) error {
 	return nil
 }
 
-// ListBlocked runs "sudo -n ufw status numbered" and returns all IPs with a DENY rule.
+// ListBlocked runs "sudo ufw status numbered" and returns all IPs with a DENY rule.
 // Returns (nil, nil) when ufw is not installed. CIDR subnets are skipped; only
 // host addresses are returned so they can be matched against ip_accounts.
-// Requires a sudoers NOPASSWD entry for the vops process user:
+// sudoPass is optional; when empty the command is run non-interactively.
+// Requires a sudoers NOPASSWD entry for the vops process user when sudoPass is empty:
 //
 //	Cmnd_Alias VLOG_UFW = /usr/sbin/ufw deny from *, /usr/sbin/ufw delete deny from *, /usr/sbin/ufw status numbered
 //	www-data ALL=(ALL) NOPASSWD: VLOG_UFW
-func ListBlocked() ([]string, error) {
+func ListBlocked(sudoPass string) ([]string, error) {
 	if !IsAvailable() {
 		return nil, nil
 	}
-	cmd := exec.Command("sudo", "-n", "/usr/sbin/ufw", "status", "numbered")
+	args, stdin := sudoArgs(sudoPass, "/usr/sbin/ufw", "status", "numbered")
+	cmd := exec.Command("sudo", args...)
+	if stdin != "" {
+		cmd.Stdin = strings.NewReader(stdin)
+	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("ufw status: %w: %s", err, string(out))
@@ -95,3 +123,4 @@ func parseUFWDenyIPs(output string) []string {
 	}
 	return ips
 }
+

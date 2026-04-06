@@ -276,7 +276,7 @@ func (e *Enricher) EnrichStream(ctx context.Context, ip string, force bool, emit
 	emit(EnrichProgress{Step: "score", Msg: "Computing threat score\u2026", Pct: 88})
 
 	acc, err := e.db.GetIPAccount(ip)
-	if err != nil {
+	if err != nil || acc == nil {
 		acc = &db.IPAccount{
 			IP:        ip,
 			FirstSeen: nowISO,

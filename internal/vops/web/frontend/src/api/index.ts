@@ -55,8 +55,8 @@ export const blockIP = (ip: string) =>
 export const unblockIP = (ip: string) =>
   apiPost<{ ok: boolean }>(`/api/v1/unblock/${ip}`);
 
-export const syncUFW = () =>
-  apiPost<{ ok: boolean }>('/api/v1/ufw/sync');
+export const syncUFW = (sudoPassword?: string) =>
+  apiPost<{ total?: number; imported?: number; note?: string }>('/api/v1/ufw/sync', sudoPassword ? { sudo_password: sudoPassword } : undefined);
 
 // Ingest
 export const triggerIngest = () =>

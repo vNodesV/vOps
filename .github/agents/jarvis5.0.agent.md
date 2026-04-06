@@ -74,25 +74,28 @@ performance claim is benchmarked, every recommendation is trade-off-aware.
 - **HTTP 405 delete workaround** (commit `fe5207e`): Apache `mod_proxy` blocks HTTP DELETE → 405; fleet delete uses POST alias; JS changed from `method:'DELETE'` to `method:'POST'` for all fleet delete calls
 - **Settings/Wizard UX bridge** (v1.3.1): dashboard-native inline settings editor, chain/service tree controls, legacy TOML import field parity, and `features.mask_rpc` rewrite parity in proxy output.
 
-### vOps (module — `vLog_v1.4.0`, SHIPPED ✅)
-- **Binary**: `vops` (`cmd/vops/main.go`, version `1.4.0`) — merged vLog+fleet; renamed from `vLog`; serves at `jarvis:18889`; default theme `light-blue`
-- **Purpose**: log archive analyzer with CRM-like IP accounts, security intelligence, config wizard, and vOps management UI
-- **Database**: SQLite via `modernc.org/sqlite` (pure Go, no CGO, WAL mode)
-- **Web UI**: `html/template` + `go:embed` + htmx — dashboard, accounts, query builder, threat panel
-- **Auth system** (shipped `70a46db`): login page (`login.html`, standalone, no `base.html` dep); session tokens via `crypto/rand` 32-byte hex; HMAC-SHA256; `map[string]time.Time` 24h TTL; bcrypt (`golang.org/x/crypto/bcrypt`, `Cost=12`); `HttpOnly`/`SameSite=Strict` cookie; `requireSession` middleware wraps all page+API routes; auth bypass if `password_hash == ""` (backward compat); config: `[vlog.auth]` in `vlog.toml`
-- **Theme** (shipped `cc7735a`): Matrix [V] dark theme — CSS design token system (`--vn-*`), Pico v2 dark mode override, glass morphism cards (`backdrop-filter:blur(8px)`, translucent bg, green border glow), viewport-fill background (`background-size:100% 100% fixed`, `content_bg.png`), `body::before` overlay, sticky footer (flex-column + `main{flex:1}`)
-- **Dashboard**: dual-line Chart.js request charts (left/right 50/50); **collapsible blocks** (`<details>`/`<summary>` + `.v-block` CSS, onclick guard prevents toggle when clicking action buttons); full-width **Chain Status** table (16 cols: Chain Info×5 + Governance×4 + Ping×3 + Server×3 + Actions×1); 65s auto-refresh; Deploy/Endpoint Status panels removed; **drag/drop layout** (HTML5 DnD on master blocks, localStorage order persistence, reset layout button); **vcol/hcol block expansion** — vcol: `∧`/`∨` button toggles `details.open` manually; hcol: `›`/`‹` buttons → 75/25% grid split (`3fr 1fr`), other block → `.is-strip` (44px pill); nav label: "Intel"; block labels: "Flagged IPs"; archive buttons: "Refresh"/"Manual Import"; page reload 1.5s after successful archive op
-- **Endpoint probe**: `handleAPIProbe` — local probe (SSRF-guarded, candidate URL discovery) + concurrent DC+WW probes via check-host.net HTTP-check API (submit+poll, 12s deadline, 2s interval); accepts `?country=CA&provider=ca1` params; `countryNodes` map (CA/US/FR/DE/NL/GB/UK/FI/JP/SG/BR/IN → nodes); `sanitizeProbeNode()` SSRF whitelist for provider param; result shape `{host,url,local,ca,ww}` with `locResult{ok,code,latency_ms,error,node}`; Chain Status "DC" column passes `ping_country` per-chain
-- **Accounts page**: server-side search (IP/country/rowid), per-page selector (25/50/100/200/All), sortable columns with URL-based sort persistence (back-nav safe), Investigate button (`.btn-investigate-done` green when intel exists), Org column (ip-api.com), Status column (ALLOWED/BLOCKED)
-- **Ingestion**: scans `$VPROX_HOME/data/logs/archives/*.tar.gz` (oldest-first, dedup via `ingested_archives` table); FS watcher for new archives; vProx backup push hook (`POST /api/v1/ingest`)
-- **IP Intelligence**: VirusTotal v3 + AbuseIPDB v2 + Shodan APIs; parallel queries (3 goroutines → buffered channels); composite threat score (0-100); flag + score + per-source breakdown; cache in `intel_cache` table
-- **OSINT**: 5 concurrent ops (DNS, port scan, ip-api.com, protocol probe, Cosmos RPC) via `sync.WaitGroup` + `sync.Mutex`; timing: ~5s vs old ~23s
-- **SSE handlers** (`internal/vlog/web/handlers.go`): `handleAPIInvestigate`, `handleAPIEnrich`, `handleAPIosint` — all use keepalive goroutine (15s `: ping`) + `context.Background()` (never `r.Context()`) to survive Apache `ProxyTimeout`; see SSE keepalive pattern in `base.agent.md`
-- **Config**: `$VPROX_HOME/config/vops.toml` → `[vops]` section; structs `VOpsSection`/`VOps`
-- **CLI**: `vops start`, `vops stop`, `vops restart`, `vops ingest`, `vops status`, `vops config --web`, `--home`, `--port`, `--quiet`
-- **Config wizard**: `internal/configwizard/` — 7-tab browser SPA (`go:embed wizard.html`); 7 POST API handlers for all config steps; TI key redaction sentinel in snapshot/save; launched via `vops config --web`; `cmd/vops/config.go` entry point
-- **vProx hook**: optional `vlog_url` in `config/ports.toml` — vProx POSTs to vLog after `--new-backup` (non-fatal)
-- **Apache config** (`.vscode/vlog.apache2`): `ProxyTimeout 60`, `RequestReadTimeout handshake=5 header=10-30,MinRate=750 body=0`; `/vlog/` Location: IP-restricted + `timeout=30`; `SetEnvIfNoCase Content-Encoding .+ no-gzip dont-vary`; `X-Real-IP "%{REMOTE_ADDR}s"`
+### vOps (module — `vLog_v1.4.0` SHIPPED ✅ / `vLog_v1.4.5` IN PROGRESS 🔨)
+- **Binary**: `vops` (`cmd/vops/main.go`, version `1.4.0` → bumping to `1.4.5`) — merged vLog+fleet; serves at `www-vm:8889` → Apache `/vlog/`
+- **Purpose**: log archive analyzer, IP intelligence CRM, fleet management, VM lifecycle management
+- **Database**: SQLite via `modernc.org/sqlite` (pure Go, no CGO, WAL mode); `internal/vops/db/`
+- **Web UI (v1.4.5)**: **React 18 + Vite + TypeScript SPA** — ground-up rebuild, `go:embed` via `internal/vops/web/frontend/dist/`; left sidebar 220px (navy `#1a2744`), `--op-*` tokens; nav: Overview/Threats/Chains/Fleet/Settings; served via `internal/vops/web/server.go`
+  - **SPA routing**: `BASE_URL = import.meta.env.BASE_URL` from Vite (set in `vite.config.ts`); all `fetch()` calls use `${BASE_URL}api/...`; login redirects use `${base}login`; critical pattern to avoid blank-page under Apache sub-path `/vlog/`
+  - **Login**: POST `${BASE_URL}api/auth/login` → `{token}` → stores in `sessionStorage`; `AuthProvider` context; `ProtectedRoute` wrapper; `BASE_URL` prefix on all redirects
+  - **Auth**: session tokens (32-byte hex, HMAC-SHA256, 24h TTL); bcrypt Cost=12; `HttpOnly`/`SameSite=Strict` cookie; `requireSession` middleware; `[vops.auth]` in vops.toml
+  - **Accounts/Threats page**: URL-driven sort (`?sort=X&dir=desc`), pagination, search; `InvestigateModal` (SSE, 3 progress bars: overall/providers/ports); auto-sort prevention after scan (invalidate without refetch)
+  - **InvestigateModal SSE event format**: phase1 (TI, 0–50%): `ti:querying`, `ti:vt_done/skip/err`, `ti:abuse_*`, `ti:shodan_*`, `ti:score`, `ti:save`, `ti:done`; phase2 (OSINT, 50–100%): `osint:rdns`, `osint:portscan`, `osint:ports_done/none`, `osint:org_done/none`, `osint:save`; keepalive: `: ping\n\n` every 15s
+  - **Critical bug fixed** (intel.go:279): `GetIPAccount` returns `(nil, nil)` on no rows; fix: `if err != nil || acc == nil {` — without this, first-time IP investigation silently drops all results
+  - **Fleet backend** (`internal/fleet/`): `VMStatus` struct (`CPUPct`, `MemPct`, `StoragePct`, `LoadAvg`, `AptCount`, `PolledAt`) — SSH compound command polling; `OS string` field planned; `HandleVMStatus` → `GET /api/v1/fleet/vms/status`
+  - **VM Manager (planned — v1.4.5)**: `github.com/digitalocean/go-libvirt` (pure Go, no CGO); SSH tunnel to `/var/run/libvirt/libvirt-sock` on hypervisor (`qc.vnodesv.net`, 10.0.0.1 from www-VM); `internal/vops/vm/` package; routes: `/api/v1/vm/hosts`, `/api/v1/vm/domains`, `/api/v1/vm/domains/{name}/action`; Tier 1: list/start/stop/pause/resume/delete/snapshots; deployment: vOps stays on www-VM, not hypervisor
+  - **UFW integration**: dedicated `vops` system user (`nologin`); `User=vops` in service template; `sudoers.d/vops`: scoped NOPASSWD for 3 ufw commands only
+- **Auth system**: same as v1.4.0
+- **Ingestion**: scans `$VPROX_HOME/data/logs/archives/*.tar.gz`; FS watcher; vProx hook
+- **IP Intelligence**: VirusTotal v3 + AbuseIPDB v2 + Shodan; parallel 3-goroutine; composite 0-100 score; `intel_cache` table
+- **OSINT**: 5 concurrent (DNS, port scan, ip-api.com, protocol probe, Cosmos RPC); `sync.WaitGroup`+`sync.Mutex`
+- **SSE handlers**: `handleAPIInvestigate`, `handleAPIEnrich`, `handleAPIosint` — keepalive goroutine (15s `: ping`), `context.Background()` (never `r.Context()`)
+- **Config**: `$VPROX_HOME/config/vops.toml` → `[vops]` section; `VOpsSection`/`VOps`
+- **CLI**: `vops start/stop/restart/ingest/status/config --web`
+- **Apache config** (`.vscode/apache.tar.gz`): `ProxyTimeout 60`; SPA fallback: `RewriteRule .* /vlog/index.html [L]` on 404; `ProxyPass /vlog/api` + `ProxyPassReverse`; favicon served from `/vlog/static/`
 
 ### Security Audit Status (2026-03-01 — all P0 items FIXED)
 All CRITICAL/HIGH findings from the 2026-03-01 audit applied in `70a46db` + `a1e5c29`. Supply chain/SQL injection/command injection remain CLEAN.
@@ -434,6 +437,9 @@ Copilot session. Invoke them explicitly when the trigger conditions match. Do no
 | [`git-flow-branch-creator`](.github/skills/git-flow-branch-creator/) | Creating Git Flow branches (feature/, release/, hotfix/) from git status/diff analysis | None |
 | [`generate-custom-instructions-from-codebase`](.github/skills/generate-custom-instructions-from-codebase/) | Generating migration/evolution instructions (e.g., vLog→vOps rename consistency) | None |
 | [`cloud-design-patterns`](.github/skills/cloud-design-patterns/) | Applying 42 cloud patterns (circuit-breaker, rate-limit, bulkhead) to vProx proxy design | None |
+| [`sql-optimization`](.github/skills/sql-optimization/) | SQLite/SQL query tuning, indexing strategies, pagination optimization; use for VM metrics time-series + ip_accounts queries | None |
+| [`sql-code-review`](.github/skills/sql-code-review/) | SQL security, maintainability, and anti-pattern review; use for any new DB schema or query changes | None |
+| [`create-technical-spike`](.github/skills/create-technical-spike/) | Time-boxed technical spike docs for critical decisions; use for go-libvirt SSH tunnel architecture | None |
 
 **Auto-invoke rules:**
 - Any test generation request → **polyglot-test-agent** (before writing tests manually)
@@ -448,6 +454,8 @@ Copilot session. Invoke them explicitly when the trigger conditions match. Do no
 - Any `gh` CLI operation or GitHub API workflow → **gh-cli**
 - Any architectural decision (config, module, theme) → **create-architectural-decision-record**
 - Any "create branch", "new feature branch", "hotfix" → **git-flow-branch-creator**
+- Any new SQLite table or SQL query change → **sql-code-review** + **sql-optimization**
+- Any new Go integration with external system → **create-technical-spike** (before coding)
 
 ---
 

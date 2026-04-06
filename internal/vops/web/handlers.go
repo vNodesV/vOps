@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"math/rand"
 	"net"
@@ -805,7 +806,7 @@ func (s *Server) handleAPIBlock(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ufwOK := true
-	if err := ufw.Block(ip); err != nil {
+	if err := ufw.Block(ip, ""); err != nil {
 		log.Printf("[web] ufw block %s: %v", ip, err)
 		ufwOK = false
 	}
@@ -832,7 +833,7 @@ func (s *Server) handleAPIUnblock(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ufwOK := true
-	if err := ufw.Unblock(ip); err != nil {
+	if err := ufw.Unblock(ip, ""); err != nil {
 		log.Printf("[web] ufw unblock %s: %v", ip, err)
 		ufwOK = false
 	}
@@ -851,8 +852,14 @@ func (s *Server) handleAPIUnblock(w http.ResponseWriter, r *http.Request) {
 // handleAPIUFWSync reads current UFW DENY rules and imports any unknown IPs
 // into the blocked_ips table. Already-blocked IPs are skipped (idempotent).
 // POST /api/v1/ufw/sync
+// Accepts optional JSON body: {"sudo_password": "..."} for servers without NOPASSWD.
 func (s *Server) handleAPIUFWSync(w http.ResponseWriter, r *http.Request) {
-	ips, err := ufw.ListBlocked()
+	var body struct {
+		SudoPassword string `json:"sudo_password"`
+	}
+	_ = json.NewDecoder(io.LimitReader(r.Body, 256)).Decode(&body)
+
+	ips, err := ufw.ListBlocked(body.SudoPassword)
 	if err != nil {
 		log.Printf("[web] ufw sync: %v", err)
 		// Provide actionable guidance when sudo permission is missing.
