@@ -31,6 +31,7 @@ type VMStatus struct {
 
 	// Live metrics (empty/zero when SSH fails)
 	Online     bool    `json:"online"`
+	OS         string  `json:"os"`          // e.g. "Ubuntu 22.04.3 LTS"
 	CPUPct     float64 `json:"cpu_pct"`     // 1-minute CPU usage %
 	MemPct     float64 `json:"mem_pct"`     // RAM used %
 	StoragePct float64 `json:"storage_pct"` // root partition used %
@@ -88,7 +89,7 @@ func pollVM(vm config.VM, cfg *config.Config) VMStatus {
 	st.Online = true
 
 	// All metrics in one compound command to minimise round trips.
-	// Fields are newline-delimited: cpu | mem | storage | load | apt
+	// Fields are newline-delimited: cpu | mem | storage | load | apt | os
 	const cmd = `
 set -o pipefail
 printf '%s\n' \
@@ -96,7 +97,8 @@ printf '%s\n' \
   "$(free 2>/dev/null | awk '/^Mem/{printf "%.1f", $3/$2*100}' || echo 0)" \
   "$(df / 2>/dev/null | awk 'NR==2{gsub(/%/,"",$5); print $5+0}' || echo 0)" \
   "$(uptime 2>/dev/null | awk -F'load average:' '{gsub(/ /,"",$2); print $2}' || echo '0,0,0')" \
-  "$(apt list --upgradable 2>/dev/null | grep -c '/' || echo 0)"
+  "$(apt list --upgradable 2>/dev/null | grep -c '/' || echo 0)" \
+  "$(lsb_release -ds 2>/dev/null || awk -F= '/^PRETTY_NAME/{gsub(/\"/,"",$2); print $2}' /etc/os-release 2>/dev/null || echo 'Linux')"
 `
 	out, err := client.Run(strings.TrimSpace(cmd))
 	if err != nil {
@@ -112,6 +114,9 @@ printf '%s\n' \
 		// load avg: "1.23,0.98,0.75" → "1.23 0.98 0.75"
 		st.LoadAvg = strings.ReplaceAll(strings.TrimSpace(lines[3]), ",", " ")
 		st.AptCount, _ = strconv.Atoi(strings.TrimSpace(lines[4]))
+	}
+	if len(lines) >= 6 {
+		st.OS = strings.TrimSpace(lines[5])
 	}
 
 	return st

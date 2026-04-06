@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import SSEStream from './SSEStream';
 import { BASE } from '../api/client';
+import type { IPAccount } from '../api/types';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -23,7 +24,7 @@ function providerIcon(s: ProviderStatus) {
   if (s === 'done')  return { icon: '✓', color: 'var(--vn-success)' };
   if (s === 'error') return { icon: '✗', color: 'var(--vn-danger)'  };
   if (s === 'skip')  return { icon: '—', color: 'var(--vn-text-subtle)' };
-  return { icon: '',  color: 'var(--vn-primary)' }; // pending / loading → spinner
+  return { icon: '',  color: 'var(--vn-primary)' };
 }
 
 // ── ProviderPill ──────────────────────────────────────────────────────────────
@@ -43,7 +44,6 @@ function ProviderPill({ label, status }: { label: string; status: ProviderStatus
       }}
     >
       {isLoading ? (
-        /* Tiny inline spinner */
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" className="animate-spin" aria-hidden="true">
           <circle cx="12" cy="12" r="10" stroke="var(--vn-border)" strokeWidth="3" />
           <path d="M12 2a10 10 0 0 1 10 10" stroke="var(--vn-primary)" strokeWidth="3" strokeLinecap="round" />
@@ -82,25 +82,25 @@ function ProgressBar({ pct, color, striped }: { pct: number; color: string; stri
 
 interface InvestigateModalProps {
   ip: string;
+  acct?: IPAccount;
   onClose: () => void;
 }
 
-export default function InvestigateModal({ ip, onClose }: InvestigateModalProps) {
+export default function InvestigateModal({ ip, acct, onClose }: InvestigateModalProps) {
   const queryClient = useQueryClient();
 
   const [overallPct,  setOverallPct]  = useState(0);
   const [streamDone,  setStreamDone]  = useState(false);
   const [providers,   setProviders]   = useState<Providers>({ vt: 'pending', abuse: 'pending', shodan: 'pending' });
   const [portScan,    setPortScan]    = useState<PortScan>({ status: 'idle', openPorts: '' });
-  // Port-scan sub-progress: 0-100 within the scanning bar.
   const [portPct,     setPortPct]     = useState(0);
 
-  // Stable callbacks.
   const handleDone = useCallback(() => {
     setStreamDone(true);
     setOverallPct(100);
     setPortPct(100);
-    queryClient.invalidateQueries({ queryKey: ['accounts'] });
+    // Use refetchType: 'none' so the table does NOT re-sort after a scan completes.
+    queryClient.invalidateQueries({ queryKey: ['accounts'], refetchType: 'none' });
     queryClient.invalidateQueries({ queryKey: ['account', ip] });
   }, [queryClient, ip]);
 
@@ -110,42 +110,35 @@ export default function InvestigateModal({ ip, onClose }: InvestigateModalProps)
       const step = ev.step ?? '';
       if (typeof ev.pct === 'number') setOverallPct(ev.pct);
 
-      // ── Provider status ─────────────────────────────────────────────────────
       if (step === 'ti:querying') {
         setProviders({ vt: 'loading', abuse: 'loading', shodan: 'loading' });
-
       } else if (step.startsWith('ti:vt_')) {
         const s = step.slice(6);
         setProviders(p => ({ ...p, vt: (s === 'done' || s === 'cached') ? 'done' : s === 'skip' ? 'skip' : 'error' }));
-
       } else if (step.startsWith('ti:abuse_')) {
         const s = step.slice(9);
         setProviders(p => ({ ...p, abuse: (s === 'done' || s === 'cached') ? 'done' : s === 'skip' ? 'skip' : 'error' }));
-
       } else if (step.startsWith('ti:shodan_')) {
         const s = step.slice(10);
         setProviders(p => ({ ...p, shodan: (s === 'done' || s === 'cached' || s === 'none') ? 'done' : s === 'skip' ? 'skip' : 'error' }));
       }
 
-      // ── Port scan ────────────────────────────────────────────────────────────
       if (step === 'osint:portscan') {
         setPortScan({ status: 'scanning', openPorts: '' });
         setPortPct(0);
-        // Animate port bar forward during the ~1.5s scan window.
         let p = 0;
         const tick = setInterval(() => {
           p = Math.min(90, p + 12);
           setPortPct(p);
           if (p >= 90) clearInterval(tick);
         }, 200);
-
+        void tick;
       } else if (step === 'osint:ports_done' || step === 'osint:ports_none') {
         const msg = ev.msg ?? '';
         const match = msg.match(/Open ports: (.+)/);
         setPortScan({ status: 'done', openPorts: match ? match[1] : '' });
         setPortPct(100);
       }
-
     } catch { /* non-JSON line — ignore */ }
   }, []);
 
@@ -179,20 +172,62 @@ export default function InvestigateModal({ ip, onClose }: InvestigateModalProps)
       >
         {/* ── Header ─────────────────────────────────────────────────────────── */}
         <div
-          className="flex items-center justify-between px-5 py-4"
+          className="flex items-start justify-between px-5 py-4"
           style={{ borderBottom: '1px solid var(--vn-border)' }}
         >
-          <div>
+          <div className="flex-1 min-w-0">
             <h2 className="text-sm font-semibold" style={{ color: 'var(--vn-text)' }}>
               Full Investigation
             </h2>
             <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--vn-primary)' }}>
               {ip}
             </p>
+            {/* Account metadata — populated from the acct prop if provided */}
+            {acct && (
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs" style={{ color: 'var(--vn-text-muted)' }}>
+                {acct.Org && (
+                  <span className="truncate max-w-[180px]" title={acct.Org}>
+                    <span style={{ color: 'var(--vn-text-subtle)' }}>Org</span>{' '}
+                    <span style={{ color: 'var(--vn-text)' }}>{acct.Org}</span>
+                  </span>
+                )}
+                <span>
+                  <span style={{ color: 'var(--vn-text-subtle)' }}>Requests</span>{' '}
+                  <span className="tabular-nums" style={{ color: 'var(--vn-text)' }}>
+                    {(acct.TotalRequests ?? 0).toLocaleString()}
+                  </span>
+                </span>
+                <span>
+                  <span style={{ color: 'var(--vn-text-subtle)' }}>Rate limits</span>{' '}
+                  <span
+                    className="tabular-nums"
+                    style={{ color: acct.RatelimitEvents > 0 ? 'var(--vn-warning)' : 'var(--vn-text)' }}
+                  >
+                    {(acct.RatelimitEvents ?? 0).toLocaleString()}
+                  </span>
+                </span>
+                {acct.ThreatScore > 0 && (
+                  <span>
+                    <span style={{ color: 'var(--vn-text-subtle)' }}>Score</span>{' '}
+                    <span
+                      style={{
+                        color: acct.ThreatScore >= 70
+                          ? 'var(--vn-danger)'
+                          : acct.ThreatScore >= 40
+                          ? 'var(--vn-warning)'
+                          : 'var(--vn-text)',
+                      }}
+                    >
+                      {acct.ThreatScore}
+                    </span>
+                  </span>
+                )}
+              </div>
+            )}
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-md cursor-pointer focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
+            className="p-1.5 rounded-md cursor-pointer focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)] flex-shrink-0 ml-3"
             style={{ color: 'var(--vn-text-muted)' }}
             aria-label="Close investigation"
           >

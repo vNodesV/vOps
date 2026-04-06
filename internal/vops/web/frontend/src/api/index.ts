@@ -1,10 +1,11 @@
-import { apiFetch, apiPost } from './client';
+import { apiFetch, apiPost, BASE } from './client';
 import type {
   Stats,
   IPAccount,
   ChartSeries,
   ChainStatus,
   VMView,
+  VMStatus,
   Deployment,
   RegisteredChain,
   ArchiveStats,
@@ -71,6 +72,13 @@ export const getFleetChains = () =>
 
 export const getFleetVMs = () =>
   apiFetch<{ vms: VMView[] }>('/api/v1/fleet/vms');
+
+export const getVMStatus = () =>
+  apiFetch<{ vms: VMStatus[]; hosts: unknown[] }>('/api/v1/fleet/vms/status');
+
+/** Returns the SSE URL for streaming apt upgrade output on a named VM. */
+export const vmUpgradeURL = (name: string) =>
+  `${BASE}api/v1/fleet/vms/${encodeURIComponent(name)}/upgrade`;
 
 export const getDeployments = (chain?: string) =>
   apiFetch<{ deployments: Deployment[] }>(

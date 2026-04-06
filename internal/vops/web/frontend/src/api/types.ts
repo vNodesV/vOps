@@ -89,6 +89,31 @@ export interface ChainStatus {
 
 export interface VMView { name: string; host: string; datacenter: string; type: string; }
 
+// Live VM status from SSH poll
+export interface VMStatus {
+  // Identity
+  name: string;
+  datacenter: string;
+  lan_ip: string;
+  public_ip: string;
+  host_ref?: string;
+  type: string;
+  // Endpoints
+  rpc_url?: string;
+  rest_url?: string;
+  // Live metrics
+  online: boolean;
+  os: string;
+  cpu_pct: number;
+  mem_pct: number;
+  storage_pct: number;
+  load_avg: string;
+  apt_count: number;
+  // Meta
+  error?: string;
+  polled_at: string;
+}
+
 export interface Deployment {
   id: number;
   vm: string;

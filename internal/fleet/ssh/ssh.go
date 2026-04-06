@@ -105,5 +105,22 @@ func (c *Client) Run(cmd string) (string, error) {
 	return string(out), err
 }
 
+// RunInput executes cmd on the remote host with stdinData piped to stdin,
+// and returns combined stdout+stderr. Use for commands that read a password
+// from stdin (e.g. sudo -S). A non-zero exit code is returned as an error.
+func (c *Client) RunInput(cmd, stdinData string) (string, error) {
+	sess, err := c.c.NewSession()
+	if err != nil {
+		return "", fmt.Errorf("fleet/ssh: new session: %w", err)
+	}
+	defer sess.Close()
+
+	if stdinData != "" {
+		sess.Stdin = strings.NewReader(stdinData)
+	}
+	out, err := sess.CombinedOutput(cmd)
+	return string(out), err
+}
+
 // Close releases the underlying SSH connection.
 func (c *Client) Close() error { return c.c.Close() }

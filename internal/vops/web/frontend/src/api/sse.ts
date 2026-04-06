@@ -9,15 +9,22 @@ export function openSSEStream(
   onMessage: (msg: SSEMessage) => void,
   onDone?: () => void,
   onError?: (err: Error) => void,
+  body?: unknown,
 ): () => void {
   const controller = new AbortController();
 
-  fetch(url, {
+  const fetchOpts: RequestInit = {
     method,
     credentials: 'include',
-    headers: { 'Accept': 'text/event-stream' },
+    headers: {
+      'Accept': 'text/event-stream',
+      ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+    },
     signal: controller.signal,
-  }).then(async (res) => {
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  };
+
+  fetch(url, fetchOpts).then(async (res) => {
     if (!res.ok || !res.body) {
       onError?.(new Error(`SSE ${res.status}`));
       return;

@@ -5,6 +5,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/vNodesV/vProx/internal/fleet"
 	"github.com/vNodesV/vProx/internal/fleet/config"
+	fleetssh "github.com/vNodesV/vProx/internal/fleet/ssh"
 	"github.com/vNodesV/vProx/internal/fleet/status"
 )
 
@@ -247,6 +249,86 @@ func (h *Handlers) HandleVMRegister(w http.ResponseWriter, r *http.Request) {
 	h.svc.RegisterVM(vm)
 	log.Printf("[fleet/api] VM %q registered from %s (type=%s)", req.Name, req.Host, req.Type)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "registered", "name": req.Name})
+}
+
+// ── POST /api/v1/fleet/vms/{name}/upgrade ─────────────────────────────────────
+
+type upgradeRequest struct {
+	SudoPassword string `json:"sudo_password"`
+}
+
+// HandleVMUpgrade SSE-streams apt update + apt upgrade -y on the named VM.
+// Body: {"sudo_password": "..."} — omit (or leave blank) when NOPASSWD is set.
+func (h *Handlers) HandleVMUpgrade(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		http.Error(w, "name required", http.StatusBadRequest)
+		return
+	}
+
+	vm := h.svc.FindVM(name)
+	if vm == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "vm not found: " + name})
+		return
+	}
+
+	var req upgradeRequest
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&req)
+	}
+
+	// SSE headers — must be set before WriteHeader.
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		return
+	}
+
+	sendEvent := func(step, msg string) {
+		b, _ := json.Marshal(map[string]string{"step": step, "msg": msg})
+		fmt.Fprintf(w, "data: %s\n\n", b)
+		flusher.Flush()
+	}
+
+	// Build sudo runner helpers.
+	runSudo := func(client *fleetssh.Client, aptArgs string) (string, error) {
+		if req.SudoPassword != "" {
+			return client.RunInput("sudo -S "+aptArgs, req.SudoPassword+"\n")
+		}
+		return client.Run("sudo -n " + aptArgs)
+	}
+
+	// Connect.
+	client, err := fleetssh.Dial(vm.Host, vm.Port, vm.User, vm.KeyPath, vm.KnownHostsPath)
+	if err != nil {
+		sendEvent("error", fmt.Sprintf("ssh connect failed: %v", err))
+		return
+	}
+	defer client.Close()
+	sendEvent("connected", fmt.Sprintf("Connected to %s (%s)", vm.Name, vm.Host))
+
+	// apt update.
+	sendEvent("update:start", "Running apt update…")
+	updateOut, err := runSudo(client, "apt update -q 2>&1")
+	if err != nil {
+		sendEvent("update:error", fmt.Sprintf("apt update failed: %v\n%s", err, strings.TrimSpace(updateOut)))
+		return
+	}
+	sendEvent("update:done", strings.TrimSpace(updateOut))
+
+	// apt upgrade -y.
+	sendEvent("upgrade:start", "Running apt upgrade -y…")
+	upgradeOut, err := runSudo(client, "DEBIAN_FRONTEND=noninteractive apt upgrade -y 2>&1")
+	if err != nil {
+		sendEvent("upgrade:error", fmt.Sprintf("apt upgrade failed: %v\n%s", err, strings.TrimSpace(upgradeOut)))
+		return
+	}
+	sendEvent("upgrade:done", strings.TrimSpace(upgradeOut))
+	sendEvent("complete", "Upgrade complete on "+vm.Name)
 }
 
 // ── helper ────────────────────────────────────────────────────────────────────

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   LineChart,
@@ -8,11 +9,12 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from 'recharts';
-import { getStats, getChart, getFleetChains, triggerIngest, getIngestStats } from '../api';
-import type { Stats, ChartSeries, ChainStatus, ArchiveStats } from '../api/types';
+import { getStats, getChart, getFleetChains, triggerIngest, getIngestStats, getVMStatus, vmUpgradeURL } from '../api';
+import type { Stats, ChartSeries, ChainStatus, ArchiveStats, VMStatus } from '../api/types';
 import StatCard from '../components/StatCard';
 import Badge from '../components/Badge';
 import Spinner from '../components/Spinner';
+import UpgradeModal from '../components/UpgradeModal';
 
 /* ── SVG Icons ───────────────────────────────────────────────── */
 
@@ -286,6 +288,149 @@ function FleetTable() {
   );
 }
 
+/* ── Mini metric bar ─────────────────────────────────────────── */
+
+function MetricBar({ value, warn = 70, danger = 85 }: { value: number; warn?: number; danger?: number }) {
+  const color = value >= danger ? 'var(--vn-danger)' : value >= warn ? 'var(--vn-warning)' : 'var(--vn-success)';
+  return (
+    <div className="flex items-center gap-1.5">
+      <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--vn-border)' }}>
+        <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, value)}%`, backgroundColor: color }} />
+      </div>
+      <span className="tabular-nums text-xs w-8 text-right" style={{ color }}>{value.toFixed(0)}%</span>
+    </div>
+  );
+}
+
+/* ── Servers Panel ───────────────────────────────────────────── */
+
+function ServersPanel() {
+  const [upgradeTarget, setUpgradeTarget] = useState<VMStatus | null>(null);
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['vm-status'],
+    queryFn: getVMStatus,
+    refetchInterval: 60_000,
+    retry: false,
+  });
+
+  if (isLoading) return <Spinner label="Loading server status" />;
+  if (isError) {
+    return (
+      <div className="p-4 text-sm rounded-lg" style={{ backgroundColor: 'var(--vn-surface)', border: '1px solid var(--vn-border)', color: 'var(--vn-text-muted)' }}>
+        Fleet not configured — add VMs to <code>config/infra/*.toml</code> to enable server monitoring.
+      </div>
+    );
+  }
+
+  const vms: VMStatus[] = data?.vms ?? [];
+  if (vms.length === 0) {
+    return (
+      <div className="p-4 text-sm rounded-lg" style={{ backgroundColor: 'var(--vn-surface)', border: '1px solid var(--vn-border)', color: 'var(--vn-text-muted)' }}>
+        No VMs configured.
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="overflow-x-auto rounded-lg" style={{ border: '1px solid var(--vn-border)' }}>
+        <table className="w-full text-sm" style={{ backgroundColor: 'var(--vn-surface)' }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid var(--vn-border)' }}>
+              {['Server', 'OS', 'CPU', 'Memory', 'Disk', 'Load', 'Updates', 'Status', ''].map((h) => (
+                <th
+                  key={h}
+                  scope="col"
+                  className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider whitespace-nowrap"
+                  style={{ color: 'var(--vn-text-muted)' }}
+                >
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {vms.map((vm) => (
+              <tr
+                key={vm.name}
+                style={{ borderBottom: '1px solid var(--vn-border)' }}
+                onMouseOver={(e) => (e.currentTarget.style.backgroundColor = 'var(--vn-surface-2)')}
+                onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '')}
+              >
+                <td className="px-3 py-2">
+                  <div className="font-medium text-xs">{vm.name}</div>
+                  <div className="text-xs" style={{ color: 'var(--vn-text-subtle)' }}>{vm.datacenter}</div>
+                </td>
+                <td className="px-3 py-2 text-xs whitespace-nowrap" style={{ color: 'var(--vn-text-muted)' }}>
+                  {vm.online ? (vm.os || 'Linux') : '—'}
+                </td>
+                <td className="px-3 py-2" style={{ minWidth: '90px' }}>
+                  {vm.online ? <MetricBar value={vm.cpu_pct} /> : <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>}
+                </td>
+                <td className="px-3 py-2" style={{ minWidth: '90px' }}>
+                  {vm.online ? <MetricBar value={vm.mem_pct} /> : <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>}
+                </td>
+                <td className="px-3 py-2" style={{ minWidth: '90px' }}>
+                  {vm.online ? <MetricBar value={vm.storage_pct} warn={75} danger={90} /> : <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>}
+                </td>
+                <td className="px-3 py-2 text-xs tabular-nums whitespace-nowrap" style={{ color: 'var(--vn-text-muted)' }}>
+                  {vm.online ? vm.load_avg || '—' : '—'}
+                </td>
+                <td className="px-3 py-2">
+                  {vm.online ? (
+                    vm.apt_count > 0 ? (
+                      <span className="inline-flex items-center gap-1 text-xs" style={{ color: 'var(--vn-warning)' }}>
+                        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'var(--vn-warning)' }} aria-hidden="true" />
+                        {vm.apt_count} pending
+                      </span>
+                    ) : (
+                      <span className="text-xs" style={{ color: 'var(--vn-success)' }}>✓ current</span>
+                    )
+                  ) : (
+                    <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>
+                  )}
+                </td>
+                <td className="px-3 py-2">
+                  <Badge status={vm.online ? 'online' : 'offline'} />
+                  {vm.error && (
+                    <span className="ml-1 text-xs" style={{ color: 'var(--vn-danger)' }} title={vm.error}>⚠</span>
+                  )}
+                </td>
+                <td className="px-3 py-2">
+                  {vm.online && (
+                    <button
+                      onClick={() => setUpgradeTarget(vm)}
+                      className="px-2 py-1 text-xs rounded cursor-pointer whitespace-nowrap
+                                 focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
+                      style={{
+                        color: vm.apt_count > 0 ? 'var(--vn-on-primary)' : 'var(--vn-text-muted)',
+                        backgroundColor: vm.apt_count > 0 ? 'var(--vn-primary)' : 'transparent',
+                        border: vm.apt_count > 0 ? 'none' : '1px solid var(--vn-border)',
+                      }}
+                      aria-label={`Upgrade ${vm.name}`}
+                    >
+                      Upgrade
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {upgradeTarget && (
+        <UpgradeModal
+          vmName={upgradeTarget.name}
+          upgradeURL={vmUpgradeURL(upgradeTarget.name)}
+          onClose={() => setUpgradeTarget(null)}
+        />
+      )}
+    </>
+  );
+}
+
 /* ── Ingest Section ──────────────────────────────────────────── */
 
 function IngestSection() {
@@ -429,6 +574,14 @@ export default function DashboardPage() {
           Chain Status
         </h3>
         <FleetTable />
+      </div>
+
+      {/* Servers / Fleet */}
+      <div>
+        <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--vn-text-muted)' }}>
+          Servers
+        </h3>
+        <ServersPanel />
       </div>
 
       {/* Ingest */}

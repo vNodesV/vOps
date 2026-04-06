@@ -197,6 +197,8 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 			s.requireSession(http.HandlerFunc(s.fleet.HandleRegisteredChainDelete)))
 		mux.Handle("POST /api/v1/fleet/poll",
 			s.requireSession(http.HandlerFunc(s.fleet.HandlePoll)))
+		mux.Handle("POST /api/v1/fleet/vms/{name}/upgrade",
+			s.requireSession(http.HandlerFunc(s.fleet.HandleVMUpgrade)))
 	}
 
 	readTimeout := time.Duration(cfg.VOps.Server.ReadTimeoutSec) * time.Second

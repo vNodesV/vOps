@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { getAccounts, syncUFW } from '../api';
+import type { IPAccount } from '../api/types';
 import Badge from '../components/Badge';
 import ThreatScore from '../components/ThreatScore';
 import SortableHeader from '../components/SortableHeader';
@@ -24,12 +25,121 @@ function fmtDate(iso: string): string {
   }
 }
 
+/* ── UFW Sync Modal ──────────────────────────────────────────────────────── */
+
+function UFWSyncModal({
+  onConfirm,
+  onClose,
+  isPending,
+}: {
+  onConfirm: (pass: string) => void;
+  onClose: () => void;
+  isPending: boolean;
+}) {
+  const [pass, setPass] = useState('');
+
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(3px)' }}
+      role="dialog"
+      aria-modal="true"
+      aria-label="UFW Sync"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="w-full max-w-sm rounded-xl overflow-hidden"
+        style={{ backgroundColor: 'var(--vn-surface)', border: '1px solid var(--vn-border)', boxShadow: 'var(--vn-shadow-md)' }}
+      >
+        <div className="px-5 py-4" style={{ borderBottom: '1px solid var(--vn-border)' }}>
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--vn-text)' }}>Sync UFW Rules</h2>
+          <p className="text-xs mt-1" style={{ color: 'var(--vn-text-muted)' }}>
+            Synchronises blocked IPs from the database into UFW firewall rules.
+          </p>
+        </div>
+        <div className="px-5 py-4 space-y-3">
+          <label className="block">
+            <span className="text-xs font-medium" style={{ color: 'var(--vn-text-muted)' }}>
+              Sudo password <span className="font-normal">(leave blank if NOPASSWD configured)</span>
+            </span>
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={pass}
+              onChange={(e) => setPass(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') onConfirm(pass); }}
+              placeholder="password"
+              className="mt-1.5 w-full px-3 py-2 rounded-md text-sm outline-none
+                         focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
+              style={{
+                backgroundColor: 'var(--vn-surface-2)',
+                border: '1px solid var(--vn-border)',
+                color: 'var(--vn-text)',
+              }}
+            />
+          </label>
+        </div>
+        <div
+          className="flex justify-end gap-2 px-5 py-3"
+          style={{ borderTop: '1px solid var(--vn-border)' }}
+        >
+          <button
+            onClick={onClose}
+            className="px-4 py-1.5 text-sm rounded-md cursor-pointer"
+            style={{ border: '1px solid var(--vn-border)', color: 'var(--vn-text-muted)' }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onConfirm(pass)}
+            disabled={isPending}
+            className="px-4 py-1.5 text-sm font-medium rounded-md cursor-pointer
+                       disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
+            style={{ backgroundColor: 'var(--vn-primary)', color: 'var(--vn-on-primary)' }}
+          >
+            {isPending ? 'Syncing\u2026' : 'Sync UFW'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Scan badge ──────────────────────────────────────────────────────────── */
+
+function ScanBadge({ updatedAt }: { updatedAt: string }) {
+  if (!updatedAt) {
+    return <span style={{ color: 'var(--vn-text-subtle)' }}>&mdash;</span>;
+  }
+  return (
+    <span className="inline-flex items-center gap-1" title={`Scanned: ${updatedAt}`}>
+      <span
+        className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+        style={{ backgroundColor: 'var(--vn-success)' }}
+        aria-hidden="true"
+      />
+      <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>
+        {fmtDate(updatedAt)}
+      </span>
+    </span>
+  );
+}
+
+/* ── Page ────────────────────────────────────────────────────────────────── */
+
 export default function AccountsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  // Modal state for inline investigation popup.
-  const [investigateIP, setInvestigateIP] = useState<string | null>(null);
+  // Modal state — holds the full account object for the investigate popup.
+  const [investigateAcct, setInvestigateAcct] = useState<IPAccount | null>(null);
+  const [showUFWModal, setShowUFWModal] = useState(false);
 
   // URL-driven state
   const page = Number(searchParams.get('page') || '1');
@@ -69,7 +179,10 @@ export default function AccountsPage() {
   });
 
   // UFW sync mutation
-  const ufwMut = useMutation({ mutationFn: syncUFW });
+  const ufwMut = useMutation({
+    mutationFn: (pass: string) => syncUFW(pass || undefined),
+    onSuccess: () => setShowUFWModal(false),
+  });
 
   const handleSort = useCallback(
     (column: string) => {
@@ -104,12 +217,10 @@ export default function AccountsPage() {
   const effectiveLimit = limit || totalItems;
   const totalPages = Math.max(1, Math.ceil(totalItems / effectiveLimit));
 
-  // Paginate client-side if API returned all results
   const displayedAccounts = useMemo(() => {
     if (!accounts) return [];
-    if (limit === 0) return accounts;
     return accounts;
-  }, [accounts, limit]);
+  }, [accounts]);
 
   const rangeStart = totalItems > 0 ? offset + 1 : 0;
   const rangeEnd = Math.min(offset + effectiveLimit, totalItems);
@@ -124,7 +235,7 @@ export default function AccountsPage() {
         </h2>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => ufwMut.mutate()}
+            onClick={() => setShowUFWModal(true)}
             disabled={ufwMut.isPending}
             className="px-3 py-1.5 text-xs font-medium rounded-md btn-vn-primary
                        disabled:opacity-50 cursor-pointer
@@ -224,11 +335,14 @@ export default function AccountsPage() {
                   <SortableHeader label="Country" column="Country" currentSort={sort} currentDir={dir} onClick={handleSort} />
                   <SortableHeader label="Org" column="Org" currentSort={sort} currentDir={dir} onClick={handleSort} />
                   <th scope="col" className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--vn-text-muted)' }}>ASN</th>
-                  <SortableHeader label="Requests" column="TotalRequests" currentSort={sort} currentDir={dir} onClick={handleSort} />
-                  <SortableHeader label="Rate Limits" column="RatelimitEvents" currentSort={sort} currentDir={dir} onClick={handleSort} />
+                  <SortableHeader label="Requests" column="TotalRequests" currentSort={sort} currentDir={dir} onClick={handleSort} align="center" />
+                  <SortableHeader label="Rate Limits" column="RatelimitEvents" currentSort={sort} currentDir={dir} onClick={handleSort} align="center" />
                   <SortableHeader label="Threat" column="ThreatScore" currentSort={sort} currentDir={dir} onClick={handleSort} />
                   <SortableHeader label="Status" column="Status" currentSort={sort} currentDir={dir} onClick={handleSort} />
                   <SortableHeader label="Last Seen" column="LastSeen" currentSort={sort} currentDir={dir} onClick={handleSort} />
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider whitespace-nowrap" style={{ color: 'var(--vn-text-muted)' }}>
+                    Scanned
+                  </th>
                   <th scope="col" className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--vn-text-muted)' }}>
                     <span className="sr-only">Actions</span>
                   </th>
@@ -259,8 +373,8 @@ export default function AccountsPage() {
                     <td className="px-3 py-2 text-xs" style={{ color: 'var(--vn-text-muted)' }}>
                       {acct.ASN || '\u2014'}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums">{(acct.TotalRequests ?? 0).toLocaleString()}</td>
-                    <td className="px-3 py-2 text-right tabular-nums" style={{ color: acct.RatelimitEvents > 0 ? 'var(--vn-warning)' : 'var(--vn-text-muted)' }}>
+                    <td className="px-3 py-2 text-center tabular-nums">{(acct.TotalRequests ?? 0).toLocaleString()}</td>
+                    <td className="px-3 py-2 text-center tabular-nums" style={{ color: acct.RatelimitEvents > 0 ? 'var(--vn-warning)' : 'var(--vn-text-muted)' }}>
                       {(acct.RatelimitEvents ?? 0).toLocaleString()}
                     </td>
                     <td className="px-3 py-2">
@@ -272,9 +386,12 @@ export default function AccountsPage() {
                     <td className="px-3 py-2 whitespace-nowrap text-xs" style={{ color: 'var(--vn-text-subtle)' }}>
                       {fmtDate(acct.LastSeen)}
                     </td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <ScanBadge updatedAt={acct.IntelUpdatedAt} />
+                    </td>
                     <td className="px-3 py-2">
                       <button
-                        onClick={(e) => { e.stopPropagation(); setInvestigateIP(acct.IP); }}
+                        onClick={(e) => { e.stopPropagation(); setInvestigateAcct(acct); }}
                         className="px-2 py-1 text-xs rounded cursor-pointer
                                    focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
                         style={{ color: 'var(--vn-primary)', backgroundColor: 'transparent' }}
@@ -338,10 +455,19 @@ export default function AccountsPage() {
       )}
     </div>
 
-    {investigateIP && (
+    {investigateAcct && (
       <InvestigateModal
-        ip={investigateIP}
-        onClose={() => setInvestigateIP(null)}
+        ip={investigateAcct.IP}
+        acct={investigateAcct}
+        onClose={() => setInvestigateAcct(null)}
+      />
+    )}
+
+    {showUFWModal && (
+      <UFWSyncModal
+        onConfirm={(pass) => ufwMut.mutate(pass)}
+        onClose={() => setShowUFWModal(false)}
+        isPending={ufwMut.isPending}
       />
     )}
     </>

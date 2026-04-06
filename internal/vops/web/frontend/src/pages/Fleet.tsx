@@ -7,10 +7,13 @@ import {
   registerChain,
   unregisterChain,
   forcePoll,
+  getVMStatus,
+  vmUpgradeURL,
 } from '../api';
-import type { RegisteredChain, VMView, Deployment } from '../api/types';
+import type { RegisteredChain, VMView, Deployment, VMStatus } from '../api/types';
 import Spinner from '../components/Spinner';
 import Badge from '../components/Badge';
+import UpgradeModal from '../components/UpgradeModal';
 
 const card: React.CSSProperties = {
   background: 'var(--vn-surface)',
@@ -66,6 +69,150 @@ const inputStyle: React.CSSProperties = {
   color: 'var(--vn-text)',
   fontSize: '0.875rem',
 };
+
+/* ── Mini metric bar ─────────────────────────────────────────── */
+
+function MiniBar({ value, warn = 70, danger = 85, label }: { value: number; warn?: number; danger?: number; label?: string }) {
+  const color = value >= danger ? 'var(--vn-danger)' : value >= warn ? 'var(--vn-warning)' : 'var(--vn-success)';
+  return (
+    <div>
+      {label && <div className="text-xs mb-0.5" style={{ color: 'var(--vn-text-subtle)' }}>{label}</div>}
+      <div className="flex items-center gap-1.5">
+        <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--vn-border)' }}>
+          <div className="h-full rounded-full" style={{ width: `${Math.min(100, value)}%`, backgroundColor: color }} />
+        </div>
+        <span className="tabular-nums text-xs w-8 text-right" style={{ color }}>{value.toFixed(0)}%</span>
+      </div>
+    </div>
+  );
+}
+
+/* ── Live Servers Section ────────────────────────────────────── */
+
+function ServersLiveSection() {
+  const [upgradeTarget, setUpgradeTarget] = useState<VMStatus | null>(null);
+
+  const { data, isLoading, isError, dataUpdatedAt } = useQuery({
+    queryKey: ['vm-status'],
+    queryFn: getVMStatus,
+    refetchInterval: 60_000,
+    retry: false,
+  });
+
+  const vms: VMStatus[] = data?.vms ?? [];
+
+  return (
+    <div style={card}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>Live Server Metrics</h2>
+          {dataUpdatedAt > 0 && (
+            <span style={{ fontSize: '0.7rem', color: 'var(--vn-text-subtle)' }}>
+              Updated {new Date(dataUpdatedAt).toLocaleTimeString()}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {isLoading ? <Spinner /> : isError ? (
+        <p style={{ color: 'var(--vn-text-muted)', fontSize: '0.875rem' }}>
+          Fleet SSH not configured — add VMs to <code>config/infra/*.toml</code>.
+        </p>
+      ) : vms.length === 0 ? (
+        <p style={{ color: 'var(--vn-text-muted)', fontSize: '0.875rem' }}>No VMs configured.</p>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1rem' }}>
+          {vms.map((vm) => (
+            <div
+              key={vm.name}
+              style={{
+                borderRadius: 'var(--vn-radius)',
+                border: `1px solid ${vm.online ? 'var(--vn-border)' : 'var(--vn-danger)'}`,
+                padding: '1rem',
+                backgroundColor: 'var(--vn-surface-2)',
+                opacity: vm.online ? 1 : 0.7,
+              }}
+            >
+              {/* Card header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{vm.name}</div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--vn-text-subtle)', marginTop: '0.1rem' }}>
+                    {vm.os || (vm.online ? 'Linux' : 'offline')} · {vm.datacenter || 'N/A'}
+                  </div>
+                  {vm.lan_ip && (
+                    <div style={{ fontSize: '0.72rem', color: 'var(--vn-text-subtle)', fontFamily: 'monospace' }}>
+                      {vm.lan_ip}
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Badge status={vm.online ? 'online' : 'offline'} />
+                  {vm.type && <Badge status={vm.type} />}
+                </div>
+              </div>
+
+              {vm.online ? (
+                <>
+                  {/* Metric bars */}
+                  <div style={{ display: 'grid', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                    <MiniBar value={vm.cpu_pct} label="CPU" />
+                    <MiniBar value={vm.mem_pct} label="Memory" />
+                    <MiniBar value={vm.storage_pct} warn={75} danger={90} label="Disk" />
+                  </div>
+
+                  {/* Stats row */}
+                  <div style={{ display: 'flex', gap: '1.25rem', fontSize: '0.75rem', color: 'var(--vn-text-muted)', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+                    <span>
+                      <span style={{ color: 'var(--vn-text-subtle)' }}>Load </span>
+                      <span style={{ fontFamily: 'monospace', color: 'var(--vn-text)' }}>{vm.load_avg || '—'}</span>
+                    </span>
+                    <span>
+                      <span style={{ color: 'var(--vn-text-subtle)' }}>Updates </span>
+                      <span style={{ color: vm.apt_count > 0 ? 'var(--vn-warning)' : 'var(--vn-success)' }}>
+                        {vm.apt_count > 0 ? `${vm.apt_count} pending` : '✓ current'}
+                      </span>
+                    </span>
+                  </div>
+
+                  {/* Actions */}
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button
+                      onClick={() => setUpgradeTarget(vm)}
+                      style={{
+                        ...btn,
+                        background: vm.apt_count > 0 ? 'var(--vn-primary)' : 'var(--vn-surface)',
+                        color: vm.apt_count > 0 ? 'var(--vn-on-primary)' : 'var(--vn-text-muted)',
+                        border: vm.apt_count > 0 ? 'none' : '1px solid var(--vn-border)',
+                        fontSize: '0.75rem',
+                        padding: '0.3rem 0.7rem',
+                      }}
+                      type="button"
+                    >
+                      {vm.apt_count > 0 ? `⬆ Upgrade (${vm.apt_count})` : 'Upgrade'}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div style={{ fontSize: '0.8rem', color: 'var(--vn-danger)' }}>
+                  {vm.error || 'SSH unreachable'}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {upgradeTarget && (
+        <UpgradeModal
+          vmName={upgradeTarget.name}
+          upgradeURL={vmUpgradeURL(upgradeTarget.name)}
+          onClose={() => setUpgradeTarget(null)}
+        />
+      )}
+    </div>
+  );
+}
 
 /* ── Registered Chains ───────────────────────────────────────── */
 function RegisteredChainsSection() {
@@ -283,6 +430,7 @@ export default function FleetPage() {
   return (
     <div>
       <h1 style={{ margin: '0 0 1.5rem', fontSize: '1.5rem', fontWeight: 700 }}>Fleet</h1>
+      <ServersLiveSection />
       <RegisteredChainsSection />
       <VMsSection />
       <DeploymentsSection />
