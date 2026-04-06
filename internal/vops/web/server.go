@@ -135,7 +135,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	// GET /login is served without session check so users can access the login page.
 	// GET /settings/wizard serves the embedded configwizard HTML (bypasses React Router).
 	// GET / (catch-all) enforces session; Go redirects to /login if unauthenticated.
-	spa := buildSPAHandler(distFS, s.cfg.VOps.BasePath)
+	spa := buildSPAHandler(distFS, s.cfg.VOps.BasePath, func() string { return s.cfg.VOps.UI.Theme })
 	mux.HandleFunc("GET /login", spa)
 	mux.Handle("GET /settings/wizard", s.requireSession(http.HandlerFunc(s.handleWizardPage)))
 	mux.Handle("GET /", s.requireSession(http.HandlerFunc(spa)))
@@ -442,14 +442,17 @@ func (s *Server) Shutdown(ctx context.Context) error {
 // basePath is injected as <meta name="vops-base" content="..."> into index.html
 // so the SPA client can build correct API URLs when served under a sub-path proxy
 // (e.g. Apache ProxyPass /vlog/ → http://127.0.0.1:8889/ with prefix stripping).
-func buildSPAHandler(distFS fs.FS, basePath string) http.HandlerFunc {
-	// Pre-read and patch index.html once at startup.
+//
+// themeFunc is called per-request to inject the current theme as
+// <meta name="vops-theme" content="..."> so the SPA can apply it before first paint.
+func buildSPAHandler(distFS fs.FS, basePath string, themeFunc func() string) http.HandlerFunc {
+	// Pre-read and patch index.html once at startup for the static basePath meta.
 	indexHTML, err := fs.ReadFile(distFS, "index.html")
 	if err != nil {
 		panic("web: dist/index.html missing from embed: " + err.Error())
 	}
 	metaTag := `<meta name="vops-base" content="` + basePath + `">`
-	patchedHTML := bytes.ReplaceAll(indexHTML, []byte("</head>"), []byte(metaTag+"</head>"))
+	basePatched := bytes.ReplaceAll(indexHTML, []byte("</head>"), []byte(metaTag+"</head>"))
 
 	fileServer := http.FileServer(http.FS(distFS))
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -474,6 +477,11 @@ func buildSPAHandler(distFS fs.FS, basePath string) http.HandlerFunc {
 				return
 			}
 		}
+
+		// Inject active theme per-request so CSS can apply it before first paint.
+		theme := themeFunc()
+		themeMeta := `<meta name="vops-theme" content="` + theme + `">`
+		patchedHTML := bytes.ReplaceAll(basePatched, []byte("</head>"), []byte(themeMeta+"</head>"))
 
 		// Fallback: serve patched index.html for all React Router paths.
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")

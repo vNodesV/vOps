@@ -1,5 +1,6 @@
 @import "tailwindcss";
 
+/* ── Base design tokens (light-blue default) ─────────────────── */
 :root {
   --vn-primary: #2563eb;
   --vn-primary-hover: #1d4ed8;
@@ -22,8 +23,75 @@
   --vn-radius: 0.5rem;
 }
 
+/* ── Theme: vnodes — dark green terminal aesthetic ───────────── */
+:root[data-theme="vnodes"] {
+  --vn-primary: #22c55e;
+  --vn-primary-hover: #16a34a;
+  --vn-accent: #4ade80;
+  --vn-bg: #080e18;
+  --vn-surface: #0f1a2e;
+  --vn-surface-2: #1a2744;
+  --vn-border: #1e3a5f;
+  --vn-text: #e2fbe8;
+  --vn-text-muted: #86efac;
+  --vn-text-subtle: #4ade80;
+  --vn-success: #4ade80;
+  --vn-warning: #fbbf24;
+  --vn-warning-medium: #f97316;
+  --vn-danger: #f87171;
+  --vn-info: #38bdf8;
+  --vn-on-primary: #052e16;
+  --vn-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.4);
+  --vn-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.4);
+}
+
+/* ── Theme: dark-blue — navy with blue-teal accents ──────────── */
+:root[data-theme="dark-blue"] {
+  --vn-primary: #3b82f6;
+  --vn-primary-hover: #2563eb;
+  --vn-accent: #38bdf8;
+  --vn-bg: #0f172a;
+  --vn-surface: #1e293b;
+  --vn-surface-2: #334155;
+  --vn-border: #334155;
+  --vn-text: #f1f5f9;
+  --vn-text-muted: #94a3b8;
+  --vn-text-subtle: #64748b;
+  --vn-success: #4ade80;
+  --vn-warning: #fbbf24;
+  --vn-warning-medium: #f97316;
+  --vn-danger: #f87171;
+  --vn-info: #38bdf8;
+  --vn-on-primary: #ffffff;
+  --vn-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.3), 0 1px 2px -1px rgb(0 0 0 / 0.3);
+  --vn-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+}
+
+/* ── Theme: light-blue — silver-blue professional look ───────── */
+:root[data-theme="light-blue"] {
+  --vn-primary: #2563eb;
+  --vn-primary-hover: #1d4ed8;
+  --vn-accent: #0ea5e9;
+  --vn-bg: #f8fafc;
+  --vn-surface: #ffffff;
+  --vn-surface-2: #f1f5f9;
+  --vn-border: #e2e8f0;
+  --vn-text: #0f172a;
+  --vn-text-muted: #64748b;
+  --vn-text-subtle: #94a3b8;
+  --vn-success: #16a34a;
+  --vn-warning: #d97706;
+  --vn-warning-medium: #ea580c;
+  --vn-danger: #dc2626;
+  --vn-info: #0284c7;
+  --vn-on-primary: #ffffff;
+  --vn-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --vn-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+}
+
+/* ── System dark-mode fallback (only when no explicit theme is set) ── */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]) {
     --vn-primary: #3b82f6;
     --vn-primary-hover: #2563eb;
     --vn-accent: #38bdf8;
