@@ -189,6 +189,9 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 			s.requireSession(http.HandlerFunc(s.fleet.HandleVMs)))
 		mux.Handle("GET /api/v1/fleet/vms/status",
 			s.requireSession(http.HandlerFunc(s.fleet.HandleVMStatus)))
+		// POST alias: "Scan All VMs" button triggers a fresh poll (POST is semantically correct for actions).
+		mux.Handle("POST /api/v1/fleet/vms/scan",
+			s.requireSession(http.HandlerFunc(s.fleet.HandleVMStatus)))
 		mux.Handle("GET /api/v1/fleet/chains",
 			s.requireSession(http.HandlerFunc(s.fleet.HandleChains)))
 		mux.Handle("GET /api/v1/fleet/chains/{chain}",

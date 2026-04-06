@@ -76,6 +76,10 @@ export const getFleetVMs = () =>
 export const getVMStatus = () =>
   apiFetch<{ vms: VMStatus[]; hosts: unknown[] }>('/api/v1/fleet/vms/status');
 
+/** Trigger a fresh SSH poll of all VMs (POST — action semantics). */
+export const scanAllVMs = () =>
+  apiPost<{ vms: VMStatus[]; hosts: unknown[] }>('/api/v1/fleet/vms/scan', {});
+
 /** Returns the SSE URL for streaming apt upgrade output on a named VM. */
 export const vmUpgradeURL = (name: string) =>
   `${BASE}api/v1/fleet/vms/${encodeURIComponent(name)}/upgrade`;

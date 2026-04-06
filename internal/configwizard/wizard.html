@@ -362,6 +362,31 @@
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
+    .nodetype-card {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--vn-green-border);
+      background: var(--vn-green-dim);
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .nodetype-card:has(input:checked) {
+      border-color: var(--vn-green);
+      background: rgba(0, 255, 0, 0.10);
+    }
+    .nodetype-card input[type="checkbox"] {
+      margin-top: 0.15rem;
+      accent-color: var(--vn-green);
+    }
+    .nodetype-card strong {
+      color: var(--vn-green);
+      display: block;
+      margin-bottom: 0.2rem;
+    }
+
     .helper-blob {
       margin: 0 0 0.8rem;
       padding: 0.6rem 0.7rem;
@@ -541,28 +566,92 @@
 <body>
   <div class="wrap">
     <section class="header">
-      <h1>vProx Configuration Wizard — Dual Mode (Web)</h1>
-      <div class="hint">Save each step in any order. Files are written with backup behavior from the shared wizard backend.</div>
+      <h1>vOps / vProx Setup Wizard</h1>
+      <div class="hint">Complete each step to configure your vProx proxy, fleet, chains, and infrastructure. Save each step independently — you can return to any step at any time. All files are written with automatic backups.</div>
       <div class="toolbar">
         <div class="required-note"><span class="required-mark">*</span> mandatory field</div>
       </div>
-      <div class="status" id="status">Ready.</div>
+      <div class="status" id="status">Ready. Start with Step 0 — select your node role(s).</div>
     </section>
 
     <nav class="tabs" aria-label="Wizard steps">
-      <button class="tab active" data-tab="ports">1. Ports</button>
-      <button class="tab" data-tab="settings">2. Settings</button>
-      <button class="tab" data-tab="chain">3. Chain</button>
-      <button class="tab" data-tab="vlog">4. vOps</button>
-      <button class="tab" data-tab="fleet">5. Fleet</button>
-      <button class="tab" data-tab="infra">6. Infra</button>
-      <button class="tab" data-tab="backup">7. Backup</button>
+      <button class="tab active" data-tab="nodetype">0. Node Type</button>
+      <button class="tab" data-tab="ports">1. Ports</button>
+      <button class="tab" data-tab="settings">2. Proxy Rules</button>
+      <button class="tab" data-tab="chain">3. Chain Profile</button>
+      <button class="tab" data-tab="vlog">4. vOps Core</button>
+      <button class="tab" data-tab="fleet">5. Fleet SSH</button>
+      <button class="tab" data-tab="infra">6. Hosts &amp; VMs</button>
+      <button class="tab" data-tab="backup">7. Backups</button>
     </nav>
 
-    <section class="panel active" id="panel-ports">
+    <!-- ── Step 0: Node Type ──────────────────────────────────── -->
+    <section class="panel active" id="panel-nodetype">
       <div class="helper-blob">
-        <strong>Ports</strong>
-        <p>Set the default proxy ports registered across all chains. <code>rpc</code> and <code>rest</code> are required — use <code>0</code> to disable optional ports. You can override any port on a per-service basis in the Chain profile step or in <code>config/chains/ports.toml</code>.</p>
+        <strong>Step 0 — What are you setting up?</strong>
+        <p>Select the role(s) of the node(s) you are configuring. This helps the wizard highlight the most relevant fields in each step. You can run multiple roles on the same infrastructure — select all that apply.</p>
+        <p><em>You do not need to save this step — it only adjusts the guidance shown in subsequent steps.</em></p>
+      </div>
+
+      <div class="grid" style="gap:0.75rem">
+        <label class="check full nodetype-card">
+          <input class="nodetype-check" data-role="validator" type="checkbox">
+          <div>
+            <strong>⚔ Validator</strong>
+            <p class="hint mini" style="margin:0.25rem 0 0">Signs blocks. Requires valoper address, RPC/REST endpoints for governance &amp; upgrade tracking, and strict uptime monitoring. The chain profile's <code>[validator]</code> section tracks participation.</p>
+          </div>
+        </label>
+        <label class="check full nodetype-card">
+          <input class="nodetype-check" data-role="node" type="checkbox">
+          <div>
+            <strong>🖥 Full Node (RPC / REST / gRPC / WS)</strong>
+            <p class="hint mini" style="margin:0.25rem 0 0">Public or internal RPC endpoint. vProx proxies and rate-limits requests to this node. Configure exposed services (<code>expose = ['rpc','rest','ws']</code>) and optional bot protection in Proxy Rules.</p>
+          </div>
+        </label>
+        <label class="check full nodetype-card">
+          <input class="nodetype-check" data-role="sp" type="checkbox">
+          <div>
+            <strong>🌐 Service Provider (SP / API Node)</strong>
+            <p class="hint mini" style="margin:0.25rem 0 0">High-traffic public endpoint for wallets and dApps. Set <code>service_type = sp</code> in the chain profile. Enable <code>mask_rpc</code> in Proxy Rules to hide internal node details from consumers.</p>
+          </div>
+        </label>
+        <label class="check full nodetype-card">
+          <input class="nodetype-check" data-role="relayer" type="checkbox">
+          <div>
+            <strong>🔀 Relayer (IBC)</strong>
+            <p class="hint mini" style="margin:0.25rem 0 0">Routes IBC packets between chains. Relayers need low-latency RPC access. Use dedicated internal endpoints and set <code>service_type = relayer</code> in the chain profile to exempt from public rate limits.</p>
+          </div>
+        </label>
+      </div>
+
+      <div class="actions" style="margin-top:1.25rem">
+        <button type="button" class="wizard-save-next" style="min-width:160px">Continue →</button>
+      </div>
+
+      <div style="margin-top:1.5rem;padding:0.75rem 1rem;border-radius:6px;background:rgba(0,255,0,0.04);border:1px solid rgba(0,255,0,0.12)">
+        <strong style="font-size:0.78rem">Quick-start guides</strong>
+        <ul class="hint mini" style="margin:0.5rem 0 0;padding-left:1.2rem;line-height:1.7">
+          <li><strong>Validator</strong>: Steps 1 (Ports) → 3 (Chain Profile, add valoper) → 4 (vOps, add API keys) → 6 (Hosts &amp; VMs, add VM with type=validator)</li>
+          <li><strong>Public RPC node</strong>: Steps 1 → 2 (Proxy Rules, tune rate limits) → 3 → 6</li>
+          <li><strong>SP / Service Provider</strong>: Steps 1 → 2 (enable mask_rpc) → 3 (service_type=sp) → 6</li>
+          <li><strong>Relayer</strong>: Step 3 (service_type=relayer, internal endpoint) → 6 (VM type=relayer)</li>
+          <li><strong>Fresh install</strong>: Complete all 8 steps in order (0 → 7).</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-ports">
+      <div class="helper-blob">
+        <strong>Step 1 — vProx Ports</strong>
+        <p>Set the default TCP ports that vProx listens on for each service type. These defaults apply to all chains unless overridden in an individual chain's profile. Ports are written to <code>config/chains/ports.toml</code>.</p>
+        <ul class="hint mini" style="margin:0.25rem 0 0;padding-left:1.2rem;line-height:1.7">
+          <li><code>rpc</code> — CometBFT RPC (default 26657). Required for all node types.</li>
+          <li><code>rest</code> — Cosmos REST/LCD (default 1317). Required for validators (governance) and SP nodes.</li>
+          <li><code>grpc</code> — gRPC endpoint (default 9090). Required for CosmWasm / contract queries. Set 0 to disable.</li>
+          <li><code>grpc_web</code> — gRPC-Web gateway (default 9091). Used by browser-based clients. Set 0 to disable.</li>
+          <li><code>vops_url</code> — Internal URL where the vOps dashboard is reachable (used for webhook callbacks).</li>
+          <li><code>trusted_proxies</code> — CIDRs of upstream proxies (Apache, nginx) that forward real client IPs via X-Forwarded-For.</li>
+        </ul>
       </div>
       <div class="import-toggle">
         <label><input class="wizard-import-check" data-step="ports" type="checkbox"> I want to convert an existing toml files</label>
@@ -589,8 +678,17 @@
 
     <section class="panel" id="panel-settings">
       <div class="helper-blob">
-        <strong>Settings</strong>
-        <p>Configure the vProx proxy engine global rate limits and security controls. <code>rps</code> / <code>burst</code> limit request throughput; auto-quarantine temporarily throttles IPs that exceed thresholds within a rolling window. Per-chain rate overrides can be set in each chain's profile.</p>
+        <strong>Step 2 — Proxy Rules</strong>
+        <p>Configure the vProx rate-limiting and security engine. These settings apply globally to all chains and can be fine-tuned per chain in the Chain Profile step. Written to <code>config/vprox/settings.toml</code>.</p>
+        <ul class="hint mini" style="margin:0.25rem 0 0;padding-left:1.2rem;line-height:1.7">
+          <li><code>rps</code> / <code>burst</code> — Sustained requests-per-second and burst allowance per client IP. Start conservatively (25 rps / 100 burst) and tune up for SP nodes.</li>
+          <li><code>auto_quarantine.enabled</code> — Temporarily throttle IPs that exceed the threshold within a rolling window. Recommended for public-facing nodes.</li>
+          <li><code>aq_threshold</code> — Requests within <code>aq_window_sec</code> that trigger quarantine. Default: 120 req / 10 sec.</li>
+          <li><code>aq_penalty_rps</code> / <code>aq_penalty_burst</code> — Reduced limits applied during quarantine. Set very low (1/1) for aggressive throttling.</li>
+          <li><code>aq_ttl_sec</code> — How long (seconds) a quarantined IP stays throttled. Default: 900s (15 min).</li>
+          <li><code>debug.enabled</code> / <code>debug_port</code> — Expose pprof profiling endpoint on localhost. Only enable for troubleshooting.</li>
+        </ul>
+        <p class="hint mini" style="margin-top:0.5rem"><strong>Relayer tip:</strong> If you have dedicated relayer VMs, whitelist their IPs in <code>trusted_proxies</code> to exempt them from rate limiting.</p>
       </div>
       <div class="import-toggle">
         <label><input class="wizard-import-check" data-step="settings" type="checkbox"> I want to convert an existing toml files</label>
@@ -618,8 +716,22 @@
 
     <section class="panel" id="panel-chain">
       <div class="helper-blob">
-        <strong>Chain Profile</strong>
-        <p>Define a chain proxy profile: identity (<code>chain_name</code>, <code>chain_id</code>), network endpoints, service toggles (RPC / REST / gRPC / WebSocket), and security features. One file per chain. Each <code>[[chain_services]]</code> row maps a service node. You can edit chain profiles at any time from the Settings → Chain Profiles tab.</p>
+        <strong>Step 3 — Chain Profile</strong>
+        <p>Define a Cosmos chain proxy profile. One file per chain, written to <code>config/vops/chains/&lt;chain_name&gt;.toml</code>. A chain profile covers identity (chain name, ID), proxy routing, service node inventory, and optional validator tracking.</p>
+        <ul class="hint mini" style="margin:0.25rem 0 0;padding-left:1.2rem;line-height:1.7">
+          <li><code>chain_name</code> — Short internal identifier, also used as the filename (e.g., <code>cosmos</code>, <code>osmosis</code>).</li>
+          <li><code>chain_id</code> — On-chain chain ID (e.g., <code>cosmoshub-4</code>, <code>osmosis-1</code>). Required for governance/upgrade tracking.</li>
+          <li><code>dashboard_name</code> — Display name shown in the vOps dashboard chain status table.</li>
+          <li><code>explorer_base</code> — Block explorer URL prefix (e.g., <code>https://mintscan.io/cosmos</code>).</li>
+          <li><code>chain_ping_country</code> — ISO country code for the latency ping probe (e.g., <code>CA</code>, <code>US</code>, <code>DE</code>).</li>
+        </ul>
+        <p class="hint mini" style="margin-top:0.5rem"><strong>[[chain_services]] rows</strong> define each managed service node:</p>
+        <ul class="hint mini" style="margin:0;padding-left:1.2rem;line-height:1.7">
+          <li><code>service_type</code>: <code>validator</code> | <code>node</code> | <code>sp</code> | <code>relayer</code></li>
+          <li><code>valoper</code>: required for <code>validator</code> rows — used to track signing participation and uptime.</li>
+          <li><code>internal_ip</code>: LAN IP of the VM running this service. Required when <code>link_to_vm = true</code>.</li>
+          <li><code>moniker</code>: Human-readable name shown in fleet status and dashboard.</li>
+        </ul>
       </div>
       <div class="import-toggle">
         <label><input class="wizard-import-check" data-step="chain" type="checkbox"> I want to convert an existing toml files</label>
@@ -678,8 +790,21 @@
 
     <section class="panel" id="panel-vlog">
       <div class="helper-blob">
-        <strong>vOps Core</strong>
-        <p>Configure the vOps intelligence engine: database location, API keys for threat intelligence (VirusTotal, AbuseIPDB, Shodan), log archive monitoring, and access authentication. <code>password_hash</code> expects a bcrypt-hashed value — leave empty only to intentionally disable auth. Keys can be rotated at any time from the Settings → vOps tab.</p>
+        <strong>Step 4 — vOps Core</strong>
+        <p>Configure the vOps intelligence dashboard: bind address, API authentication, IP threat intelligence API keys, log archive monitoring, and UI theme. Written to <code>config/vops/vops.toml</code>.</p>
+        <ul class="hint mini" style="margin:0.25rem 0 0;padding-left:1.2rem;line-height:1.7">
+          <li><code>port</code> / <code>bind_address</code> — vOps listens on this address. Use <code>127.0.0.1</code> with Apache <code>ProxyPass /vlog/ http://127.0.0.1:8889/vlog/</code>.</li>
+          <li><code>base_path</code> — URL sub-path where vOps is served (e.g., <code>/vlog/</code>). Must match Apache config.</li>
+          <li><code>api_key</code> — Shared secret for the <code>/block</code> and <code>/unblock</code> API endpoints. Generate with the ⟳ button. Copy this key to vProx's config for webhook integration.</li>
+          <li><code>password_hash</code> — bcrypt hash of the admin login password (cost=12). Generate in Settings → Security after setup, or use the ⟳ button below.</li>
+          <li><strong>IP Intelligence keys</strong> (optional but recommended):
+            <ul style="margin:0.25rem 0 0;padding-left:1.2rem">
+              <li><code>virustotal</code> — VirusTotal v3 API key (free tier: 500 req/day).</li>
+              <li><code>abuseipdb</code> — AbuseIPDB v2 API key (free tier: 1000 req/day).</li>
+              <li><code>shodan</code> — Shodan API key for port/banner scanning (paid).</li>
+            </ul>
+          </li>
+        </ul>
       </div>
       <div class="import-toggle">
         <label><input class="wizard-import-check" data-step="vops" type="checkbox"> I want to convert an existing toml files</label>
@@ -732,8 +857,16 @@
 
     <section class="panel" id="panel-fleet">
       <div class="helper-blob">
-        <strong>Fleet SSH Defaults</strong>
-        <p>Set the SSH connection details vOps uses to reach your validator VMs for deployments and status polling. The user and key path defined here apply globally to all VMs unless overridden per-VM in the Infrastructure file. <code>poll_interval_sec</code> controls how frequently vOps checks chain heights and upgrade plans.</p>
+        <strong>Step 5 — Fleet SSH Defaults</strong>
+        <p>Set the SSH connection parameters that vOps uses to reach your VMs for metrics polling, script deployment, and apt upgrades. These defaults apply to all VMs; per-VM overrides can be set in the Hosts &amp; VMs step. Written to <code>config/fleet/settings.toml</code>.</p>
+        <ul class="hint mini" style="margin:0.25rem 0 0;padding-left:1.2rem;line-height:1.7">
+          <li><code>ssh_user</code> — Linux user on the VM (e.g., <code>ubuntu</code>). Must have passwordless sudo for deployment scripts.</li>
+          <li><code>ssh_key_path</code> — Absolute path to the SSH private key on the vOps server. Generate the key pair in Settings → Security → Fleet SSH Key, then copy the public key to each VM's <code>~/.ssh/authorized_keys</code>.</li>
+          <li><code>ssh_port</code> — SSH port on VMs (default 22). Change if you use non-standard ports for security.</li>
+          <li><code>ssh_timeout_sec</code> — Per-VM SSH connection timeout. Increase for slow links.</li>
+          <li><code>poll_interval_sec</code> — How often (seconds) the background fleet poller checks VM health and chain status. Default: 60s.</li>
+        </ul>
+        <p class="hint mini" style="margin-top:0.5rem"><strong>Prerequisites:</strong> Generate an SSH key in Settings → Security → Fleet SSH Key first, then paste the path here.</p>
       </div>
       <div class="import-toggle">
         <label><input class="wizard-import-check" data-step="fleet" type="checkbox"> I want to convert an existing toml files</label>
@@ -757,8 +890,30 @@
 
     <section class="panel" id="panel-infra">
       <div class="helper-blob">
-        <strong>Infrastructure</strong>
-        <p>Register your physical hosts and virtual machines into a datacenter inventory file. Fleet uses this registry for SSH deployments; Chain Status uses it for ping routing and latency probing. Each datacenter gets its own <code>config/infra/&lt;datacenter&gt;.toml</code> file. You can register as many datacenters as needed — add more from Settings → Infrastructure.</p>
+        <strong>Step 6 — Hosts &amp; VMs</strong>
+        <p>Register your physical hypervisor host(s) and the virtual machines they run. This inventory is used by: fleet SSH polling (metrics, upgrades), Chain Status latency probes, and the VM Manager (libvirt/QEMU lifecycle control). Written to <code>config/infra/&lt;datacenter&gt;.toml</code>.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-top:0.75rem">
+          <div style="padding:0.6rem 0.8rem;border-radius:5px;background:rgba(0,255,0,0.04);border:1px solid rgba(0,255,0,0.12)">
+            <strong style="font-size:0.78rem">🖥 [host] — Physical Hypervisor</strong>
+            <ul class="hint mini" style="margin:0.25rem 0 0;padding-left:1.1rem;line-height:1.6">
+              <li><code>host_name</code> — Unique identifier (e.g., <code>qc-host-1</code>).</li>
+              <li><code>host_public_ip</code> — Public IP or hostname for SSH access.</li>
+              <li><code>host_lan_ip</code> — LAN IP (10.x.x.x) if accessible from vOps network.</li>
+              <li>Used by VM Manager to connect to libvirt/QEMU via SSH tunnel.</li>
+            </ul>
+          </div>
+          <div style="padding:0.6rem 0.8rem;border-radius:5px;background:rgba(0,255,0,0.04);border:1px solid rgba(0,255,0,0.12)">
+            <strong style="font-size:0.78rem">💻 [[vm]] — Virtual Machine</strong>
+            <ul class="hint mini" style="margin:0.25rem 0 0;padding-left:1.1rem;line-height:1.6">
+              <li><code>vm.name</code> — Hostname/identifier matching the VM's actual name.</li>
+              <li><code>vm.lan_ip</code> — LAN IP for SSH polling (metrics, upgrades).</li>
+              <li><code>vm.type</code> — Role: <code>validator</code> | <code>node</code> | <code>sp</code> | <code>relayer</code> | <code>webserver</code>.</li>
+              <li><code>vm.host</code> — SSH target IP for the fleet poller.</li>
+              <li><code>host_ref</code> sets the parent host for VM Manager operations.</li>
+            </ul>
+          </div>
+        </div>
+        <p class="hint mini" style="margin-top:0.5rem"><code>vm.ping.country</code> / <code>vm.ping.provider</code> control the latency probe card shown in Chain Status for each chain associated with this VM.</p>
       </div>
       <div class="import-toggle">
         <label><input class="wizard-import-check" data-step="infra" type="checkbox"> I want to convert an existing toml files</label>
@@ -838,8 +993,17 @@
 
     <section class="panel" id="panel-backup">
       <div class="helper-blob">
-        <strong>Backup</strong>
-        <p>Configure automated backup schedule, destination, and file selections. Enable <code>automation</code> to run backups on a recurring schedule. <code>destination</code> accepts a local directory path. File lists are comma-separated — include the logs, data files, and config dirs you want archived. You can override these settings at any time from the Settings → Backup tab.</p>
+        <strong>Step 7 — Backups</strong>
+        <p>Configure automated log archive backups. vProx periodically compresses access logs into <code>.tar.gz</code> archives; this step controls where those archives are stored and how often. Written to <code>config/backup/backup.toml</code>.</p>
+        <ul class="hint mini" style="margin:0.25rem 0 0;padding-left:1.2rem;line-height:1.7">
+          <li><code>automation</code> — Check this to enable scheduled backups. Uncheck to run backups manually via <code>vprox --new-backup</code>.</li>
+          <li><code>interval_days</code> — Days between automatic backups (default: 7).</li>
+          <li><code>max_size_mb</code> — Maximum archive size before rotation triggers (default: 100 MB).</li>
+          <li><code>destination</code> — Local directory for backup files (e.g., <code>/var/backups/vprox</code>). Must be writable by the vops service user.</li>
+          <li><code>check_interval_min</code> — How often (minutes) the backup daemon checks if a new backup is due.</li>
+          <li><code>files_logs</code> — Comma-separated log file patterns to include in each archive.</li>
+        </ul>
+        <p class="hint mini" style="margin-top:0.5rem"><strong>After setup:</strong> Use <code>vprox --list-backup</code> to see existing archives and <code>vprox --backup-status</code> to check scheduler health.</p>
       </div>
       <div class="import-toggle">
         <label><input class="wizard-import-check" data-step="backup" type="checkbox"> I want to convert an existing toml files</label>
@@ -895,7 +1059,7 @@
       infra: $("#form-infra"),
       backup: $("#form-backup")
     };
-    const stepOrder = ["ports", "settings", "chain", "vlog", "fleet", "infra", "backup"];
+    const stepOrder = ["nodetype", "ports", "settings", "chain", "vlog", "fleet", "infra", "backup"];
     const importState = { step: "", checkbox: null, fields: null, sourcePath: "" };
     const importedSourceByStep = {};
 
