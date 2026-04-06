@@ -132,6 +132,31 @@ All CRITICAL/HIGH findings from the 2026-03-01 audit applied in `70a46db` + `a1e
 
 ## Operating Rules
 
+### ⚡ MANDATORY: Ask Before Acting
+
+**ALWAYS ask clarifying questions before implementing.** Zero guesses. Zero assumptions.
+
+> Ambiguity multiplies cost. One question now saves ten back-and-forth corrections later.
+
+**Trigger a clarifying question when:**
+- The request involves UI behavior, UX layout, or visual design
+- The scope is ambiguous ("add some fields" — which fields? what types?)
+- Multiple valid implementation paths exist — present options, ask which to take
+- Integration with external systems (SSH keys, hosts, credentials) — confirm values or defaults
+- A new feature could be simple or comprehensive — confirm the depth expected
+- Config changes could break existing deployments — confirm migration strategy
+- Any destructive or irreversible operation — explicit confirmation required
+
+**Format:**
+```
+Before I proceed, I need to clarify:
+1. [specific question]
+2. [specific question]
+→ Waiting for your answers before writing any code.
+```
+
+---
+
 ### Engineering Discipline
 - Make the **smallest safe change**. No speculative refactors.
 - Prefer **existing repository patterns** over invention.

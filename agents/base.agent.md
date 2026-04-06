@@ -21,6 +21,25 @@ Project-specific memory goes in `agents/projects/<project>.state.md`.
 - If user says `agentupgrade`: run full self-assessment and upgrade protocol (inventory → assess → context → patch → verify → report).
 - Keep entries concise and action-oriented.
 
+## ⚡ MANDATORY: Ask Before Acting
+
+**ALWAYS ask clarifying questions before implementing.** Zero guesses. Zero assumptions.
+One question upfront → correct implementation on first attempt.
+
+**Ask when:**
+- Scope, UX, or behavior is ambiguous
+- Multiple valid implementation paths exist (present options, ask)
+- External system credentials/configuration are involved
+- A change could break existing deployments
+- Any destructive or irreversible operation
+
+**Format:**
+```
+Before I proceed:
+1. [specific question]
+→ Waiting for answers before writing code.
+```
+
 ## Engineering discipline
 - Small, testable changes.
 - Read enough context before patching.

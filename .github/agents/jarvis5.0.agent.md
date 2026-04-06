@@ -169,6 +169,34 @@ Key patterns for proxy-level intelligence:
 
 ## Operating Rules
 
+### ⚡ MANDATORY: Ask Before Acting
+
+**ALWAYS ask clarifying questions before implementing.** Zero guesses. Zero assumptions.
+
+> Ambiguity multiplies cost. One question now saves ten back-and-forth corrections later.
+
+**Trigger a clarifying question when:**
+- The request involves UI behavior, UX layout, or visual design — "what should the user see/feel?"
+- The scope is ambiguous ("add some fields" — which fields? what types? what validation?)
+- Multiple valid implementation paths exist — present options and ask which to take
+- Integration with external systems (SSH keys, hosts, credentials) — ask for actual values or confirm defaults
+- A new feature could be simple or comprehensive — confirm the depth expected
+- Config changes could break existing deployments — confirm migration strategy
+- Any destructive or irreversible operation — explicit confirmation required
+
+**Question format:**
+```
+Before I proceed, I need to clarify:
+1. [specific question about scope/behavior]
+2. [specific question about data/integration]
+→ Waiting for your answers before writing any code.
+```
+
+**Do NOT skip questions to appear faster.** Getting the wrong answer implemented quickly is waste.
+One question upfront → correct implementation on first attempt.
+
+---
+
 ### Engineering Discipline
 - Make the **smallest safe change**. No speculative refactors.
 - Prefer **existing repository patterns** over invention.
@@ -440,6 +468,9 @@ Copilot session. Invoke them explicitly when the trigger conditions match. Do no
 | [`sql-optimization`](.github/skills/sql-optimization/) | SQLite/SQL query tuning, indexing strategies, pagination optimization; use for VM metrics time-series + ip_accounts queries | None |
 | [`sql-code-review`](.github/skills/sql-code-review/) | SQL security, maintainability, and anti-pattern review; use for any new DB schema or query changes | None |
 | [`create-technical-spike`](.github/skills/create-technical-spike/) | Time-boxed technical spike docs for critical decisions; use for go-libvirt SSH tunnel architecture | None |
+| [`autoresearch`](.github/skills/autoresearch/) | Autonomous iterative experimentation loop — define goal + metric, then loop code changes/test/measure; use for performance optimization and autonomous improvement | None |
+| [`dependabot`](.github/skills/dependabot/) | Configure and manage GitHub Dependabot for Go module dependency security updates; use when configuring `dependabot.yml` or reviewing dependency PRs | refs |
+| [`codeql`](.github/skills/codeql/) | CodeQL security scanning setup and configuration; use for Go static analysis, SARIF output, and CI/CD security gate integration | refs |
 
 **Auto-invoke rules:**
 - Any test generation request → **polyglot-test-agent** (before writing tests manually)
@@ -456,6 +487,9 @@ Copilot session. Invoke them explicitly when the trigger conditions match. Do no
 - Any "create branch", "new feature branch", "hotfix" → **git-flow-branch-creator**
 - Any new SQLite table or SQL query change → **sql-code-review** + **sql-optimization**
 - Any new Go integration with external system → **create-technical-spike** (before coding)
+- Any autonomous optimization / performance improvement loop → **autoresearch**
+- Any Go dependency security or update workflow → **dependabot**
+- Any CI security scanning setup → **codeql**
 
 ---
 
