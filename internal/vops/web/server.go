@@ -183,14 +183,24 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	mux.Handle("GET /api/v1/probe", s.requireSession(http.HandlerFunc(s.handleAPIProbe)))
 	mux.Handle("GET /api/v1/fleet/chains/traffic", s.requireSession(http.HandlerFunc(s.handleAPIChainTraffic)))
 
+	// POST /api/v1/fleet/vms/scan is always registered so the UI never gets a
+	// 405 Method Not Allowed from the Go 1.22 mux catch-all GET / pattern.
+	// When fleet is not yet configured it returns 503 with a human-readable message.
+	mux.Handle("POST /api/v1/fleet/vms/scan", s.requireSession(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.fleet == nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+				"error": "Fleet not configured — add at least one VM in Settings → Infrastructure and save.",
+			})
+			return
+		}
+		s.fleet.HandleVMStatus(w, r)
+	})))
+
 	// Fleet module routes — only registered when fleet is configured.
 	if s.fleet != nil {
 		mux.Handle("GET /api/v1/fleet/vms",
 			s.requireSession(http.HandlerFunc(s.fleet.HandleVMs)))
 		mux.Handle("GET /api/v1/fleet/vms/status",
-			s.requireSession(http.HandlerFunc(s.fleet.HandleVMStatus)))
-		// POST alias: "Scan All VMs" button triggers a fresh poll (POST is semantically correct for actions).
-		mux.Handle("POST /api/v1/fleet/vms/scan",
 			s.requireSession(http.HandlerFunc(s.fleet.HandleVMStatus)))
 		mux.Handle("GET /api/v1/fleet/chains",
 			s.requireSession(http.HandlerFunc(s.fleet.HandleChains)))

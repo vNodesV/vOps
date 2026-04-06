@@ -52,22 +52,60 @@ func sshKeyPaths() (priv, pub string, err error) {
 
 // handleAPIGetSSHPubKey returns the current vOps SSH public key (if any).
 // GET /settings/api/ssh-pub-key → {"pub_key":"ssh-ed25519 ...", "exists":true}
+//
+// Resolution order:
+//  1. ~/.vprox/secret/vops_ssh_key.pub  (standard generated location)
+//  2. <fleet.defaults.key_path>.pub      (configured fleet key)
+//  3. Private key at either location — public key derived in-memory (no file written)
 func (s *Server) handleAPIGetSSHPubKey(w http.ResponseWriter, _ *http.Request) {
-	_, pubPath, err := sshKeyPaths()
+	privPath, pubPath, err := sshKeyPaths()
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	data, err := os.ReadFile(pubPath)
-	if os.IsNotExist(err) {
-		writeJSON(w, http.StatusOK, map[string]any{"exists": false, "pub_key": ""})
+
+	// Build ordered candidate lists for .pub and private key files.
+	pubCandidates := []string{pubPath}
+	privCandidates := []string{privPath}
+	if kp := strings.TrimSpace(s.cfg.VOps.Push.Defaults.KeyPath); kp != "" {
+		pubCandidates = append(pubCandidates, kp+".pub")
+		privCandidates = append(privCandidates, kp)
+	}
+
+	// 1. Try reading an existing .pub file.
+	for _, p := range pubCandidates {
+		data, readErr := os.ReadFile(p)
+		if readErr == nil {
+			writeJSON(w, http.StatusOK, map[string]any{
+				"exists":  true,
+				"pub_key": strings.TrimSpace(string(data)),
+				"path":    p,
+			})
+			return
+		}
+	}
+
+	// 2. No .pub file found — attempt to derive the public key from the private key.
+	for _, p := range privCandidates {
+		data, readErr := os.ReadFile(p)
+		if readErr != nil {
+			continue
+		}
+		signer, parseErr := ssh.ParsePrivateKey(data)
+		if parseErr != nil {
+			continue
+		}
+		pubKeyStr := strings.TrimSpace(string(ssh.MarshalAuthorizedKey(signer.PublicKey())))
+		writeJSON(w, http.StatusOK, map[string]any{
+			"exists":  true,
+			"pub_key": pubKeyStr,
+			"path":    p,
+			"derived": true, // derived from private key — no .pub file on disk
+		})
 		return
 	}
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"exists": true, "pub_key": strings.TrimSpace(string(data))})
+
+	writeJSON(w, http.StatusOK, map[string]any{"exists": false, "pub_key": ""})
 }
 
 // handleAPIGenSSHKey generates a new ed25519 SSH key pair, stores it in
