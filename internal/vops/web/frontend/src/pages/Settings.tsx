@@ -1641,6 +1641,11 @@ function PreferencesPanel() {
   });
   const [saved, setSaved] = useState(false);
 
+  const pickTheme = (id: string) => {
+    setTheme(id);
+    document.documentElement.setAttribute('data-theme', id);
+  };
+
   const saveMut = useMutation({
     mutationFn: (t: string) => saveConfig('preferences', { theme: t }),
     onSuccess: (_, t) => {
@@ -1649,24 +1654,30 @@ function PreferencesPanel() {
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     },
+    onError: () => {
+      // Revert preview to persisted theme on save failure.
+      const saved = document.documentElement.getAttribute('data-theme') ?? 'vnodes';
+      setTheme(saved);
+      document.documentElement.setAttribute('data-theme', saved);
+    },
   });
 
   const themes = [
-    { id: 'vnodes', label: 'vNodes Green', desc: 'Classic neon-green terminal aesthetic' },
-    { id: 'dark-blue', label: 'Dark Blue', desc: 'Deep navy with blue-teal accents' },
-    { id: 'light-blue', label: 'Light Blue', desc: 'Silver-blue professional look' },
+    { id: 'vnodes', label: 'vNodes Green', desc: 'Classic neon-green terminal aesthetic', swatch: '#00ff88' },
+    { id: 'dark-blue', label: 'Dark Blue', desc: 'Deep navy with blue-teal accents', swatch: '#3b82f6' },
+    { id: 'light-blue', label: 'Light Blue', desc: 'Silver-blue professional look', swatch: '#60a5fa' },
   ];
 
   return (
     <SectionCard
       title="Display Preferences"
-      subtitle="Customize the vOps dashboard appearance. The selected theme applies instantly and is saved to vops.toml for persistence across sessions and page reloads."
+      subtitle="Select a theme below — it previews instantly. Click Apply to save it to vops.toml so it persists across page reloads."
     >
       <div className="space-y-3">
         {themes.map((t) => (
           <label
             key={t.id}
-            className="flex items-start gap-3 p-3 rounded-lg cursor-pointer"
+            className="flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors"
             style={{
               backgroundColor: theme === t.id ? 'var(--vn-surface-2)' : 'transparent',
               border: `1px solid ${theme === t.id ? 'var(--vn-primary)' : 'var(--vn-border)'}`,
@@ -1677,8 +1688,12 @@ function PreferencesPanel() {
               name="theme"
               value={t.id}
               checked={theme === t.id}
-              onChange={() => setTheme(t.id)}
+              onChange={() => pickTheme(t.id)}
               className="mt-0.5 accent-[var(--vn-primary)]"
+            />
+            <span
+              className="w-4 h-4 rounded-full flex-shrink-0"
+              style={{ backgroundColor: t.swatch, border: '1px solid rgba(255,255,255,0.2)' }}
             />
             <div>
               <div className="text-sm font-medium" style={{ color: 'var(--vn-text)' }}>
@@ -1692,7 +1707,7 @@ function PreferencesPanel() {
         ))}
       </div>
 
-      <div className="flex items-center gap-3 mt-2">
+      <div className="flex items-center gap-3 mt-3">
         <button
           onClick={() => saveMut.mutate(theme)}
           disabled={saveMut.isPending}
@@ -1700,12 +1715,13 @@ function PreferencesPanel() {
                      focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
           style={{ backgroundColor: 'var(--vn-primary)', color: 'var(--vn-on-primary)' }}
         >
-          {saveMut.isPending ? 'Saving…' : 'Apply Theme'}
+          {saveMut.isPending ? 'Saving…' : 'Apply & Save Theme'}
         </button>
         {saved && (
-          <span className="text-xs" style={{ color: 'var(--vn-success)' }}>
-            ✓ Theme saved.
-          </span>
+          <span className="text-xs" style={{ color: 'var(--vn-success)' }}>✓ Theme saved.</span>
+        )}
+        {saveMut.isError && (
+          <span className="text-xs" style={{ color: 'var(--vn-danger)' }}>Save failed — preview reverted.</span>
         )}
       </div>
     </SectionCard>
