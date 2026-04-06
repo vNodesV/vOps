@@ -114,6 +114,18 @@ export interface VMStatus {
   polled_at: string;
 }
 
+/** VM discovered via `virsh list --all` on the hypervisor host. */
+export interface VirshVM {
+  name: string;
+  datacenter: string;
+  lan_ip?: string;
+  state: string;
+  online: boolean;
+  load_avg?: string;
+  mem_pct?: number;
+  error?: string;
+}
+
 export interface Deployment {
   id: number;
   vm: string;

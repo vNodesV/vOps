@@ -11,7 +11,7 @@ import {
   scanAllVMs,
   getVMHistory,
 } from '../api';
-import type { ConfigSnapshot, VMStatus, VMMetricPoint } from '../api/types';
+import type { ConfigSnapshot, VMStatus, VirshVM, VMMetricPoint } from '../api/types';
 import Spinner from '../components/Spinner';
 import Badge from '../components/Badge';
 
@@ -422,12 +422,16 @@ function FleetScanPanel() {
 
   const cachedQ = useQuery({
     queryKey: ['vm-status'],
-    queryFn: () => Promise.resolve({ vms: [] as VMStatus[], hosts: [] as unknown[] }),
+    queryFn: () => Promise.resolve({ vms: [] as VMStatus[], discovered: [] as VirshVM[], hosts: [] as unknown[] }),
     enabled: false,
   });
 
   const vms: VMStatus[] =
     (scanMut.data?.vms ?? (cachedQ.data as { vms: VMStatus[] } | undefined)?.vms) ?? [];
+
+  const discovered: VirshVM[] =
+    (scanMut.data as { discovered?: VirshVM[] } | undefined)?.discovered ??
+    (cachedQ.data as { discovered?: VirshVM[] } | undefined)?.discovered ?? [];
 
   const lastScanned = scanMut.data
     ? new Date().toLocaleTimeString()
@@ -581,9 +585,71 @@ function FleetScanPanel() {
           className="p-4 rounded-lg text-xs text-center"
           style={{ backgroundColor: 'var(--vn-surface-2)', border: '1px dashed var(--vn-border)', color: 'var(--vn-text-muted)' }}
         >
-          Click <strong>Scan All VMs</strong> to poll your fleet via SSH. Make sure VMs are configured
-          in <code>config/infra/*.toml</code> and the SSH key is deployed.
+          Click <strong>Scan All VMs</strong> to discover VMs via virsh and poll metrics over SSH.
+          Make sure the hypervisor host is configured in <code>config/infra/*.toml</code> with a valid
+          <code> lan_ip</code>, <code>user</code>, and <code>ssh_key_path</code>.
         </div>
+      )}
+
+      {/* Hypervisor-discovered VMs (virsh list --all) */}
+      {discovered.length > 0 && (
+        <SectionCard
+          title="Hypervisor Discovery"
+          subtitle="VMs found by querying virsh on the hypervisor host. Running VMs with a known IP were also probed via SSH for live metrics."
+        >
+          <div className="overflow-x-auto rounded-lg" style={{ border: '1px solid var(--vn-border)' }}>
+            <table className="w-full text-xs" style={{ backgroundColor: 'var(--vn-surface)' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--vn-border)' }}>
+                  {['VM Name', 'Datacenter', 'LAN IP', 'State', 'Mem %', 'Load Avg', 'Status'].map((h) => (
+                    <th
+                      key={h}
+                      className="px-3 py-2 text-left font-medium uppercase tracking-wider whitespace-nowrap"
+                      style={{ color: 'var(--vn-text-subtle)', fontSize: '0.65rem' }}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {discovered.map((vm, i) => (
+                  <tr
+                    key={`${vm.name}-${i}`}
+                    style={{ borderBottom: '1px solid var(--vn-border)' }}
+                    onMouseOver={(e) => (e.currentTarget.style.backgroundColor = 'var(--vn-surface-2)')}
+                    onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '')}
+                  >
+                    <td className="px-3 py-2 font-medium">{vm.name}</td>
+                    <td className="px-3 py-2" style={{ color: 'var(--vn-text-subtle)' }}>{vm.datacenter || '—'}</td>
+                    <td className="px-3 py-2 tabular-nums" style={{ color: 'var(--vn-text-muted)' }}>{vm.lan_ip || '—'}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <Badge status={vm.state === 'running' ? 'online' : vm.state.includes('error') || vm.state.includes('unreachable') ? 'offline' : 'idle'} />
+                      <span className="ml-1.5 text-xs" style={{ color: 'var(--vn-text-muted)' }}>{vm.state}</span>
+                    </td>
+                    <td className="px-3 py-2" style={{ minWidth: 80 }}>
+                      {vm.online && vm.mem_pct != null ? <MetricBar value={vm.mem_pct} /> : <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>}
+                    </td>
+                    <td className="px-3 py-2 tabular-nums" style={{ color: 'var(--vn-text-muted)' }}>
+                      {vm.load_avg || '—'}
+                    </td>
+                    <td className="px-3 py-2">
+                      {vm.error ? (
+                        <span style={{ color: 'var(--vn-danger)' }} title={vm.error}>⚠ error</span>
+                      ) : vm.online ? (
+                        <span style={{ color: 'var(--vn-success)' }}>online</span>
+                      ) : vm.state === 'shut off' ? (
+                        <span style={{ color: 'var(--vn-text-subtle)' }}>stopped</span>
+                      ) : (
+                        <span style={{ color: 'var(--vn-text-muted)' }}>{vm.state}</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </SectionCard>
       )}
     </SectionCard>
   );

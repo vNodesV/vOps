@@ -11,6 +11,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -165,6 +166,11 @@ func (s *Service) pollAll(ctx context.Context) {
 	var wg sync.WaitGroup
 	for _, vm := range vms {
 		vm := vm
+		// Webserver VMs host the vOps service itself and have no chain endpoints.
+		// Exclude them from chain status polling; they still appear in the VM list.
+		if strings.EqualFold(vm.Type, "webserver") {
+			continue
+		}
 		if vm.Name != "" {
 			active[vm.Name] = struct{}{}
 		}

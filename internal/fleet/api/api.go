@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/vNodesV/vProx/internal/fleet"
@@ -58,7 +59,215 @@ func (h *Handlers) HandleVMStatus(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ── GET /api/v1/fleet/vms/{name}/history ─────────────────────────────────────
+// ── POST /api/v1/fleet/vms/scan ───────────────────────────────────────────────
+
+// VirshVM is one VM discovered by querying virsh on the hypervisor host.
+type VirshVM struct {
+	Name       string  `json:"name"`
+	Datacenter string  `json:"datacenter"`
+	LanIP      string  `json:"lan_ip,omitempty"`
+	State      string  `json:"state"`
+	Online     bool    `json:"online"`
+	LoadAvg    string  `json:"load_avg,omitempty"`
+	MemPct     float64 `json:"mem_pct,omitempty"`
+	Error      string  `json:"error,omitempty"`
+}
+
+// HandleHypervisorScan SSHes to each configured hypervisor host, discovers
+// running VMs via `virsh list --all`, probes their IPs with `virsh domifaddr`,
+// then SSHes into each running VM to collect live metrics.
+//
+// When no hypervisor hosts are configured it falls back to HandleVMStatus
+// (standard SSH poll of the known VM list).
+//
+// Response: {"discovered":[…], "vms":[…], "hosts":[…], "scanned_at":"…"}
+func (h *Handlers) HandleHypervisorScan(w http.ResponseWriter, r *http.Request) {
+	cfg := h.svc.Config()
+	if cfg == nil || len(cfg.Hosts) == 0 {
+		// No hypervisor hosts configured — fall back to standard VM poll.
+		h.HandleVMStatus(w, r)
+		return
+	}
+
+	var mu sync.Mutex
+	var discovered []VirshVM
+	var wg sync.WaitGroup
+
+	for _, host := range cfg.Hosts {
+		host := host
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			sshKey := host.SSHKeyPath
+			user := host.User
+			dialAddr := host.LanIP
+			if dialAddr == "" {
+				dialAddr = host.Name
+			}
+
+			hc, err := fleetssh.Dial(dialAddr, 22, user, sshKey, "")
+			if err != nil {
+				mu.Lock()
+				discovered = append(discovered, VirshVM{
+					Name:       host.Name,
+					Datacenter: host.Datacenter,
+					State:      "host-unreachable",
+					Error:      fmt.Sprintf("SSH to hypervisor %s: %v", dialAddr, err),
+				})
+				mu.Unlock()
+				return
+			}
+			defer hc.Close()
+
+			listOut, err := hc.Run("virsh list --all 2>&1")
+			if err != nil {
+				mu.Lock()
+				discovered = append(discovered, VirshVM{
+					Name:       host.Name,
+					Datacenter: host.Datacenter,
+					State:      "virsh-error",
+					Error:      fmt.Sprintf("virsh list: %v", err),
+				})
+				mu.Unlock()
+				return
+			}
+
+			// Parse virsh list --all.  Header is 2 lines (column names + separator).
+			// Columns: <Id>  <Name>  <State words…>
+			type rawVM struct{ name, state string }
+			var rawVMs []rawVM
+			for i, line := range strings.Split(listOut, "\n") {
+				if i < 2 {
+					continue
+				}
+				line = strings.TrimSpace(line)
+				if line == "" || strings.HasPrefix(line, "-") {
+					continue
+				}
+				f := strings.Fields(line)
+				if len(f) < 3 {
+					continue
+				}
+				rawVMs = append(rawVMs, rawVM{name: f[1], state: strings.Join(f[2:], " ")})
+			}
+
+			var vmWg sync.WaitGroup
+			for _, rv := range rawVMs {
+				rv := rv
+				vmWg.Add(1)
+				go func() {
+					defer vmWg.Done()
+					dvm := VirshVM{
+						Name:       rv.name,
+						Datacenter: host.Datacenter,
+						State:      rv.state,
+					}
+
+					if !strings.Contains(rv.state, "running") {
+						mu.Lock()
+						discovered = append(discovered, dvm)
+						mu.Unlock()
+						return
+					}
+
+					// Get VM IP from hypervisor via virsh domifaddr.
+					ifOut, err := hc.Run("virsh domifaddr " + rv.name + " 2>&1")
+					if err == nil {
+						for _, line := range strings.Split(ifOut, "\n") {
+							if !strings.Contains(line, "ipv4") {
+								continue
+							}
+							parts := strings.Fields(line)
+							if len(parts) < 4 {
+								continue
+							}
+							ip := parts[3]
+							if idx := strings.Index(ip, "/"); idx >= 0 {
+								ip = ip[:idx]
+							}
+							dvm.LanIP = ip
+							break
+						}
+					}
+
+					// Resolve SSH credentials: prefer per-VM config, fall back to host defaults.
+					vmUser := host.User
+					vmKey := host.SSHKeyPath
+					vmPort := 22
+					if known := cfg.FindVM(rv.name); known != nil {
+						if known.User != "" {
+							vmUser = known.User
+						}
+						if known.KeyPath != "" {
+							vmKey = known.KeyPath
+						}
+						if known.Port > 0 {
+							vmPort = known.Port
+						}
+					}
+
+					if dvm.LanIP != "" && vmUser != "" && vmKey != "" {
+						vmClient, err := fleetssh.Dial(dvm.LanIP, vmPort, vmUser, vmKey, "")
+						if err == nil {
+							defer vmClient.Close()
+							// One compound command: load average + memory %.
+							out, err := vmClient.Run(
+								`cat /proc/loadavg && free -m | awk '/Mem:/{printf "%.1f", $3/$2*100}'`,
+							)
+							if err == nil {
+								dvm.Online = true
+								lines := strings.Split(strings.TrimSpace(out), "\n")
+								if len(lines) >= 1 {
+									if parts := strings.Fields(lines[0]); len(parts) >= 1 {
+										dvm.LoadAvg = parts[0]
+									}
+								}
+								if len(lines) >= 2 {
+									dvm.MemPct, _ = strconv.ParseFloat(strings.TrimSpace(lines[1]), 64)
+								}
+							}
+						} else {
+							dvm.Error = fmt.Sprintf("VM SSH: %v", err)
+						}
+					}
+
+					mu.Lock()
+					discovered = append(discovered, dvm)
+					mu.Unlock()
+				}()
+			}
+			vmWg.Wait()
+		}()
+	}
+	wg.Wait()
+
+	if discovered == nil {
+		discovered = []VirshVM{}
+	}
+
+	// Also run the standard SSH poll for the configured VM list.
+	vmResults := status.PollAllVMs(cfg)
+	if h.db != nil {
+		for _, vm := range vmResults {
+			if !vm.Online {
+				continue
+			}
+			_ = opsdb.InsertVMMetric(h.db, vm.Name,
+				vm.CPUPct, vm.MemPct, vm.StoragePct, vm.LoadAvg, vm.AptCount,
+			)
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"discovered": discovered,
+		"vms":        vmResults,
+		"hosts":      h.svc.Hosts(),
+		"scanned_at": time.Now().Format(time.RFC3339),
+	})
+}
+
+
 
 // HandleVMHistory returns time-series metrics for a single VM.
 // Query param: hours (default 24, max 48).

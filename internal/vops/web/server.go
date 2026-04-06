@@ -193,7 +193,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 			})
 			return
 		}
-		s.fleet.HandleVMStatus(w, r)
+		s.fleet.HandleHypervisorScan(w, r)
 	})))
 
 	// Fleet module routes — only registered when fleet is configured.

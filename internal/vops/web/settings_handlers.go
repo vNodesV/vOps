@@ -77,9 +77,9 @@ func (s *Server) handleAPIGetSSHPubKey(w http.ResponseWriter, _ *http.Request) {
 		data, readErr := os.ReadFile(p)
 		if readErr == nil {
 			writeJSON(w, http.StatusOK, map[string]any{
-				"exists":  true,
-				"pub_key": strings.TrimSpace(string(data)),
-				"path":    p,
+				"exists":     true,
+				"public_key": strings.TrimSpace(string(data)),
+				"path":       p,
 			})
 			return
 		}
@@ -97,15 +97,15 @@ func (s *Server) handleAPIGetSSHPubKey(w http.ResponseWriter, _ *http.Request) {
 		}
 		pubKeyStr := strings.TrimSpace(string(ssh.MarshalAuthorizedKey(signer.PublicKey())))
 		writeJSON(w, http.StatusOK, map[string]any{
-			"exists":  true,
-			"pub_key": pubKeyStr,
-			"path":    p,
-			"derived": true, // derived from private key — no .pub file on disk
+			"exists":     true,
+			"public_key": pubKeyStr,
+			"path":       p,
+			"derived":    true, // derived from private key — no .pub file on disk
 		})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"exists": false, "pub_key": ""})
+	writeJSON(w, http.StatusOK, map[string]any{"exists": false, "public_key": ""})
 }
 
 // handleAPIGenSSHKey generates a new ed25519 SSH key pair, stores it in
@@ -154,8 +154,8 @@ func (s *Server) handleAPIGenSSHKey(w http.ResponseWriter, _ *http.Request) {
 
 	log.Printf("[vops] SSH key pair generated → %s", privPath)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"pub_key": strings.TrimSpace(string(pubBytes)),
-		"path":    privPath,
+		"public_key":      strings.TrimSpace(string(pubBytes)),
+		"private_key_path": privPath,
 	})
 }
 
