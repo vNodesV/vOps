@@ -9,8 +9,8 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from 'recharts';
-import { getStats, getChart, getFleetChains, triggerIngest, getIngestStats, getVMStatus, vmUpgradeURL } from '../api';
-import type { Stats, ChartSeries, ChainStatus, ArchiveStats, VMStatus } from '../api/types';
+import { getStats, getChart, getFleetChains, triggerIngest, getIngestStats, getVMStatus, vmUpgradeURL, getVMHistory } from '../api';
+import type { Stats, ChartSeries, ChainStatus, ArchiveStats, VMStatus, VMMetricPoint } from '../api/types';
 import StatCard from '../components/StatCard';
 import Badge from '../components/Badge';
 import Spinner from '../components/Spinner';
@@ -304,6 +304,39 @@ function MetricBar({ value, warn = 70, danger = 85 }: { value: number; warn?: nu
 
 /* ── Servers Panel ───────────────────────────────────────────── */
 
+function Sparkline({ pts, color, height = 24, width = 100 }: { pts: number[]; color: string; height?: number; width?: number }) {
+  if (pts.length < 2) return null;
+  const step = width / (pts.length - 1);
+  const points = pts.map((v, i) => {
+    const x = i * step;
+    const y = height - Math.min(100, Math.max(0, v)) / 100 * height;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  return (
+    <svg width={width} height={height} style={{ display: 'block' }}>
+      <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function HistorySparkline({ vmName }: { vmName: string }) {
+  const { data } = useQuery({
+    queryKey: ['vm-history', vmName],
+    queryFn: () => getVMHistory(vmName, 6),
+    staleTime: 60_000,
+    retry: false,
+  });
+  const pts: VMMetricPoint[] = data?.history ?? [];
+  if (pts.length < 2) return <span style={{ color: 'var(--vn-text-subtle)', fontSize: '0.65rem' }}>no data</span>;
+  return (
+    <div style={{ position: 'relative', height: 24, width: 100 }}>
+      <div style={{ position: 'absolute', top: 0, left: 0 }}><Sparkline pts={pts.map(p => p.storage_pct)} color="var(--vn-warning)" /></div>
+      <div style={{ position: 'absolute', top: 0, left: 0 }}><Sparkline pts={pts.map(p => p.mem_pct)} color="var(--vn-success)" /></div>
+      <div style={{ position: 'absolute', top: 0, left: 0 }}><Sparkline pts={pts.map(p => p.cpu_pct)} color="var(--vn-primary)" /></div>
+    </div>
+  );
+}
+
 function ServersPanel() {
   const [upgradeTarget, setUpgradeTarget] = useState<VMStatus | null>(null);
 
@@ -338,7 +371,7 @@ function ServersPanel() {
         <table className="w-full text-sm" style={{ backgroundColor: 'var(--vn-surface)' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--vn-border)' }}>
-              {['Server', 'OS', 'CPU', 'Memory', 'Disk', 'Load', 'Updates', 'Status', ''].map((h) => (
+              {['Server', 'OS', 'CPU', 'Memory', 'Disk', 'Load', 'Updates', '6h History', 'Status', ''].map((h) => (
                 <th
                   key={h}
                   scope="col"
@@ -390,6 +423,9 @@ function ServersPanel() {
                   ) : (
                     <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>
                   )}
+                </td>
+                <td className="px-3 py-2" style={{ minWidth: '110px' }}>
+                  {vm.online ? <HistorySparkline vmName={vm.name} /> : <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>}
                 </td>
                 <td className="px-3 py-2">
                   <Badge status={vm.online ? 'online' : 'offline'} />
