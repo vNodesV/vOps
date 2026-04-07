@@ -24,7 +24,13 @@ import (
 	"github.com/vNodesV/vProx/internal/vops/web"
 )
 
-const version = "1.4.5"
+// Build-time variables injected via -ldflags "-X main.version=... -X main.commit=... -X main.buildDate=...".
+// Defaults are used for local `go run` / unversioned builds.
+var (
+	version   = "dev"
+	commit    = "unknown"
+	buildDate = "unknown"
+)
 
 // ---------------------------------------------------------------------------
 // Help / usage
@@ -189,7 +195,7 @@ func run() int {
 		return 0
 	}
 	if f.version {
-		fmt.Println("vOps " + version)
+		fmt.Printf("vOps %s (%s, built %s)\n", version, commit, buildDate)
 		return 0
 	}
 

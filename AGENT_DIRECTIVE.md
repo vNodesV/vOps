@@ -88,12 +88,22 @@ After each meaningful commit, push so the operator can install/reinstall vOps on
 # Standard post-implementation sequence
 go build ./... && go vet ./... && go test ./...           # verify
 cd internal/vops/web/frontend && npm run build            # rebuild SPA if frontend changed
+make bump-patch                                           # increment version (on vOps_v1.0.0+ branches)
+git add cmd/vops/VERSION && git commit -m "chore: bump vOps to $(cat cmd/vops/VERSION)"
 cd /path/to/vProx && git push origin <branch>            # push for www-qc deployment
 ```
 
-- Push on the **working branch** (e.g., `vLog_v1.4.5`), not directly to `main`.
+- Push on the **working branch** (e.g., `vOps_v1.0.0`), not directly to `main`.
 - Do not squash or rebase mid-branch; `www-qc` pulls the branch tip for reinstall.
 - If a push would break the running service, note it explicitly before pushing.
+
+## vOps versioning
+- **Source of truth**: `cmd/vops/VERSION` (semver `MAJOR.MINOR.PATCH`)
+- **Starting version on `vOps_v1.0.0` branch**: `0.0.1`
+- **Bump rules**: `make bump-patch` (fixes) · `make bump-minor` (new features) · `make bump-major` (milestones)
+- **Ldflags**: version + commit hash + build date are injected at build time via `VOPS_LDFLAGS`
+- **Check current version**: `make help` (shows current version) or `cat cmd/vops/VERSION`
+- Always bump before a push when changes warrant a version update.
 
 ## Gotchas
 - Avoid breaking file formats under `~/.vProx/data/logs/` without a migration strategy.

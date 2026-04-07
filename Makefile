@@ -8,6 +8,14 @@ BUILD_OUT := $(BUILD_DIR)/$(APP_NAME)
 VOPS_NAME  := vOps
 VOPS_SRC   := ./cmd/vops
 VOPS_BUILD := $(BUILD_DIR)/$(VOPS_NAME)
+
+# vOps semantic version — source of truth is cmd/vops/VERSION.
+# Use `make bump-patch|bump-minor|bump-major` to increment before each push.
+# Override on the command line: make build-vops VOPS_VERSION=1.2.3
+VOPS_VERSION  := $(shell cat cmd/vops/VERSION 2>/dev/null || echo "dev")
+VOPS_COMMIT   := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+VOPS_BUILT    := $(shell date -u +%Y-%m-%d)
+VOPS_LDFLAGS  := -X main.version=$(VOPS_VERSION) -X main.commit=$(VOPS_COMMIT) -X main.buildDate=$(VOPS_BUILT)
 # System user that owns the vOps service (overridable: make service-vops VOPS_USER=myuser).
 # Run `make system-user-vops` once to create this user before enabling the service.
 VOPS_USER  ?= vops
@@ -57,7 +65,8 @@ EFFECTIVE_GOROOT  := $(if $(_TOOLCHAIN_GOROOT),$(_TOOLCHAIN_GOROOT),$(GOROOT))
 .PHONY: all install clean ufw help \
         validate-go dirs geo config config-vops config-vprox config-modules \
         build build-vops systemd service-vops system-user-vops samples-fleet \
-        release release-vops deploy-jarvis
+        release release-vops deploy-jarvis \
+        bump-patch bump-minor bump-major
 
 all: help
 
@@ -74,6 +83,12 @@ help:
 	@echo "  make release          Cross-compile vProx + vOps → dist/ (linux+darwin × amd64+arm64)"
 	@echo "  make release-vops     Cross-compile vOps only → dist/"
 	@echo "  make deploy-jarvis    Cross-compile + kill + SCP + restart vOps on jarvis"
+	@echo ""
+	@echo "  Version management (vOps):"
+	@echo "    make bump-patch       0.0.1 → 0.0.2  (bug fixes / small improvements)"
+	@echo "    make bump-minor       0.0.x → 0.1.0  (new features, backward-compatible)"
+	@echo "    make bump-major       0.x.y → 1.0.0  (breaking changes / major milestones)"
+	@echo "    Current version: $$(cat cmd/vops/VERSION 2>/dev/null || echo 'unknown')"
 	@echo ""
 	@echo "  Paths (install):"
 	@echo "    Binaries:  $(GOPATH_BIN)/vprox  $(GOPATH_BIN)/vops"
@@ -93,7 +108,7 @@ install: validate-go dirs geo config config-vops config-vprox config-modules env
 	@echo ""
 	@echo "── Building vProx + vOps ────────────────────────────────────────────────"
 	GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(GOPATH_BIN)/$(APP_NAME)" "$(BUILD_SRC)"
-	GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(GOPATH_BIN)/$(VOPS_NAME)" "$(VOPS_SRC)"
+	GOROOT="$(EFFECTIVE_GOROOT)" go build -ldflags "$(VOPS_LDFLAGS)" -o "$(GOPATH_BIN)/$(VOPS_NAME)" "$(VOPS_SRC)"
 	@echo "✓ $(APP_NAME)  → $(GOPATH_BIN)/$(APP_NAME)"
 	@echo "✓ $(VOPS_NAME) → $(GOPATH_BIN)/$(VOPS_NAME)"
 	@echo ""
@@ -325,7 +340,7 @@ build:
 add-%: validate-go dirs
 	@case "$*" in \
 	  vOps|vops|vLog|vlog) \
-	    GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(GOPATH_BIN)/$(VOPS_NAME)" "$(VOPS_SRC)"; \
+	    GOROOT="$(EFFECTIVE_GOROOT)" go build -ldflags "$(VOPS_LDFLAGS)" -o "$(GOPATH_BIN)/$(VOPS_NAME)" "$(VOPS_SRC)"; \
 	    echo "✓ $(VOPS_NAME) → $(GOPATH_BIN)/$(VOPS_NAME)"; \
 	    $(MAKE) config-vops; \
 	    $(MAKE) samples-fleet; \
@@ -449,7 +464,7 @@ build-vops: frontend
 	@sudo systemctl stop "$(VOPS_NAME)" 2>/dev/null && echo "  ✓ $(VOPS_NAME) stopped" || echo "  ○ $(VOPS_NAME) was not running"
 	@echo "Building $(VOPS_NAME)..."
 	mkdir -p "$(BUILD_DIR)"
-	GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(VOPS_BUILD)" "$(VOPS_SRC)"
+	GOROOT="$(EFFECTIVE_GOROOT)" go build -ldflags "$(VOPS_LDFLAGS)" -o "$(VOPS_BUILD)" "$(VOPS_SRC)"
 	@cp "$(VOPS_BUILD)" "$(GOPATH_BIN)/$(VOPS_NAME)"
 	@if [ -e "/usr/local/bin/$(VOPS_NAME)" ]; then \
 		sudo cp "$(VOPS_BUILD)" "/usr/local/bin/$(VOPS_NAME)"; \
@@ -627,7 +642,7 @@ release:
 		GOOS=$$os GOARCH=$$arch GOROOT="$(EFFECTIVE_GOROOT)" \
 			go build -o "$(DIST_DIR)/vprox-$$os-$$arch" "$(BUILD_SRC)" || exit 1; \
 		GOOS=$$os GOARCH=$$arch GOROOT="$(EFFECTIVE_GOROOT)" \
-			go build -o "$(DIST_DIR)/vops-$$os-$$arch" "$(VOPS_SRC)" || exit 1; \
+			go build -ldflags "$(VOPS_LDFLAGS)" -o "$(DIST_DIR)/vops-$$os-$$arch" "$(VOPS_SRC)" || exit 1; \
 	done
 	@echo "✓ Cross-compile complete. Outputs in $(DIST_DIR)/:"
 	@ls -lh "$(DIST_DIR)/"
@@ -641,7 +656,7 @@ release-vops:
 		arch=$$(echo $$target | cut -d/ -f2); \
 		echo "  → vOps $$os/$$arch"; \
 		GOOS=$$os GOARCH=$$arch GOROOT="$(EFFECTIVE_GOROOT)" \
-			go build -o "$(DIST_DIR)/vops-$$os-$$arch" "$(VOPS_SRC)" || exit 1; \
+			go build -ldflags "$(VOPS_LDFLAGS)" -o "$(DIST_DIR)/vops-$$os-$$arch" "$(VOPS_SRC)" || exit 1; \
 	done
 	@echo "✓ Cross-compile complete. Outputs in $(DIST_DIR)/:"
 	@ls -lh "$(DIST_DIR)/"
@@ -658,3 +673,31 @@ deploy-jarvis: release-vops
 	@echo "  Starting vOps on $(JARVIS_HOST)..."
 	@ssh "$(JARVIS_HOST)" "chmod +x $(JARVIS_BIN_DST) && nohup $(JARVIS_BIN_DST) start --home $(JARVIS_HOME) > $(JARVIS_LOG) 2>&1 & echo \$$! > $(JARVIS_PID) && sleep 2 && echo '  PID:'\$$(cat $(JARVIS_PID)) && curl -s -o /dev/null -w '  HTTP:%{http_code}' http://127.0.0.1:$(JARVIS_PORT)/ && echo ''"
 	@echo "✓ Deploy complete. Tunnel with: ssh -N -L $(JARVIS_PORT):127.0.0.1:$(JARVIS_PORT) $(JARVIS_HOST)"
+
+## ─── vOps version management ────────────────────────────────────────────────
+## Source of truth: cmd/vops/VERSION  (format: MAJOR.MINOR.PATCH)
+## Run the appropriate target before each push to increment the version.
+
+## Bump patch version (0.0.1 → 0.0.2) — use for bug fixes and small improvements.
+bump-patch:
+	@ver=$$(cat cmd/vops/VERSION); \
+	IFS='.' read -r maj min pat <<< "$$ver"; \
+	new="$$maj.$$min.$$((pat+1))"; \
+	printf "$$new\n" > cmd/vops/VERSION; \
+	echo "✓ vOps version: $$ver → $$new  (cmd/vops/VERSION updated)"
+
+## Bump minor version (0.0.x → 0.1.0) — use for new features (backward-compatible).
+bump-minor:
+	@ver=$$(cat cmd/vops/VERSION); \
+	IFS='.' read -r maj min pat <<< "$$ver"; \
+	new="$$maj.$$((min+1)).0"; \
+	printf "$$new\n" > cmd/vops/VERSION; \
+	echo "✓ vOps version: $$ver → $$new  (cmd/vops/VERSION updated)"
+
+## Bump major version (0.x.y → 1.0.0) — use for breaking changes or major milestones.
+bump-major:
+	@ver=$$(cat cmd/vops/VERSION); \
+	IFS='.' read -r maj min pat <<< "$$ver"; \
+	new="$$((maj+1)).0.0"; \
+	printf "$$new\n" > cmd/vops/VERSION; \
+	echo "✓ vOps version: $$ver → $$new  (cmd/vops/VERSION updated)"
