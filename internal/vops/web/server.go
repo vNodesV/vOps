@@ -98,15 +98,17 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	if fleetSvc != nil {
 		s.fleet = api.New(fleetSvc, d.DB)
 		s.fleetSvc = fleetSvc
-		// Wire VM manager when the fleet config has hypervisor hosts.
-		if len(fleetSvc.Config().Hosts) > 0 {
-			s.vmMgr = vm.NewHandlers(
-				fleetSvc.Config(),
-				22,
-				cfg.VOps.Push.Defaults.KeyPath,
-				cfg.VOps.Push.Defaults.KnownHostsPath,
-			)
-		}
+		// Always create the VM manager so routes are available even when no
+		// hypervisor hosts are configured yet; it returns empty lists until
+		// infra is saved and fleet config is reloaded.
+		// Pass fleetSvc (not a config snapshot) so HandleListHosts always
+		// reflects the current in-memory fleet config after a settings save.
+		s.vmMgr = vm.NewHandlers(
+			fleetSvc,
+			22,
+			cfg.VOps.Push.Defaults.KeyPath,
+			cfg.VOps.Push.Defaults.KnownHostsPath,
+		)
 	}
 
 	mux := http.NewServeMux()

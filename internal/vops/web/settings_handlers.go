@@ -230,19 +230,9 @@ func (s *Server) handleAPISettingsApply(w http.ResponseWriter, r *http.Request) 
 	_, needsInfra := stepSet["infra"]
 	if needsFleet || needsChain || needsInfra {
 		if s.fleetSvc != nil {
-			defs := fleetcfg.FleetDefaults{
-				User:    s.cfg.VOps.Push.Defaults.User,
-				KeyPath: s.cfg.VOps.Push.Defaults.KeyPath,
-			}
-			runtimeCfg, err := fleetcfg.LoadRuntimeConfig(s.home, defs, s.cfg.VOps.Push.ChainsDir, s.cfg.VOps.Push.InfraDir)
-			if err != nil {
-				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "fleet reload failed: " + err.Error()})
-				return
-			}
-			s.fleetSvc.SetConfig(runtimeCfg)
-			ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 			defer cancel()
-			s.fleetSvc.Poll(ctx)
+			s.reloadFleetRuntime(ctx)
 			softReloaded = append(softReloaded, "fleet")
 		} else {
 			requires["vops"] = struct{}{}
@@ -288,6 +278,29 @@ func (s *Server) handleAPISettingsApply(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
+// reloadFleetRuntime reloads fleet config from disk and updates the in-memory
+// fleet service. Called after infra/fleet/chain settings are saved so that
+// fleet scan, VM status, and VM manager immediately reflect new TOML content
+// without requiring a service restart.
+func (s *Server) reloadFleetRuntime(ctx context.Context) {
+	if s.fleetSvc == nil {
+		return
+	}
+	defs := fleetcfg.FleetDefaults{
+		User:    s.cfg.VOps.Push.Defaults.User,
+		KeyPath: s.cfg.VOps.Push.Defaults.KeyPath,
+	}
+	runtimeCfg, err := fleetcfg.LoadRuntimeConfig(s.home, defs, s.cfg.VOps.Push.ChainsDir, s.cfg.VOps.Push.InfraDir)
+	if err != nil {
+		log.Printf("[settings] fleet runtime reload failed: %v", err)
+		return
+	}
+	s.fleetSvc.SetConfig(runtimeCfg)
+	pollCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	s.fleetSvc.Poll(pollCtx)
+}
+
 func (s *Server) handleAPISettingsSave(step string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, 512*1024)
@@ -299,6 +312,12 @@ func (s *Server) handleAPISettingsSave(step string) http.HandlerFunc {
 		if err := configwizard.ApplyFields(s.home, step, fields); err != nil {
 			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 			return
+		}
+		// Reload fleet runtime immediately when infra or fleet settings change
+		// so that fleet scan, VM status, and VM manager see the new config
+		// without needing a service restart.
+		if step == "infra" || step == "fleet" {
+			s.reloadFleetRuntime(r.Context())
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	}

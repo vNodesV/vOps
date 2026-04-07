@@ -9,19 +9,27 @@ import (
 	"github.com/vNodesV/vProx/internal/fleet/config"
 )
 
+// configProvider is satisfied by *fleet.Service and allows Handlers to read
+// the current fleet config without holding a stale snapshot.
+type configProvider interface {
+	Config() *config.Config
+}
+
 // Handlers exposes VM manager operations as HTTP JSON endpoints.
 // It is wired into the vOps mux by server.go when fleet config is available.
+// svc is queried on every request so VM Manager always reflects live TOML state.
 type Handlers struct {
-	cfg        *config.Config
+	svc        configProvider
 	sshPort    int
 	sshKeyPath string
 	knownHosts string
 }
 
-// NewHandlers creates Handlers backed by the given fleet config.
-func NewHandlers(cfg *config.Config, sshPort int, sshKeyPath, knownHosts string) *Handlers {
+// NewHandlers creates Handlers backed by the given fleet service.
+// svc must implement configProvider (satisfied by *fleet.Service).
+func NewHandlers(svc configProvider, sshPort int, sshKeyPath, knownHosts string) *Handlers {
 	return &Handlers{
-		cfg:        cfg,
+		svc:        svc,
 		sshPort:    sshPort,
 		sshKeyPath: sshKeyPath,
 		knownHosts: knownHosts,
@@ -32,8 +40,13 @@ func NewHandlers(cfg *config.Config, sshPort int, sshKeyPath, knownHosts string)
 
 // HandleListHosts returns all hypervisor hosts from the fleet config.
 func (h *Handlers) HandleListHosts(w http.ResponseWriter, r *http.Request) {
-	hosts := make([]HostInfo, 0, len(h.cfg.Hosts))
-	for _, host := range h.cfg.Hosts {
+	cfg := h.svc.Config()
+	if cfg == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"hosts": []HostInfo{}})
+		return
+	}
+	hosts := make([]HostInfo, 0, len(cfg.Hosts))
+	for _, host := range cfg.Hosts {
 		hosts = append(hosts, HostInfo{
 			Name:       host.Name,
 			LanIP:      host.LanIP,
@@ -231,7 +244,11 @@ func (h *Handlers) HandleDeleteSnapshot(w http.ResponseWriter, r *http.Request) 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 func (h *Handlers) findHost(name string) (HostInfo, error) {
-	for _, host := range h.cfg.Hosts {
+	cfg := h.svc.Config()
+	if cfg == nil {
+		return HostInfo{}, fmt.Errorf("host %q not found in fleet config", name)
+	}
+	for _, host := range cfg.Hosts {
 		if host.Name == name {
 			user := host.User
 			if user == "" {
