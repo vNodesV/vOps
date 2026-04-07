@@ -59,9 +59,10 @@ func (h *Handlers) debugRun(client *fleetssh.Client, source, host, cmd string) (
 	return out, err
 }
 
-// parseVirshIP extracts the first IPv4 address from the tabular output of
-// "virsh domifaddr". All three --source modes (lease/arp/agent) use the same
-// table format; we only need lines containing "ipv4".
+// parseVirshIP extracts the first routable IPv4 address from the tabular output
+// of "virsh domifaddr".  All three --source modes (lease/arp/agent) use the same
+// table format; we skip loopback (127.x) and link-local (169.254.x) addresses
+// because --source agent lists every interface including lo.
 func parseVirshIP(out string) string {
 	for _, line := range strings.Split(out, "\n") {
 		if !strings.Contains(line, "ipv4") {
@@ -74,6 +75,13 @@ func parseVirshIP(out string) string {
 		ip := parts[3]
 		if idx := strings.Index(ip, "/"); idx >= 0 {
 			ip = ip[:idx]
+		}
+		parsed := net.ParseIP(ip)
+		if parsed == nil {
+			continue
+		}
+		if parsed.IsLoopback() || parsed.IsLinkLocalUnicast() {
+			continue // skip lo (127.0.0.1) and APIPA (169.254.x.x)
 		}
 		return ip
 	}
@@ -192,12 +200,13 @@ func parseVirtTopMetrics(out string) map[string][2]float64 {
 	return result
 }
 
-// collectVirtTopMetrics runs one virt-top cycle on the hypervisor and returns
-// CPU%/MEM% for every running domain.  A single SSH command replaces per-VM
-// SSH tunnels for these two metrics.
+// collectVirtTopMetrics runs two virt-top cycles on the hypervisor and returns
+// CPU%/MEM% for every running domain.  The first cycle is a warmup baseline
+// (CPU delta = 0); the second cycle contains the real measured values.
+// A single SSH command replaces per-VM SSH tunnels for these two metrics.
 func (h *Handlers) collectVirtTopMetrics(hc *fleetssh.Client, dialAddr string) map[string][2]float64 {
 	out, err := h.debugRun(hc, "hypervisor-scan", dialAddr,
-		"virt-top -n 1 --connect qemu:///system 2>&1")
+		"virt-top -n 2 --connect qemu:///system 2>&1")
 	if err != nil {
 		return nil
 	}
