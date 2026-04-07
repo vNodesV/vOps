@@ -105,6 +105,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		// reflects the current in-memory fleet config after a settings save.
 		s.vmMgr = vm.NewHandlers(
 			fleetSvc,
+			d.DB,
 			22,
 			cfg.VOps.Push.Defaults.KeyPath,
 			cfg.VOps.Push.Defaults.KnownHostsPath,
@@ -227,6 +228,12 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 			s.requireSession(http.HandlerFunc(s.fleet.HandleVMUpgrade)))
 		mux.Handle("GET /api/v1/fleet/vms/{name}/history",
 			s.requireSession(http.HandlerFunc(s.fleet.HandleVMHistory)))
+		mux.Handle("POST /api/v1/fleet/hosts/scan",
+			s.requireSession(http.HandlerFunc(s.fleet.HandleHostScan)))
+		mux.Handle("GET /api/v1/fleet/hosts",
+			s.requireSession(http.HandlerFunc(s.fleet.HandleListHosts)))
+		mux.Handle("GET /api/v1/audit",
+			s.requireSession(http.HandlerFunc(s.fleet.HandleListAudit)))
 	}
 
 	// VM Manager routes — only registered when hypervisor hosts are configured.
@@ -250,6 +257,20 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		// POST alias for DELETE — useful behind Apache reverse proxies.
 		mux.Handle("POST /api/v1/vm/hosts/{host}/domains/{domain}/snapshots/{snap}/delete",
 			s.requireSession(http.HandlerFunc(s.vmMgr.HandleDeleteSnapshot)))
+		// VM lifecycle management.
+		mux.Handle("DELETE /api/v1/vm/hosts/{host}/domains/{domain}",
+			s.requireSession(http.HandlerFunc(s.vmMgr.HandleDeleteDomain)))
+		mux.Handle("POST /api/v1/vm/hosts/{host}/domains/{domain}/delete",
+			s.requireSession(http.HandlerFunc(s.vmMgr.HandleDeleteDomain)))
+		mux.Handle("POST /api/v1/vm/hosts/{host}/domains/{domain}/resize",
+			s.requireSession(http.HandlerFunc(s.vmMgr.HandleResizeDomain)))
+		mux.Handle("POST /api/v1/vm/hosts/{host}/domains",
+			s.requireSession(http.HandlerFunc(s.vmMgr.HandleCreateDomain)))
+		// Network inspection.
+		mux.Handle("GET /api/v1/vm/hosts/{host}/networks",
+			s.requireSession(http.HandlerFunc(s.vmMgr.HandleListNetworks)))
+		mux.Handle("GET /api/v1/vm/hosts/{host}/domains/{domain}/interfaces",
+			s.requireSession(http.HandlerFunc(s.vmMgr.HandleDomainInterfaces)))
 	}
 
 	readTimeout := time.Duration(cfg.VOps.Server.ReadTimeoutSec) * time.Second

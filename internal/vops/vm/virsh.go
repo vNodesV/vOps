@@ -4,7 +4,9 @@
 package vm
 
 import (
+	"encoding/base64"
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -238,4 +240,385 @@ func parseKiB(s string) int64 {
 	s = strings.TrimSuffix(s, " kB")
 	n, _ := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
 	return n
+}
+
+// ── Network & interface types ──────────────────────────────────────────────────
+
+// Network represents a libvirt virtual network on a hypervisor.
+type Network struct {
+	Name       string `json:"name"`
+	State      string `json:"state"`      // active | inactive
+	Autostart  bool   `json:"autostart"`
+	Persistent bool   `json:"persistent"`
+}
+
+// Interface represents one network interface attached to a domain.
+type Interface struct {
+	Interface string `json:"interface"` // e.g. vnet0
+	Type      string `json:"type"`      // network | bridge
+	Source    string `json:"source"`    // network/bridge name
+	Model     string `json:"model"`     // virtio | e1000
+	MAC       string `json:"mac"`
+}
+
+// ── VM lifecycle option types ──────────────────────────────────────────────────
+
+// UndefineOpts controls the behaviour of UndefineVM.
+type UndefineOpts struct {
+	// DeleteStorage removes the managed qcow2 disk from Pool (default "default").
+	DeleteStorage bool
+	Pool          string
+}
+
+// CloneOpts describes parameters for cloning an existing VM via virt-clone.
+// virt-clone is part of the virtinst package (apt install virtinst on hypervisor).
+type CloneOpts struct {
+	SourceDomain string // existing domain to clone
+	NewName      string // new domain name
+	// NewDiskPath is the full path for the cloned disk; empty = auto-derive.
+	NewDiskPath string
+	Pool        string // storage pool (default: "default")
+	MemMiB      int64  // override memory in MiB (0 = keep source value)
+	VCPUs       int    // override vCPU count (0 = keep source value)
+}
+
+// CreateFromImageOpts describes parameters for deploying a new VM from a base image
+// via virt-install --import (part of the virtinst package).
+type CreateFromImageOpts struct {
+	Name       string
+	BaseImage  string // full path to source qcow2 (e.g. pool boot-1)
+	DiskPath   string // destination path in pool default
+	DiskSizeGB int    // grow disk after copy; 0 = no resize
+	MemMiB     int64
+	VCPUs      int
+	Network    string // libvirt network name (default: "default")
+	OSVariant  string // virt-install --os-variant hint (e.g. "ubuntu22.04"; empty = "generic")
+}
+
+// ── New virsh operations ───────────────────────────────────────────────────────
+
+// ListNetworks returns all libvirt virtual networks on the host.
+func ListNetworks(client sshClient) ([]Network, error) {
+	out, err := client.Run("virsh net-list --all 2>&1")
+	if err != nil {
+		return nil, fmt.Errorf("virsh net-list: %w", err)
+	}
+	var nets []Network
+	for i, line := range strings.Split(out, "\n") {
+		if i < 2 {
+			continue
+		}
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "-") {
+			continue
+		}
+		f := strings.Fields(line)
+		if len(f) < 3 {
+			continue
+		}
+		nets = append(nets, Network{
+			Name:       f[0],
+			State:      f[1],
+			Autostart:  f[2] == "yes",
+			Persistent: len(f) > 3 && f[3] == "yes",
+		})
+	}
+	return nets, nil
+}
+
+// ListDomainInterfaces returns the network interfaces attached to a domain.
+func ListDomainInterfaces(client sshClient, domainName string) ([]Interface, error) {
+	out, err := client.Run(fmt.Sprintf("virsh domiflist %s 2>&1", shellescape(domainName)))
+	if err != nil {
+		return nil, fmt.Errorf("virsh domiflist: %w", err)
+	}
+	var ifaces []Interface
+	for i, line := range strings.Split(out, "\n") {
+		if i < 2 {
+			continue
+		}
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "-") {
+			continue
+		}
+		f := strings.Fields(line)
+		if len(f) < 5 {
+			continue
+		}
+		ifaces = append(ifaces, Interface{
+			Interface: f[0],
+			Type:      f[1],
+			Source:    f[2],
+			Model:     f[3],
+			MAC:       f[4],
+		})
+	}
+	return ifaces, nil
+}
+
+// UndefineVM removes a domain definition from libvirt.
+// If opts.DeleteStorage is true, it also deletes managed disk volumes.
+// The domain is force-stopped first when it is running.
+func UndefineVM(client sshClient, domainName string, opts UndefineOpts) error {
+	// Force-stop if running.
+	state, _ := getDomainState(client, domainName)
+	if strings.Contains(state, "running") {
+		out, err := client.Run(fmt.Sprintf("virsh destroy %s 2>&1", shellescape(domainName)))
+		if err != nil {
+			return fmt.Errorf("virsh destroy: %w — %s", err, out)
+		}
+	}
+
+	// Collect disk paths before undefine (blklist is only available while defined).
+	var diskPaths []string
+	if opts.DeleteStorage {
+		diskPaths, _ = domainDiskPaths(client, domainName)
+	}
+
+	// Undefine; --nvram removes firmware state for UEFI guests.
+	out, err := client.Run(fmt.Sprintf(
+		"virsh undefine %s --nvram 2>/dev/null || virsh undefine %s 2>&1",
+		shellescape(domainName), shellescape(domainName),
+	))
+	if err != nil {
+		return fmt.Errorf("virsh undefine: %w — %s", err, out)
+	}
+
+	if opts.DeleteStorage {
+		pool := opts.Pool
+		if pool == "" {
+			pool = "default"
+		}
+		for _, path := range diskPaths {
+			vol := filepath.Base(path)
+			// Try pool-aware vol-delete first; fall back to direct rm.
+			_, _ = client.Run(fmt.Sprintf(
+				"virsh vol-delete %s --pool %s 2>/dev/null || rm -f %s 2>&1",
+				shellescape(vol), shellescape(pool), shellquote(path),
+			))
+		}
+	}
+	return nil
+}
+
+// SetVCPUs changes the vCPU count for a domain.
+// The change is always persisted to the domain config.
+// If live is true and the domain is running, a hot-plug change is also attempted
+// (requires the guest to support CPU hot-plug).
+func SetVCPUs(client sshClient, domainName string, count int, live bool) error {
+	n := strconv.Itoa(count)
+	if out, err := client.Run(fmt.Sprintf(
+		"virsh setvcpus %s %s --config 2>&1", shellescape(domainName), n,
+	)); err != nil {
+		return fmt.Errorf("virsh setvcpus --config: %w — %s", err, out)
+	}
+	if live {
+		if out, err := client.Run(fmt.Sprintf(
+			"virsh setvcpus %s %s --live 2>&1", shellescape(domainName), n,
+		)); err != nil {
+			return fmt.Errorf("virsh setvcpus --live: %w — %s", err, out)
+		}
+	}
+	return nil
+}
+
+// SetMemory changes the memory allocation for a domain (value in MiB).
+// The change is always persisted to the domain config.
+// If live is true and the domain is running, a balloon change is also attempted
+// (requires the guest to have a virtio-balloon device).
+func SetMemory(client sshClient, domainName string, mib int64, live bool) error {
+	kib := strconv.FormatInt(mib*1024, 10)
+	// Set max memory before current to avoid "cannot exceed max" errors.
+	for _, cmd := range []string{
+		fmt.Sprintf("virsh setmaxmem %s %s --config 2>&1", shellescape(domainName), kib),
+		fmt.Sprintf("virsh setmem %s %s --config 2>&1", shellescape(domainName), kib),
+	} {
+		if out, err := client.Run(cmd); err != nil {
+			return fmt.Errorf("virsh setmem --config: %w — %s", err, out)
+		}
+	}
+	if live {
+		if out, err := client.Run(fmt.Sprintf(
+			"virsh setmem %s %s --live 2>&1", shellescape(domainName), kib,
+		)); err != nil {
+			return fmt.Errorf("virsh setmem --live: %w — %s", err, out)
+		}
+	}
+	return nil
+}
+
+// CloneVM clones an existing VM using virt-clone (part of the virtinst package).
+// If virt-clone is not installed on the hypervisor, the call returns an error with
+// installation instructions.
+func CloneVM(client sshClient, opts CloneOpts) error {
+	// Build virt-clone command.
+	args := fmt.Sprintf("--original %s --name %s", shellescape(opts.SourceDomain), shellescape(opts.NewName))
+	if opts.NewDiskPath != "" {
+		args += " --file " + shellquote(opts.NewDiskPath)
+	} else {
+		args += " --auto-clone"
+	}
+	out, err := client.Run(fmt.Sprintf("virt-clone %s 2>&1", args))
+	if err != nil {
+		if strings.Contains(out, "not found") || strings.Contains(err.Error(), "not found") ||
+			strings.Contains(out, "No such file or directory") {
+			return fmt.Errorf("virt-clone not found — install virtinst on the hypervisor: apt install virtinst\noriginal error: %s", out)
+		}
+		return fmt.Errorf("virt-clone: %w — %s", err, out)
+	}
+
+	// Apply memory/vcpu overrides after clone.
+	if opts.MemMiB > 0 {
+		if err := SetMemory(client, opts.NewName, opts.MemMiB, false); err != nil {
+			return fmt.Errorf("clone memory override: %w", err)
+		}
+	}
+	if opts.VCPUs > 0 {
+		if err := SetVCPUs(client, opts.NewName, opts.VCPUs, false); err != nil {
+			return fmt.Errorf("clone vcpu override: %w", err)
+		}
+	}
+	return nil
+}
+
+// CreateVMFromImage deploys a new VM by copying a base qcow2 image and importing it
+// with virt-install --import (part of the virtinst package).
+// The base image is copied to DiskPath and optionally grown before import.
+func CreateVMFromImage(client sshClient, opts CreateFromImageOpts) error {
+	// 1. Copy base image.
+	out, err := client.Run(fmt.Sprintf("cp %s %s 2>&1", shellquote(opts.BaseImage), shellquote(opts.DiskPath)))
+	if err != nil {
+		return fmt.Errorf("copy base image: %w — %s", err, out)
+	}
+
+	// 2. Optionally resize.
+	if opts.DiskSizeGB > 0 {
+		out, err = client.Run(fmt.Sprintf(
+			"qemu-img resize %s %dG 2>&1", shellquote(opts.DiskPath), opts.DiskSizeGB,
+		))
+		if err != nil {
+			// Non-fatal: remove copied disk and report.
+			_, _ = client.Run("rm -f " + shellquote(opts.DiskPath) + " 2>/dev/null")
+			return fmt.Errorf("resize disk: %w — %s", err, out)
+		}
+	}
+
+	// 3. Build virt-install --import command.
+	network := opts.Network
+	if network == "" {
+		network = "default"
+	}
+	osVariant := opts.OSVariant
+	if osVariant == "" {
+		osVariant = "generic"
+	}
+
+	viCmd := fmt.Sprintf(
+		"virt-install --name %s --memory %d --vcpus %d"+
+			" --disk path=%s,format=qcow2"+
+			" --import --os-variant %s --network network=%s"+
+			" --noautoconsole 2>&1",
+		shellescape(opts.Name), opts.MemMiB, opts.VCPUs,
+		shellquote(opts.DiskPath),
+		shellescape(osVariant), shellescape(network),
+	)
+
+	out, err = client.Run(viCmd)
+	if err != nil {
+		if strings.Contains(out, "not found") || strings.Contains(err.Error(), "not found") ||
+			strings.Contains(out, "No such file or directory") {
+			_, _ = client.Run("rm -f " + shellquote(opts.DiskPath) + " 2>/dev/null")
+			return fmt.Errorf("virt-install not found — install virtinst: apt install virtinst\noriginal error: %s", out)
+		}
+		// Clean up copied disk on failure.
+		_, _ = client.Run("rm -f " + shellquote(opts.DiskPath) + " 2>/dev/null")
+		return fmt.Errorf("virt-install: %w — %s", err, out)
+	}
+	return nil
+}
+
+// ── private helpers ────────────────────────────────────────────────────────────
+
+// getDomainState returns the current state string for a domain (e.g. "running", "shut off").
+func getDomainState(client sshClient, domainName string) (string, error) {
+	out, err := client.Run(fmt.Sprintf("virsh domstate %s 2>&1", shellescape(domainName)))
+	if err != nil {
+		return "", fmt.Errorf("virsh domstate: %w", err)
+	}
+	return strings.TrimSpace(out), nil
+}
+
+// domainDiskPaths returns the full file paths of all disk volumes attached to a domain.
+func domainDiskPaths(client sshClient, domainName string) ([]string, error) {
+	out, err := client.Run(fmt.Sprintf("virsh domblklist %s --details 2>&1", shellescape(domainName)))
+	if err != nil {
+		return nil, fmt.Errorf("virsh domblklist: %w", err)
+	}
+	var paths []string
+	for i, line := range strings.Split(out, "\n") {
+		if i < 2 {
+			continue
+		}
+		f := strings.Fields(line)
+		// Fields: Type  Device  Target  Source
+		// Only "file" type disks have a real path.
+		if len(f) < 4 || f[0] != "file" {
+			continue
+		}
+		src := f[3]
+		if src != "" && src != "-" {
+			paths = append(paths, src)
+		}
+	}
+	return paths, nil
+}
+
+// shellquote wraps a string in single quotes and escapes any embedded single quotes.
+// Use this for file paths and any string that may contain special shell characters.
+// For domain/snapshot names (restricted charset) prefer shellescape.
+func shellquote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
+}
+
+// writeViaBase64 writes content to a remote file path by encoding it as base64
+// and decoding it on the remote side. Safe for arbitrary binary or text content.
+// Used internally for writing XML files to the hypervisor.
+func writeViaBase64(client sshClient, content, remotePath string) error {
+	b64 := base64.StdEncoding.EncodeToString([]byte(content))
+	// base64 alphabet [A-Za-z0-9+/=] is safe inside single quotes.
+	cmd := fmt.Sprintf("printf '%%s' '%s' | base64 -d > %s 2>&1", b64, shellquote(remotePath))
+	out, err := client.Run(cmd)
+	if err != nil {
+		return fmt.Errorf("write %s: %w — %s", remotePath, err, out)
+	}
+	return nil
+}
+
+// rewriteDomainXML replaces name, clears UUID, replaces disk source path, and
+// optionally overrides memory/vcpu in a virsh dumpxml output string.
+// Used as a fallback when virt-clone is unavailable.
+var (
+	reDomName  = regexp.MustCompile(`<name>[^<]*</name>`)
+	reDomUUID  = regexp.MustCompile(`<uuid>[0-9a-f\-]+</uuid>`)
+	reDomDisk  = regexp.MustCompile(`(<source file=')[^']*('/>)`)
+	reDomMAC   = regexp.MustCompile(`<mac address='[^']*'/>`)
+	reDomMem   = regexp.MustCompile(`<memory[^>]*>[^<]*</memory>`)
+	reDomCurM  = regexp.MustCompile(`<currentMemory[^>]*>[^<]*</currentMemory>`)
+	reDomVCPU  = regexp.MustCompile(`<vcpu[^>]*>[^<]*</vcpu>`)
+)
+
+func rewriteDomainXML(src, newName, newDisk string, memMiB int64, vcpus int) string {
+	s := reDomName.ReplaceAllLiteralString(src, "<name>"+newName+"</name>")
+	s = reDomUUID.ReplaceAllLiteralString(s, "")
+	s = reDomDisk.ReplaceAllString(s, "${1}"+newDisk+"${2}")
+	s = reDomMAC.ReplaceAllLiteralString(s, "")
+	if memMiB > 0 {
+		kib := fmt.Sprintf("%d", memMiB*1024)
+		s = reDomMem.ReplaceAllLiteralString(s, "<memory unit='KiB'>"+kib+"</memory>")
+		s = reDomCurM.ReplaceAllLiteralString(s, "<currentMemory unit='KiB'>"+kib+"</currentMemory>")
+	}
+	if vcpus > 0 {
+		s = reDomVCPU.ReplaceAllString(s, fmt.Sprintf("<vcpu placement='static'>%d</vcpu>", vcpus))
+	}
+	return s
 }
