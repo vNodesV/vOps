@@ -153,7 +153,7 @@ func (h *Handlers) HandleHypervisorScan(w http.ResponseWriter, r *http.Request) 
 			}
 			defer hc.Close()
 
-			listOut, err := h.debugRun(hc, "hypervisor-scan", dialAddr, "virsh list --all 2>&1")
+			listOut, err := h.debugRun(hc, "hypervisor-scan", dialAddr, "virsh -c qemu:///system list --all 2>&1")
 			if err != nil {
 				mu.Lock()
 				discovered = append(discovered, VirshVM{
@@ -205,7 +205,7 @@ func (h *Handlers) HandleHypervisorScan(w http.ResponseWriter, r *http.Request) 
 					}
 
 					// Get VM IP from hypervisor via virsh domifaddr.
-					ifOut, err := h.debugRun(hc, "hypervisor-scan", dialAddr, "virsh domifaddr "+rv.name+" 2>&1")
+					ifOut, err := h.debugRun(hc, "hypervisor-scan", dialAddr, "virsh -c qemu:///system domifaddr "+rv.name+" 2>&1")
 					if err == nil {
 						for _, line := range strings.Split(ifOut, "\n") {
 							if !strings.Contains(line, "ipv4") {
