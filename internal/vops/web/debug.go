@@ -2,8 +2,10 @@ package web
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -134,4 +136,62 @@ func (s *Server) handleAPIDebugEvents(w http.ResponseWriter, r *http.Request) {
 		"enabled": s.debug.IsEnabled(),
 		"events":  events,
 	})
+}
+
+// ── HTTP middleware ───────────────────────────────────────────────────────────
+
+// debugHTTPMiddleware wraps the entire mux and records every API request when
+// debug mode is enabled. Static assets and the debug polling endpoints
+// themselves are excluded to avoid noise.
+func (s *Server) debugHTTPMiddleware(next http.Handler) http.Handler {
+	// Prefixes that are too noisy or would cause recursive logging.
+	skipPrefixes := []string{
+		"/api/v1/debug/",
+		"/assets/",
+		"/static/",
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !s.debug.IsEnabled() {
+			next.ServeHTTP(w, r)
+			return
+		}
+		for _, pfx := range skipPrefixes {
+			if strings.HasPrefix(r.URL.Path, pfx) {
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
+		start := time.Now()
+		rw := &debugResponseWriter{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(rw, r)
+
+		path := r.URL.Path
+		if r.URL.RawQuery != "" {
+			path += "?" + r.URL.RawQuery
+		}
+		statusStr := fmt.Sprintf("HTTP %d", rw.status)
+		errStr := ""
+		if rw.status >= 400 {
+			errStr = fmt.Sprintf("HTTP %d", rw.status)
+		}
+		s.debug.Emit("http", r.RemoteAddr, r.Method+" "+path, statusStr, errStr,
+			time.Since(start).Milliseconds())
+	})
+}
+
+// debugResponseWriter wraps http.ResponseWriter to capture the status code.
+type debugResponseWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (rw *debugResponseWriter) WriteHeader(code int) {
+	rw.status = code
+	rw.ResponseWriter.WriteHeader(code)
+}
+
+func (rw *debugResponseWriter) Flush() {
+	if f, ok := rw.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }

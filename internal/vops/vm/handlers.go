@@ -26,6 +26,14 @@ type Handlers struct {
 	sshPort    int
 	sshKeyPath string
 	knownHosts string
+	debug      vmDebugEmitter
+}
+
+// vmDebugEmitter is satisfied by *web.DebugRing; defined locally to avoid
+// a circular import between the vm and web packages.
+type vmDebugEmitter interface {
+	IsEnabled() bool
+	Emit(source, host, command, output, errStr string, durationMs int64)
 }
 
 // NewHandlers creates Handlers backed by the given fleet service.
@@ -40,6 +48,10 @@ func NewHandlers(svc configProvider, db *sql.DB, sshPort int, sshKeyPath, knownH
 		knownHosts: knownHosts,
 	}
 }
+
+// SetDebug attaches a debug emitter so all SSH commands executed by VM manager
+// handlers are recorded in the debug console.
+func (h *Handlers) SetDebug(d vmDebugEmitter) { h.debug = d }
 
 // ── GET /api/v1/vm/hosts ──────────────────────────────────────────────────────
 
@@ -72,7 +84,7 @@ func (h *Handlers) HandleListDomains(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 		return
 	}
-	client, err := dialHost(hi, h.sshPort, h.sshKeyPath, h.knownHosts)
+	client, err := h.dialHost(hi)
 	if err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": fmt.Sprintf("ssh: %v", err)})
 		return
@@ -107,7 +119,7 @@ func (h *Handlers) HandleDomainAction(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 		return
 	}
-	client, err := dialHost(hi, h.sshPort, h.sshKeyPath, h.knownHosts)
+	client, err := h.dialHost(hi)
 	if err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": fmt.Sprintf("ssh: %v", err)})
 		return
@@ -132,7 +144,7 @@ func (h *Handlers) HandleDomainStats(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 		return
 	}
-	client, err := dialHost(hi, h.sshPort, h.sshKeyPath, h.knownHosts)
+	client, err := h.dialHost(hi)
 	if err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": fmt.Sprintf("ssh: %v", err)})
 		return
@@ -155,7 +167,7 @@ func (h *Handlers) HandleListSnapshots(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 		return
 	}
-	client, err := dialHost(hi, h.sshPort, h.sshKeyPath, h.knownHosts)
+	client, err := h.dialHost(hi)
 	if err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": fmt.Sprintf("ssh: %v", err)})
 		return
@@ -190,7 +202,7 @@ func (h *Handlers) HandleCreateSnapshot(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 		return
 	}
-	client, err := dialHost(hi, h.sshPort, h.sshKeyPath, h.knownHosts)
+	client, err := h.dialHost(hi)
 	if err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": fmt.Sprintf("ssh: %v", err)})
 		return
@@ -212,7 +224,7 @@ func (h *Handlers) HandleRevertSnapshot(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 		return
 	}
-	client, err := dialHost(hi, h.sshPort, h.sshKeyPath, h.knownHosts)
+	client, err := h.dialHost(hi)
 	if err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": fmt.Sprintf("ssh: %v", err)})
 		return
@@ -234,7 +246,7 @@ func (h *Handlers) HandleDeleteSnapshot(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 		return
 	}
-	client, err := dialHost(hi, h.sshPort, h.sshKeyPath, h.knownHosts)
+	client, err := h.dialHost(hi)
 	if err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": fmt.Sprintf("ssh: %v", err)})
 		return
@@ -286,7 +298,7 @@ func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 		return
 	}
-	client, err := dialHost(hi, h.sshPort, h.sshKeyPath, h.knownHosts)
+	client, err := h.dialHost(hi)
 	if err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": fmt.Sprintf("ssh: %v", err)})
 		return
@@ -312,7 +324,7 @@ func (h *Handlers) HandleDomainInterfaces(w http.ResponseWriter, r *http.Request
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 		return
 	}
-	client, err := dialHost(hi, h.sshPort, h.sshKeyPath, h.knownHosts)
+	client, err := h.dialHost(hi)
 	if err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": fmt.Sprintf("ssh: %v", err)})
 		return
@@ -348,7 +360,7 @@ func (h *Handlers) HandleDeleteDomain(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 		return
 	}
-	client, err := dialHost(hi, h.sshPort, h.sshKeyPath, h.knownHosts)
+	client, err := h.dialHost(hi)
 	if err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": fmt.Sprintf("ssh: %v", err)})
 		return
@@ -392,7 +404,7 @@ func (h *Handlers) HandleResizeDomain(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 		return
 	}
-	client, err := dialHost(hi, h.sshPort, h.sshKeyPath, h.knownHosts)
+	client, err := h.dialHost(hi)
 	if err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": fmt.Sprintf("ssh: %v", err)})
 		return
@@ -461,7 +473,7 @@ func (h *Handlers) HandleCreateDomain(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 		return
 	}
-	client, err := dialHost(hi, h.sshPort, h.sshKeyPath, h.knownHosts)
+	client, err := h.dialHost(hi)
 	if err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": fmt.Sprintf("ssh: %v", err)})
 		return

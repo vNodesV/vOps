@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	fleetssh "github.com/vNodesV/vProx/internal/fleet/ssh"
 )
@@ -46,18 +47,49 @@ type sshClient interface {
 	Run(cmd string) (string, error)
 }
 
+// debugSSHClient wraps sshClient and emits a DebugEvent for every Run call.
+type debugSSHClient struct {
+	inner sshClient
+	debug vmDebugEmitter
+	host  string
+}
+
+func (d *debugSSHClient) Run(cmd string) (string, error) {
+	start := time.Now()
+	out, err := d.inner.Run(cmd)
+	if d.debug.IsEnabled() {
+		errStr := ""
+		if err != nil {
+			errStr = err.Error()
+		}
+		d.debug.Emit("vm-manager", d.host, cmd, out, errStr, time.Since(start).Milliseconds())
+	}
+	return out, err
+}
+
 // dialFn is the SSH dial constructor — swappable for tests.
 var dialFn = func(host string, port int, user, keyPath, knownHosts string) (sshClient, error) {
 	return fleetssh.Dial(host, port, user, keyPath, knownHosts)
 }
 
 // dialHost opens an SSH connection to the given hypervisor host.
-func dialHost(h HostInfo, port int, keyPath, knownHosts string) (sshClient, error) {
-	addr := h.LanIP
+// When debug mode is active it wraps the client so every Run() is recorded.
+func (h *Handlers) dialHost(hi HostInfo) (sshClient, error) {
+	addr := hi.LanIP
 	if addr == "" {
-		addr = h.Name
+		addr = hi.Name
 	}
-	return dialFn(addr, port, h.User, keyPath, knownHosts)
+	c, err := dialFn(addr, h.sshPort, hi.User, h.sshKeyPath, h.knownHosts)
+	if err != nil {
+		if h.debug != nil && h.debug.IsEnabled() {
+			h.debug.Emit("vm-manager", addr, "ssh dial", "", err.Error(), 0)
+		}
+		return nil, err
+	}
+	if h.debug != nil {
+		return &debugSSHClient{inner: c, debug: h.debug, host: addr}, nil
+	}
+	return c, nil
 }
 
 // ListDomains returns all libvirt domains visible to virsh on the host,

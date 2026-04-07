@@ -118,6 +118,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 			cfg.VOps.Push.Defaults.KeyPath,
 			cfg.VOps.Push.Defaults.KnownHostsPath,
 		)
+		s.vmMgr.SetDebug(s.debug)
 	}
 
 	mux := http.NewServeMux()
@@ -294,7 +295,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 
 	s.httpSrv = &http.Server{
 		Addr:         fmt.Sprintf("%s:%d", cfg.VOps.BindAddress, cfg.VOps.Port),
-		Handler:      securityHeaders(mux),
+		Handler:      s.debugHTTPMiddleware(securityHeaders(mux)),
 		ReadTimeout:  readTimeout,
 		WriteTimeout: writeTimeout,
 	}

@@ -91,7 +91,7 @@ export default function DebugPanel({ onDisable }: DebugPanelProps) {
                 {/* Summary row */}
                 <div style={summaryStyle}>
                   <span style={{ color: '#8b949e', minWidth: '68px', flexShrink: 0 }}>{ev.time}</span>
-                  <span style={{ color: '#e3b341', minWidth: '110px', flexShrink: 0 }}>{ev.source}</span>
+                  <span style={{ color: sourceColor(ev.source), minWidth: '110px', flexShrink: 0 }}>{ev.source}</span>
                   <span style={{ color: '#79c0ff', minWidth: '110px', flexShrink: 0 }}>{ev.host}</span>
                   <span style={{
                     color: '#c9d1d9',
@@ -207,3 +207,12 @@ const btnStyle: CSSProperties = {
   fontSize: '0.68rem',
   fontFamily: 'inherit',
 };
+
+function sourceColor(source: string): string {
+  if (source === 'http') return '#a5f3fc';       // cyan   — HTTP calls
+  if (source === 'vm-manager') return '#c084fc'; // purple — VM manager SSH
+  if (source === 'vm-probe') return '#a78bfa';   // violet — VM metrics probe
+  if (source.startsWith('hypervisor')) return '#fb923c'; // orange — hypervisor scan
+  if (source.startsWith('host')) return '#fbbf24';       // amber  — host scan
+  return '#e3b341'; // default yellow
+}
