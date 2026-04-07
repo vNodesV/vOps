@@ -59,6 +59,44 @@ func (h *Handlers) debugRun(client *fleetssh.Client, source, host, cmd string) (
 	return out, err
 }
 
+// parseVirshIP extracts the first IPv4 address from the tabular output of
+// "virsh domifaddr". All three --source modes (lease/arp/agent) use the same
+// table format; we only need lines containing "ipv4".
+func parseVirshIP(out string) string {
+	for _, line := range strings.Split(out, "\n") {
+		if !strings.Contains(line, "ipv4") {
+			continue
+		}
+		parts := strings.Fields(line)
+		if len(parts) < 4 {
+			continue
+		}
+		ip := parts[3]
+		if idx := strings.Index(ip, "/"); idx >= 0 {
+			ip = ip[:idx]
+		}
+		return ip
+	}
+	return ""
+}
+
+// probeVMIP tries three virsh domifaddr sources in order (arp → lease → agent)
+// and returns the first IPv4 address found.  Using --source arp covers bridged
+// VMs; lease covers libvirt-managed NAT; agent covers VMs with qemu-guest-agent.
+func (h *Handlers) probeVMIP(hc *fleetssh.Client, dialAddr, vmName string) string {
+	for _, src := range []string{"arp", "lease", "agent"} {
+		cmd := "virsh -c qemu:///system domifaddr " + vmName + " --source " + src + " 2>&1"
+		out, err := h.debugRun(hc, "hypervisor-scan", dialAddr, cmd)
+		if err != nil {
+			continue
+		}
+		if ip := parseVirshIP(out); ip != "" {
+			return ip
+		}
+	}
+	return ""
+}
+
 // ── GET /api/v1/fleet/vms/status ──────────────────────────────────────────────
 
 // HandleVMStatus polls all VMs concurrently via SSH and returns live metrics.
@@ -204,25 +242,8 @@ func (h *Handlers) HandleHypervisorScan(w http.ResponseWriter, r *http.Request) 
 						return
 					}
 
-					// Get VM IP from hypervisor via virsh domifaddr.
-					ifOut, err := h.debugRun(hc, "hypervisor-scan", dialAddr, "virsh -c qemu:///system domifaddr "+rv.name+" 2>&1")
-					if err == nil {
-						for _, line := range strings.Split(ifOut, "\n") {
-							if !strings.Contains(line, "ipv4") {
-								continue
-							}
-							parts := strings.Fields(line)
-							if len(parts) < 4 {
-								continue
-							}
-							ip := parts[3]
-							if idx := strings.Index(ip, "/"); idx >= 0 {
-								ip = ip[:idx]
-							}
-							dvm.LanIP = ip
-							break
-						}
-					}
+					// Get VM IP — tries arp (bridged), lease (NAT), agent in order.
+					dvm.LanIP = h.probeVMIP(hc, dialAddr, rv.name)
 
 					// Resolve SSH credentials: prefer per-VM config, fall back to [vprox] defaults.
 					vmUser := host.VMUser
