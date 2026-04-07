@@ -110,6 +110,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	if fleetSvc != nil {
 		s.fleet = api.New(fleetSvc, d.DB)
 		s.fleet.SetDebug(s.debug)
+		s.fleet.SetInfraDir(cfg.VOps.Push.InfraDir)
 		s.fleetSvc = fleetSvc
 		// Always create the VM manager so routes are available even when no
 		// hypervisor hosts are configured yet; it returns empty lists until
@@ -250,6 +251,8 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 			s.requireSession(http.HandlerFunc(s.fleet.HandleVMUpgrade)))
 		mux.Handle("GET /api/v1/fleet/vms/{name}/history",
 			s.requireSession(http.HandlerFunc(s.fleet.HandleVMHistory)))
+		mux.Handle("POST /api/v1/fleet/vms/register",
+			s.requireSession(http.HandlerFunc(s.fleet.HandleRegisterDiscoveredVM)))
 		mux.Handle("POST /api/v1/fleet/hosts/scan",
 			s.requireSession(http.HandlerFunc(s.fleet.HandleHostScan)))
 		mux.Handle("GET /api/v1/fleet/hosts",

@@ -80,6 +80,13 @@ export const getVMStatus = () =>
 export const scanAllVMs = () =>
   apiPost<{ vms: VMStatus[]; hosts: unknown[] }>('/api/v1/fleet/vms/scan', {});
 
+/** Register a virsh-discovered VM into the infra TOML config. */
+export const registerDiscoveredVM = (name: string, lan_ip: string, datacenter: string) =>
+  apiPost<{ ok: boolean; already_registered: boolean; file: string }>(
+    '/api/v1/fleet/vms/register',
+    { name, lan_ip, datacenter },
+  );;
+
 /** Returns the SSE URL for streaming apt upgrade output on a named VM. */
 export const vmUpgradeURL = (name: string) =>
   `${BASE}api/v1/fleet/vms/${encodeURIComponent(name)}/upgrade`;

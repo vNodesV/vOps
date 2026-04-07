@@ -6,11 +6,14 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -32,9 +35,10 @@ type DebugEmitter interface {
 
 // Handlers holds a reference to the fleet Service and an optional metrics DB.
 type Handlers struct {
-	svc   *fleet.Service
-	db    *sql.DB // may be nil when metrics storage is not wired
-	debug DebugEmitter
+	svc      *fleet.Service
+	db       *sql.DB // may be nil when metrics storage is not wired
+	debug    DebugEmitter
+	infraDir string // path to config/infra/ directory for VM registration
 }
 
 // New returns a Handlers backed by svc. db is optional; when non-nil, VM
@@ -43,6 +47,10 @@ func New(svc *fleet.Service, db *sql.DB) *Handlers { return &Handlers{svc: svc, 
 
 // SetDebug attaches a DebugEmitter to record SSH commands when debug mode is on.
 func (h *Handlers) SetDebug(d DebugEmitter) { h.debug = d }
+
+// SetInfraDir sets the path to the config/infra/ directory so that
+// HandleRegisterDiscoveredVM can append [[vm]] stanzas to the right file.
+func (h *Handlers) SetInfraDir(dir string) { h.infraDir = dir }
 
 // debugRun executes cmd on client, emitting a debug event if debug mode is on.
 // It is a transparent wrapper around client.Run that adds timing + logging.
@@ -381,7 +389,16 @@ func (h *Handlers) HandleHypervisorScan(w http.ResponseWriter, r *http.Request) 
 					if dvm.LanIP != "" && vmUser != "" && vmKey != "" {
 						// Tunnel through the already-open hypervisor connection (hc)
 						// — equivalent to ssh -J hypervisor user@vm, no separate dial.
+						dialStart := time.Now()
 						vmClient, err := hc.DialThrough(dvm.LanIP, vmPort, vmUser, vmKey, "")
+						if h.debug != nil && h.debug.IsEnabled() {
+							dialCmd := fmt.Sprintf("ssh -J %s %s@%s -p %d", dialAddr, vmUser, dvm.LanIP, vmPort)
+							errStr := ""
+							if err != nil {
+								errStr = err.Error()
+							}
+							h.debug.Emit("vm-probe", dvm.LanIP, dialCmd, "", errStr, time.Since(dialStart).Milliseconds())
+						}
 						if err == nil {
 							defer vmClient.Close()
 							// virt-top already gave us CPU/MEM; we only need load average.
@@ -403,10 +420,27 @@ func (h *Handlers) HandleHypervisorScan(w http.ResponseWriter, r *http.Request) 
 								if len(lines) >= 2 && dvm.MemPct == 0 {
 									dvm.MemPct, _ = strconv.ParseFloat(strings.TrimSpace(lines[1]), 64)
 								}
+							} else {
+								dvm.Error = fmt.Sprintf("VM SSH probe: %v", err)
 							}
 						} else {
 							dvm.Error = fmt.Sprintf("VM SSH: %v", err)
 						}
+					} else if dvm.LanIP != "" {
+						// Credentials missing — tell the user exactly what to fix.
+						missing := []string{}
+						if vmUser == "" {
+							missing = append(missing, "user")
+						}
+						if vmKey == "" {
+							missing = append(missing, "ssh_key_path")
+						}
+						msg := fmt.Sprintf("VM SSH skipped: missing %s — add [vprox] %s to infra TOML",
+							strings.Join(missing, " and "), strings.Join(missing, "/"))
+						if h.debug != nil && h.debug.IsEnabled() {
+							h.debug.Emit("vm-probe", dvm.LanIP, "ssh dial", "", msg, 0)
+						}
+						dvm.Error = msg
 					}
 
 					mu.Lock()
@@ -446,7 +480,93 @@ func (h *Handlers) HandleHypervisorScan(w http.ResponseWriter, r *http.Request) 
 
 
 
-// HandleVMHistory returns time-series metrics for a single VM.
+// ── POST /api/v1/fleet/vms/register ──────────────────────────────────────────
+
+// registerVMRequest is the JSON body accepted by HandleRegisterDiscoveredVM.
+type registerVMRequest struct {
+	Name       string `json:"name"`
+	LanIP      string `json:"lan_ip"`
+	Datacenter string `json:"datacenter"`
+}
+
+// HandleRegisterDiscoveredVM appends a [[vm]] stanza for a virsh-discovered VM
+// to the appropriate infra TOML file.  It finds the file by matching the
+// datacenter name, then checks for duplicate names before appending.
+func (h *Handlers) HandleRegisterDiscoveredVM(w http.ResponseWriter, r *http.Request) {
+	var req registerVMRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request: name is required"})
+		return
+	}
+
+	dir := h.infraDir
+	if dir == "" {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "infra directory not configured"})
+		return
+	}
+
+	// Find the infra file that owns this datacenter.
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "cannot read infra dir: " + err.Error()})
+		return
+	}
+
+	var targetFile string
+	for _, e := range entries {
+		if e.IsDir() || filepath.Ext(e.Name()) != ".toml" {
+			continue
+		}
+		fPath := filepath.Join(dir, e.Name())
+		data, err := os.ReadFile(fPath)
+		if err != nil {
+			continue
+		}
+		// Match by datacenter field value in the file content.
+		if strings.Contains(string(data), `"`+req.Datacenter+`"`) || strings.Contains(string(data), `'`+req.Datacenter+`'`) {
+			targetFile = fPath
+			break
+		}
+	}
+
+	// If no matching file found, create one named after the datacenter.
+	if targetFile == "" {
+		safeName := strings.NewReplacer(" ", "_", "/", "_", "\\", "_").Replace(req.Datacenter)
+		targetFile = filepath.Join(dir, safeName+".toml")
+	}
+
+	// Read existing content to check for duplicates.
+	existing, err := os.ReadFile(targetFile)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	if strings.Contains(string(existing), `name = "`+req.Name+`"`) ||
+		strings.Contains(string(existing), `name = '`+req.Name+`'`) {
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "already_registered": true, "file": targetFile})
+		return
+	}
+
+	// Build and append the [[vm]] stanza.
+	stanza := fmt.Sprintf(
+		"\n[[vm]]\nname       = %q\nhost_ref   = %q\nhost       = %q\nlan_ip     = %q\ndatacenter = %q\ntype       = \"node\"\n",
+		req.Name, req.Datacenter, req.LanIP, req.LanIP, req.Datacenter,
+	)
+	f, err := os.OpenFile(targetFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "cannot open infra file: " + err.Error()})
+		return
+	}
+	defer f.Close()
+	if _, err := f.WriteString(stanza); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "write failed: " + err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "already_registered": false, "file": targetFile})
+}
+
+
 // Query param: hours (default 24, max 48).
 func (h *Handlers) HandleVMHistory(w http.ResponseWriter, r *http.Request) {
 	if h.db == nil {

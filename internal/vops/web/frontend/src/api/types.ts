@@ -121,6 +121,8 @@ export interface VirshVM {
   lan_ip?: string;
   state: string;
   online: boolean;
+  os_version?: string;
+  cpu_pct?: number;
   load_avg?: string;
   mem_pct?: number;
   error?: string;
