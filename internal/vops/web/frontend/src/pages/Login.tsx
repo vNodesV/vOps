@@ -3,6 +3,7 @@ import { BASE } from '../api/client';
 import Spinner from '../components/Spinner';
 
 interface BuildInfo {
+  release: string;
   version: string;
   commit: string;
   build_date: string;
@@ -201,7 +202,7 @@ export default function LoginPage() {
           className="absolute bottom-4 text-xs"
           style={{ color: 'rgba(255,255,255,0.45)' }}
         >
-          v{buildInfo.version} · {buildInfo.commit} · {buildInfo.build_date}
+          vOps v{buildInfo.release || '1.0.0'} build {buildInfo.version} · {buildInfo.commit}
         </p>
       )}
     </div>

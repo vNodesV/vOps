@@ -37,6 +37,11 @@ import (
 //go:embed static dist
 var webFS embed.FS
 
+// releaseVersion is the vOps major release label shown in the UI (e.g. login page).
+// Increment this with make bump-major; the build number (cmd/vops/VERSION) tracks
+// incremental patch delivery within a release.
+const releaseVersion = "1.0.0"
+
 // Server is the vOps HTTP server. It owns the ServeMux and references
 // to the database and enrichment subsystems.
 type Server struct {
@@ -488,6 +493,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 func (s *Server) handleAPIVersion(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{
+		"release":    releaseVersion,
 		"version":    s.version,
 		"commit":     s.commit,
 		"build_date": s.buildDate,

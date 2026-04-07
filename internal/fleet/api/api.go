@@ -80,11 +80,12 @@ func parseVirshIP(out string) string {
 	return ""
 }
 
-// probeVMIP tries three virsh domifaddr sources in order (arp → lease → agent)
-// and returns the first IPv4 address found.  Using --source arp covers bridged
-// VMs; lease covers libvirt-managed NAT; agent covers VMs with qemu-guest-agent.
+// probeVMIP tries three virsh domifaddr sources in order (agent → arp → lease)
+// and returns the first IPv4 address found.  agent is tried first because
+// qemu-guest-agent is now installed on all VMs; arp covers bridged VMs without
+// agent; lease covers libvirt-managed NAT networks.
 func (h *Handlers) probeVMIP(hc *fleetssh.Client, dialAddr, vmName string) string {
-	for _, src := range []string{"arp", "lease", "agent"} {
+	for _, src := range []string{"agent", "arp", "lease"} {
 		cmd := "virsh -c qemu:///system domifaddr " + vmName + " --source " + src + " 2>&1"
 		out, err := h.debugRun(hc, "hypervisor-scan", dialAddr, cmd)
 		if err != nil {
@@ -132,9 +133,104 @@ type VirshVM struct {
 	LanIP      string  `json:"lan_ip,omitempty"`
 	State      string  `json:"state"`
 	Online     bool    `json:"online"`
+	OSVersion  string  `json:"os_version,omitempty"`
+	CPUPct     float64 `json:"cpu_pct,omitempty"`
 	LoadAvg    string  `json:"load_avg,omitempty"`
 	MemPct     float64 `json:"mem_pct,omitempty"`
 	Error      string  `json:"error,omitempty"`
+}
+
+// parseVirtTopMetrics parses one cycle of "virt-top -n 1" output and returns
+// a map of VM name → [CPUPct, MemPct].  The parser is header-aware so it
+// handles both old and new virt-top column orderings.
+func parseVirtTopMetrics(out string) map[string][2]float64 {
+	result := make(map[string][2]float64)
+	cpuIdx, memIdx, nameIdx := -1, -1, -1
+
+	for _, line := range strings.Split(out, "\n") {
+		fields := strings.Fields(strings.TrimSpace(line))
+		if len(fields) == 0 {
+			continue
+		}
+		// Detect header: first field is "ID" (case-insensitive).
+		if strings.EqualFold(fields[0], "ID") {
+			for i, h := range fields {
+				switch strings.ToUpper(strings.TrimPrefix(h, "%")) {
+				case "CPU":
+					cpuIdx = i
+				case "MEM":
+					memIdx = i
+				case "NAME":
+					nameIdx = i
+				}
+			}
+			continue
+		}
+		if cpuIdx < 0 || memIdx < 0 {
+			continue
+		}
+		// Data line: first field must be a numeric domain ID.
+		if _, err := strconv.Atoi(fields[0]); err != nil {
+			continue
+		}
+		name := ""
+		if nameIdx >= 0 && nameIdx < len(fields) {
+			name = fields[nameIdx]
+		} else if len(fields) > 0 {
+			name = fields[len(fields)-1]
+		}
+		if name == "" || cpuIdx >= len(fields) || memIdx >= len(fields) {
+			continue
+		}
+		cpu, errC := strconv.ParseFloat(strings.TrimSuffix(fields[cpuIdx], "%"), 64)
+		mem, errM := strconv.ParseFloat(strings.TrimSuffix(fields[memIdx], "%"), 64)
+		if errC != nil || errM != nil {
+			continue
+		}
+		result[name] = [2]float64{cpu, mem}
+	}
+	return result
+}
+
+// collectVirtTopMetrics runs one virt-top cycle on the hypervisor and returns
+// CPU%/MEM% for every running domain.  A single SSH command replaces per-VM
+// SSH tunnels for these two metrics.
+func (h *Handlers) collectVirtTopMetrics(hc *fleetssh.Client, dialAddr string) map[string][2]float64 {
+	out, err := h.debugRun(hc, "hypervisor-scan", dialAddr,
+		"virt-top -n 1 --connect qemu:///system 2>&1")
+	if err != nil {
+		return nil
+	}
+	return parseVirtTopMetrics(out)
+}
+
+// probeGuestOSInfo retrieves the OS pretty-name from the qemu-guest-agent via
+// "virsh qemu-agent-command guest-get-osinfo".  Runs on the hypervisor — no
+// SSH tunnel into the VM required.
+func (h *Handlers) probeGuestOSInfo(hc *fleetssh.Client, dialAddr, vmName string) string {
+	cmd := `virsh -c qemu:///system qemu-agent-command ` + vmName +
+		` '{"execute":"guest-get-osinfo"}' 2>&1`
+	out, err := h.debugRun(hc, "hypervisor-scan", dialAddr, cmd)
+	if err != nil {
+		return ""
+	}
+	var resp struct {
+		Return struct {
+			PrettyName string `json:"pretty-name"`
+			Name       string `json:"name"`
+			VersionID  string `json:"version-id"`
+		} `json:"return"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &resp); err != nil {
+		return ""
+	}
+	if resp.Return.PrettyName != "" {
+		return resp.Return.PrettyName
+	}
+	if resp.Return.Name != "" && resp.Return.VersionID != "" {
+		return resp.Return.Name + " " + resp.Return.VersionID
+	}
+	return resp.Return.Name
 }
 
 // HandleHypervisorScan SSHes to each configured hypervisor host, discovers
@@ -223,6 +319,9 @@ func (h *Handlers) HandleHypervisorScan(w http.ResponseWriter, r *http.Request) 
 				rawVMs = append(rawVMs, rawVM{name: f[1], state: strings.Join(f[2:], " ")})
 			}
 
+			// One virt-top invocation gives CPU%/MEM% for all domains at once.
+			virtTopMetrics := h.collectVirtTopMetrics(hc, dialAddr)
+
 			var vmWg sync.WaitGroup
 			for _, rv := range rawVMs {
 				rv := rv
@@ -242,8 +341,17 @@ func (h *Handlers) HandleHypervisorScan(w http.ResponseWriter, r *http.Request) 
 						return
 					}
 
-					// Get VM IP — tries arp (bridged), lease (NAT), agent in order.
+					// Get VM IP — agent first (qemu-guest-agent installed), then arp/lease.
 					dvm.LanIP = h.probeVMIP(hc, dialAddr, rv.name)
+
+					// Apply virt-top CPU/MEM (hypervisor-side, no tunnel needed).
+					if m, ok := virtTopMetrics[rv.name]; ok {
+						dvm.CPUPct = m[0]
+						dvm.MemPct = m[1]
+					}
+
+					// OS info via guest agent — no SSH tunnel required.
+					dvm.OSVersion = h.probeGuestOSInfo(hc, dialAddr, rv.name)
 
 					// Resolve SSH credentials: prefer per-VM config, fall back to [vprox] defaults.
 					vmUser := host.VMUser
@@ -267,10 +375,13 @@ func (h *Handlers) HandleHypervisorScan(w http.ResponseWriter, r *http.Request) 
 						vmClient, err := hc.DialThrough(dvm.LanIP, vmPort, vmUser, vmKey, "")
 						if err == nil {
 							defer vmClient.Close()
-							// One compound command: load average + memory %.
-							out, err := h.debugRun(vmClient, "vm-probe", dvm.LanIP,
-								`cat /proc/loadavg && free -m | awk '/Mem:/{printf "%.1f", $3/$2*100}'`,
-							)
+							// virt-top already gave us CPU/MEM; we only need load average.
+							// If virt-top missed this VM, fall back to the full compound command.
+							probeCmd := `cut -d' ' -f1 /proc/loadavg`
+							if _, hasMetrics := virtTopMetrics[rv.name]; !hasMetrics {
+								probeCmd = `cat /proc/loadavg && free -m | awk '/Mem:/{printf "\n%.1f", $3/$2*100}'`
+							}
+							out, err := h.debugRun(vmClient, "vm-probe", dvm.LanIP, probeCmd)
 							if err == nil {
 								dvm.Online = true
 								lines := strings.Split(strings.TrimSpace(out), "\n")
@@ -279,7 +390,8 @@ func (h *Handlers) HandleHypervisorScan(w http.ResponseWriter, r *http.Request) 
 										dvm.LoadAvg = parts[0]
 									}
 								}
-								if len(lines) >= 2 {
+								// Only parse mem% if virt-top didn't provide it.
+								if len(lines) >= 2 && dvm.MemPct == 0 {
 									dvm.MemPct, _ = strconv.ParseFloat(strings.TrimSpace(lines[1]), 64)
 								}
 							}
