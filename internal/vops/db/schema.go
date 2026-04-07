@@ -115,6 +115,89 @@ CREATE TABLE IF NOT EXISTS vm_metrics_history (
 	apt_count   INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_vm_metrics_vm_polled ON vm_metrics_history(vm_name, polled_at);
+
+CREATE TABLE IF NOT EXISTS datacenter_inventory (
+	id              INTEGER PRIMARY KEY AUTOINCREMENT,
+	name            TEXT NOT NULL UNIQUE,
+	host_name       TEXT NOT NULL DEFAULT '',
+	lan_ip          TEXT NOT NULL DEFAULT '',
+	public_ip       TEXT NOT NULL DEFAULT '',
+	vrack_ip        TEXT NOT NULL DEFAULT '',
+	datacenter      TEXT NOT NULL DEFAULT '',
+	os              TEXT NOT NULL DEFAULT '',
+	kernel          TEXT NOT NULL DEFAULT '',
+	uptime_sec      INTEGER NOT NULL DEFAULT 0,
+	disk_pct        REAL NOT NULL DEFAULT 0,
+	load_avg        TEXT NOT NULL DEFAULT '',
+	apt_pending     INTEGER NOT NULL DEFAULT 0,
+	last_seen       TEXT NOT NULL DEFAULT '',
+	status          TEXT NOT NULL DEFAULT 'unknown'
+);
+CREATE INDEX IF NOT EXISTS idx_dc_inventory_dc ON datacenter_inventory(datacenter);
+
+CREATE TABLE IF NOT EXISTS audit_log (
+	id          INTEGER PRIMARY KEY AUTOINCREMENT,
+	ts          TEXT NOT NULL,
+	actor       TEXT NOT NULL DEFAULT 'system',
+	action      TEXT NOT NULL,
+	target_type TEXT NOT NULL DEFAULT '',
+	target_name TEXT NOT NULL DEFAULT '',
+	params      TEXT NOT NULL DEFAULT '{}',
+	result      TEXT NOT NULL DEFAULT 'ok',
+	error       TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_audit_log_ts ON audit_log(ts);
+CREATE INDEX IF NOT EXISTS idx_audit_log_target ON audit_log(target_type, target_name);
+
+CREATE TABLE IF NOT EXISTS units (
+	id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+	name               TEXT NOT NULL UNIQUE,
+	chain_name         TEXT NOT NULL DEFAULT '',
+	chain_id           TEXT NOT NULL DEFAULT '',
+	network_type       TEXT NOT NULL DEFAULT 'mainnet',
+	node_type          TEXT NOT NULL DEFAULT 'node',
+	vm_name            TEXT NOT NULL DEFAULT '',
+	datacenter         TEXT NOT NULL DEFAULT '',
+	service_name       TEXT NOT NULL DEFAULT '',
+	binary_path        TEXT NOT NULL DEFAULT '',
+	cosmovisor_path    TEXT NOT NULL DEFAULT '',
+	cosmovisor_enabled INTEGER NOT NULL DEFAULT 0,
+	config_dir         TEXT NOT NULL DEFAULT '',
+	rpc_port           INTEGER NOT NULL DEFAULT 26657,
+	api_port           INTEGER NOT NULL DEFAULT 1317,
+	p2p_port           INTEGER NOT NULL DEFAULT 26656,
+	valoper            TEXT NOT NULL DEFAULT '',
+	state              TEXT NOT NULL DEFAULT 'unknown',
+	deployed_at        TEXT NOT NULL DEFAULT '',
+	notes              TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_units_vm ON units(vm_name);
+CREATE INDEX IF NOT EXISTS idx_units_chain ON units(chain_name);
+
+CREATE TABLE IF NOT EXISTS unit_status (
+	id             INTEGER PRIMARY KEY AUTOINCREMENT,
+	unit_name      TEXT NOT NULL,
+	polled_at      TEXT NOT NULL,
+	syncing        INTEGER NOT NULL DEFAULT 0,
+	block_height   INTEGER NOT NULL DEFAULT 0,
+	peers          INTEGER NOT NULL DEFAULT 0,
+	voting_power   INTEGER NOT NULL DEFAULT 0,
+	gov_pending    INTEGER NOT NULL DEFAULT 0,
+	service_active INTEGER NOT NULL DEFAULT 0,
+	error          TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_unit_status_unit_polled ON unit_status(unit_name, polled_at);
+
+CREATE TABLE IF NOT EXISTS patch_status (
+	id               INTEGER PRIMARY KEY AUTOINCREMENT,
+	target_name      TEXT NOT NULL,
+	target_type      TEXT NOT NULL DEFAULT 'vm',
+	checked_at       TEXT NOT NULL,
+	packages_pending INTEGER NOT NULL DEFAULT 0,
+	last_upgraded    TEXT NOT NULL DEFAULT '',
+	summary          TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_patch_status_target ON patch_status(target_name, target_type);
 `
 
 // Migrate executes the schema DDL against db, creating all tables and

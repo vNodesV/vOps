@@ -78,7 +78,7 @@ func pollVM(vm config.VM, cfg *config.Config) VMStatus {
 		PolledAt:     time.Now(),
 	}
 
-	client, err := fleetssh.Dial(vm.Host, vm.Port, vm.User, vm.KeyPath, vm.KnownHostsPath)
+	client, err := dialVM(vm, cfg)
 	if err != nil {
 		st.Online = false
 		st.Error = fmt.Sprintf("ssh: %v", err)
@@ -134,4 +134,24 @@ func resolvePublicIP(vm config.VM, cfg *config.Config) string {
 		}
 	}
 	return ""
+}
+
+// dialVM opens an SSH connection to vm, using a ProxyJump when vm.ProxyJumpParams
+// (or a Config-resolved jump host) is configured.
+func dialVM(vm config.VM, cfg *config.Config) (*fleetssh.Client, error) {
+	if jp := cfg.ResolveProxyJump(&vm); jp != nil {
+		jumpAddr := jp.LanIP
+		if jumpAddr == "" {
+			jumpAddr = jp.Name
+		}
+		jumpPort := jp.Port
+		if jumpPort == 0 {
+			jumpPort = 22
+		}
+		return fleetssh.DialViaProxy(
+			jumpAddr, jumpPort, jp.User, jp.SSHKeyPath, "",
+			vm.Host, vm.Port, vm.User, vm.KeyPath, vm.KnownHostsPath,
+		)
+	}
+	return fleetssh.Dial(vm.Host, vm.Port, vm.User, vm.KeyPath, vm.KnownHostsPath)
 }

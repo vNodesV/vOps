@@ -19,6 +19,25 @@ const scriptBase = "~/vProx/scripts"
 // — safe for use as path segments and bash positional arguments.
 var safeSegment = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
+// dialVM opens an SSH connection to vm using a ProxyJump when configured.
+func dialVM(vm config.VM) (*fleetssh.Client, error) {
+	if jp := vm.ProxyJumpParams; jp != nil {
+		jumpAddr := jp.LanIP
+		if jumpAddr == "" {
+			jumpAddr = jp.Name
+		}
+		jumpPort := jp.Port
+		if jumpPort == 0 {
+			jumpPort = 22
+		}
+		return fleetssh.DialViaProxy(
+			jumpAddr, jumpPort, jp.User, jp.SSHKeyPath, "",
+			vm.Host, vm.Port, vm.User, vm.KeyPath, vm.KnownHostsPath,
+		)
+	}
+	return fleetssh.Dial(vm.Host, vm.Port, vm.User, vm.KeyPath, vm.KnownHostsPath)
+}
+
 // shellQuote wraps s in single quotes for safe use in a bash command string.
 // Any single-quote characters inside s are properly escaped.
 func shellQuote(s string) string {
@@ -50,9 +69,9 @@ func (r *Runner) Deploy(vm config.VM, chain, component, script string, dryRun bo
 		return Result{Err: fmt.Errorf("runner: invalid script parameters (alphanumeric, hyphen, underscore only)")}
 	}
 
-	c, err := fleetssh.Dial(vm.Host, vm.Port, vm.User, vm.KeyPath, vm.KnownHostsPath)
+	c, err := dialVM(vm)
 	if err != nil {
-		return Result{Err: fmt.Errorf("runner: ssh dial: %w", err)}
+		return Result{Err: fmt.Errorf("runner: ssh Deploy dial: %w", err)}
 	}
 	defer c.Close()
 
@@ -84,9 +103,9 @@ func (r *Runner) Deploy(vm config.VM, chain, component, script string, dryRun bo
 
 // RunCmd executes an arbitrary command on vm (for diagnostics / one-offs).
 func (r *Runner) RunCmd(vm config.VM, cmd string) Result {
-	c, err := fleetssh.Dial(vm.Host, vm.Port, vm.User, vm.KeyPath, vm.KnownHostsPath)
+	c, err := dialVM(vm)
 	if err != nil {
-		return Result{Err: fmt.Errorf("runner: ssh dial: %w", err)}
+		return Result{Err: fmt.Errorf("runner: ssh RunCmd dial: %w", err)}
 	}
 	defer c.Close()
 

@@ -35,6 +35,9 @@ type Host struct {
 	SSHKeyPath string `toml:"ssh_key_path" json:"ssh_key_path,omitempty"`
 	// Port is the SSH port used to reach this hypervisor (default: 22).
 	Port int `toml:"port" json:"port,omitempty"`
+	// VRackIP is the host's IP on the OVH vRack private network, used for
+	// cross-datacenter management traffic (e.g. QC ↔ RBX).
+	VRackIP string `toml:"vrack_ip" json:"vrack_ip,omitempty"`
 
 	// VMUser and VMKeyPath are runtime-only defaults for VM SSH within this host.
 	// Populated from [vprox].user / [vprox].ssh_key_path during LoadFromInfraFiles.
@@ -79,6 +82,14 @@ type VM struct {
 
 	// Ping config — selects check-host.net probe node for datacenter latency column.
 	Ping VMPing `toml:"ping"`
+
+	// ProxyJumpHost names the [host] entry used as SSH ProxyJump to reach this VM.
+	// Required for LAN-only VMs (e.g. 10.0.0.x) that are not directly reachable
+	// from vOps.  When empty the VM is dialed directly.
+	ProxyJumpHost string `toml:"proxy_jump_host" json:"proxy_jump_host,omitempty"`
+	// ProxyJumpParams is runtime-only; populated from ProxyJumpHost resolution at
+	// load time.  Used by SSH callers without needing access to the full Config.
+	ProxyJumpParams *Host `toml:"-" json:"-"`
 }
 
 // Config is the top-level fleet configuration.
@@ -149,6 +160,19 @@ func (c *Config) FindVM(name string) *VM {
 		if c.VMs[i].Name == name {
 			return &c.VMs[i]
 		}
+	}
+	return nil
+}
+
+// ResolveProxyJump returns the Host to use as SSH ProxyJump for vm, or nil
+// when no jump host is configured.  Prefers the pre-resolved ProxyJumpParams
+// (populated at load time) and falls back to a live Config lookup.
+func (c *Config) ResolveProxyJump(vm *VM) *Host {
+	if vm.ProxyJumpParams != nil {
+		return vm.ProxyJumpParams
+	}
+	if vm.ProxyJumpHost != "" {
+		return c.FindHost(vm.ProxyJumpHost)
 	}
 	return nil
 }
@@ -542,6 +566,22 @@ func LoadFromInfraFiles(dir string) (*Config, error) {
 					f.VMs[i].KeyPath = f.Vprox.SSHKeyPath
 				} else if f.Host.SSHKeyPath != "" {
 					f.VMs[i].KeyPath = f.Host.SSHKeyPath
+				}
+			}
+			// Resolve proxy_jump_host → ProxyJumpParams for SSH callers.
+			// Intra-file resolution first (same file's [host]), then cross-file lookup.
+			if f.VMs[i].ProxyJumpHost != "" {
+				if f.Host.Name != "" && f.VMs[i].ProxyJumpHost == f.Host.Name {
+					h := f.Host
+					f.VMs[i].ProxyJumpParams = &h
+				} else {
+					for j := range hosts {
+						if hosts[j].Name == f.VMs[i].ProxyJumpHost {
+							h := hosts[j]
+							f.VMs[i].ProxyJumpParams = &h
+							break
+						}
+					}
 				}
 			}
 			vms = append(vms, f.VMs[i])

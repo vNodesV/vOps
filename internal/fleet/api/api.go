@@ -212,7 +212,9 @@ func (h *Handlers) HandleHypervisorScan(w http.ResponseWriter, r *http.Request) 
 					}
 
 					if dvm.LanIP != "" && vmUser != "" && vmKey != "" {
-						vmClient, err := fleetssh.Dial(dvm.LanIP, vmPort, vmUser, vmKey, "")
+						// Tunnel through the already-open hypervisor connection (hc)
+						// — equivalent to ssh -J hypervisor user@vm, no separate dial.
+						vmClient, err := hc.DialThrough(dvm.LanIP, vmPort, vmUser, vmKey, "")
 						if err == nil {
 							defer vmClient.Close()
 							// One compound command: load average + memory %.
@@ -562,7 +564,17 @@ func (h *Handlers) HandleVMUpgrade(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Connect.
-	client, err := fleetssh.Dial(vm.Host, vm.Port, vm.User, vm.KeyPath, vm.KnownHostsPath)
+	var err error
+	var client *fleetssh.Client
+	if jp := h.svc.Config().ResolveProxyJump(vm); jp != nil {
+		jumpAddr := jp.LanIP
+		if jumpAddr == "" { jumpAddr = jp.Name }
+		jumpPort := jp.Port
+		if jumpPort == 0 { jumpPort = 22 }
+		client, err = fleetssh.DialViaProxy(jumpAddr, jumpPort, jp.User, jp.SSHKeyPath, "", vm.Host, vm.Port, vm.User, vm.KeyPath, vm.KnownHostsPath)
+	} else {
+		client, err = fleetssh.Dial(vm.Host, vm.Port, vm.User, vm.KeyPath, vm.KnownHostsPath)
+	}
 	if err != nil {
 		sendEvent("error", fmt.Sprintf("ssh connect failed: %v", err))
 		return
