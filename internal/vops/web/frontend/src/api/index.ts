@@ -169,3 +169,27 @@ export const deleteVMSnapshot = (host: string, domain: string, snap: string) =>
     `/api/v1/vm/hosts/${encodeURIComponent(host)}/domains/${encodeURIComponent(domain)}/snapshots/${encodeURIComponent(snap)}/delete`,
     {},
   );
+
+// ── Debug console ────────────────────────────────────────────────────────────
+
+export interface DebugEvent {
+  id: number;
+  time: string;
+  source: string;
+  host: string;
+  command: string;
+  output?: string;
+  error?: string;
+  duration_ms: number;
+}
+
+export const getDebugMode = () =>
+  apiFetch<{ enabled: boolean }>('/api/v1/debug/mode');
+
+export const setDebugMode = (enabled: boolean, clear = false) =>
+  apiPost<{ enabled: boolean }>('/api/v1/debug/mode', { enabled, clear });
+
+export const getDebugEvents = (sinceId = 0) =>
+  apiFetch<{ enabled: boolean; events: DebugEvent[] }>(
+    `/api/v1/debug/events?since_id=${sinceId}`,
+  );

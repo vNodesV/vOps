@@ -53,6 +53,7 @@ type Server struct {
 	fleet    *api.Handlers // nil when fleet module is not configured
 	fleetSvc *fleet.Service
 	vmMgr    *vm.Handlers  // nil when no hypervisor hosts are configured
+	debug    *DebugRing    // SSH command debug recorder
 
 	// Session state for dashboard login.
 	sessions   map[string]time.Time // token → expiry
@@ -99,9 +100,11 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		sessions:      make(map[string]time.Time),
 		sessionKey:    sessionKey,
 		loginAttempts: make(map[string]*loginAttempt),
+		debug:         &DebugRing{},
 	}
 	if fleetSvc != nil {
 		s.fleet = api.New(fleetSvc, d.DB)
+		s.fleet.SetDebug(s.debug)
 		s.fleetSvc = fleetSvc
 		// Always create the VM manager so routes are available even when no
 		// hypervisor hosts are configured yet; it returns empty lists until
@@ -125,6 +128,11 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 
 	// Public metadata — no session required (used by login page before auth).
 	mux.HandleFunc("GET /api/v1/version", s.handleAPIVersion)
+
+	// Debug console routes — session-protected.
+	mux.Handle("GET /api/v1/debug/mode", s.requireSession(http.HandlerFunc(s.handleAPIDebugMode)))
+	mux.Handle("POST /api/v1/debug/mode", s.requireSession(http.HandlerFunc(s.handleAPIDebugMode)))
+	mux.Handle("GET /api/v1/debug/events", s.requireSession(http.HandlerFunc(s.handleAPIDebugEvents)))
 
 	// Static assets — exempt from session check.
 	// Serve only the "static/" subtree to prevent path traversal to dist/.

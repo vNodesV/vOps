@@ -23,15 +23,41 @@ import (
 	opsdb "github.com/vNodesV/vProx/internal/vops/db"
 )
 
+// DebugEmitter is satisfied by *web.DebugRing; it allows the fleet API package
+// to emit SSH command traces without importing the web package.
+type DebugEmitter interface {
+	IsEnabled() bool
+	Emit(source, host, command, output, errStr string, durationMs int64)
+}
+
 // Handlers holds a reference to the fleet Service and an optional metrics DB.
 type Handlers struct {
-	svc *fleet.Service
-	db  *sql.DB // may be nil when metrics storage is not wired
+	svc   *fleet.Service
+	db    *sql.DB // may be nil when metrics storage is not wired
+	debug DebugEmitter
 }
 
 // New returns a Handlers backed by svc. db is optional; when non-nil, VM
 // metrics are stored on each status poll and history endpoints are enabled.
 func New(svc *fleet.Service, db *sql.DB) *Handlers { return &Handlers{svc: svc, db: db} }
+
+// SetDebug attaches a DebugEmitter to record SSH commands when debug mode is on.
+func (h *Handlers) SetDebug(d DebugEmitter) { h.debug = d }
+
+// debugRun executes cmd on client, emitting a debug event if debug mode is on.
+// It is a transparent wrapper around client.Run that adds timing + logging.
+func (h *Handlers) debugRun(client *fleetssh.Client, source, host, cmd string) (string, error) {
+	start := time.Now()
+	out, err := client.Run(cmd)
+	if h.debug != nil && h.debug.IsEnabled() {
+		errStr := ""
+		if err != nil {
+			errStr = err.Error()
+		}
+		h.debug.Emit(source, host, cmd, out, errStr, time.Since(start).Milliseconds())
+	}
+	return out, err
+}
 
 // ── GET /api/v1/fleet/vms/status ──────────────────────────────────────────────
 
@@ -112,6 +138,9 @@ func (h *Handlers) HandleHypervisorScan(w http.ResponseWriter, r *http.Request) 
 		}
 		hc, err := fleetssh.Dial(dialAddr, port, user, sshKey, "")
 			if err != nil {
+				if h.debug != nil && h.debug.IsEnabled() {
+					h.debug.Emit("hypervisor-scan", dialAddr, "ssh dial", "", err.Error(), 0)
+				}
 				mu.Lock()
 				discovered = append(discovered, VirshVM{
 					Name:       host.Name,
@@ -124,7 +153,7 @@ func (h *Handlers) HandleHypervisorScan(w http.ResponseWriter, r *http.Request) 
 			}
 			defer hc.Close()
 
-			listOut, err := hc.Run("virsh list --all 2>&1")
+			listOut, err := h.debugRun(hc, "hypervisor-scan", dialAddr, "virsh list --all 2>&1")
 			if err != nil {
 				mu.Lock()
 				discovered = append(discovered, VirshVM{
@@ -176,7 +205,7 @@ func (h *Handlers) HandleHypervisorScan(w http.ResponseWriter, r *http.Request) 
 					}
 
 					// Get VM IP from hypervisor via virsh domifaddr.
-					ifOut, err := hc.Run("virsh domifaddr " + rv.name + " 2>&1")
+					ifOut, err := h.debugRun(hc, "hypervisor-scan", dialAddr, "virsh domifaddr "+rv.name+" 2>&1")
 					if err == nil {
 						for _, line := range strings.Split(ifOut, "\n") {
 							if !strings.Contains(line, "ipv4") {
@@ -218,7 +247,7 @@ func (h *Handlers) HandleHypervisorScan(w http.ResponseWriter, r *http.Request) 
 						if err == nil {
 							defer vmClient.Close()
 							// One compound command: load average + memory %.
-							out, err := vmClient.Run(
+							out, err := h.debugRun(vmClient, "vm-probe", dvm.LanIP,
 								`cat /proc/loadavg && free -m | awk '/Mem:/{printf "%.1f", $3/$2*100}'`,
 							)
 							if err == nil {

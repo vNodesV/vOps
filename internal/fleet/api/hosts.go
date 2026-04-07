@@ -81,6 +81,9 @@ func (h *Handlers) HandleHostScan(w http.ResponseWriter, r *http.Request) {
 			client, err := fleetssh.Dial(dialAddr, port, host.User, host.SSHKeyPath, "")
 			if err != nil {
 				res.Error = fmt.Sprintf("SSH: %v", err)
+				if h.debug != nil && h.debug.IsEnabled() {
+					h.debug.Emit("host-scan", dialAddr, "ssh dial", "", err.Error(), 0)
+				}
 				mu.Lock()
 				results = append(results, res)
 				mu.Unlock()
@@ -99,7 +102,7 @@ func (h *Handlers) HandleHostScan(w http.ResponseWriter, r *http.Request) {
 			}
 			defer client.Close()
 
-			out, err := client.Run(hostHealthCmd)
+			out, err := h.debugRun(client, "host-scan", dialAddr, hostHealthCmd)
 			if err != nil {
 				res.Error = fmt.Sprintf("health cmd: %v", err)
 				res.Status = "error"

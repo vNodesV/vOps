@@ -1948,3 +1948,91 @@ Ship IP Accounts UX polish, Dashboard Servers panel, Fleet live metrics section,
 1. `ufw-service-user`: `useradd -r -s /usr/sbin/nologin vops`; `sudoers.d/vops` NOPASSWD for 3 ufw commands; `User=vops` in `vops.service.template`
 2. VM Manager Tier 1: `go get github.com/digitalocean/go-libvirt`; `internal/vops/vm/` package; SSH tunnel to `10.0.0.1:/var/run/libvirt/libvirt-sock`; list/start/stop/pause/resume/delete/snapshots
 3. Fleet sparklines: SQLite time-series table `vm_metrics_history`; Chart.js mini-graphs per VM
+
+---
+
+## Session: 2026-04-06 19:30Z — vLog_v1.4.5 Settings bugs + virsh hypervisor scan
+
+### Branch
+`vLog_v1.4.5` — HEAD at `a1ebe28`
+
+### Goal
+Fix 5 live production bugs reported from deployed vOps instance + implement virsh-based VM discovery.
+
+### Completed
+
+**Commit `2cb987b` — fix(settings): fleet scan 405 + SSH pub key lookup**
+
+Bug 1 — Fleet scan 405 Method Not Allowed:
+- `POST /api/v1/fleet/vms/scan` was inside `if s.fleet != nil` guard
+- When no VMs loaded, fleet = nil → route never registered → Go 1.22 mux catch-all GET / returns 405
+- Fix: register route unconditionally; return 503 + human-readable message when fleet nil
+- Files: `internal/vops/web/server.go`
+
+Bug 2 — SSH pub key not found despite key existing:
+- `handleAPIGetSSHPubKey` only searched `~/.vprox/secret/vops_ssh_key.pub`
+- User had key at `/home/vnodesv/.vprox/secret/vops_ssh_key` (private only, no .pub sibling)
+- Fix: resolve in priority order:
+  1. `~/.vprox/secret/vops_ssh_key.pub` (standard)
+  2. `cfg.VOps.Push.Defaults.KeyPath + ".pub"` (fleet-configured key)
+  3. Derive public key in-memory from private key (`ssh.ParsePrivateKey`) — handles keys with no .pub file
+- Files: `internal/vops/web/settings_handlers.go`
+
+**Commit `a1ebe28` — fix(settings): SSH key field names, webserver VM filter, virsh hypervisor scan**
+
+Bug 3 — "Key written to: undefined":
+- Backend returned `pub_key`/`path` but frontend TypeScript expected `public_key`/`private_key_path`
+- Fixed all 3 response sites in `handleAPIGetSSHPubKey` + `handleAPIGenSSHKey`
+- Files: `internal/vops/web/settings_handlers.go`
+
+Bug 4 — www-qc (webserver VM) shown in Chain Status:
+- `pollAll()` was polling ALL VMs including type=webserver for chain RPC/REST endpoints
+- Fix: `strings.EqualFold(vm.Type, "webserver")` early continue before chain polling
+- Webserver VMs still appear in VM list/Manager; no chain status entry created
+- Files: `internal/fleet/push.go` (added `"strings"` import)
+
+Bug 5 — Scan showed "completed hh:mm:ss" but discovered nothing:
+- `POST /api/v1/fleet/vms/scan` called `HandleVMStatus` which only polls pre-configured VMs
+- User needed virsh-based discovery: SSH → hypervisor → `virsh list --all` → per-VM IP → SSH metrics
+- New handler `HandleHypervisorScan` in `internal/fleet/api/api.go`:
+  1. SSH to each `cfg.Hosts[].LanIP` using `host.SSHKeyPath`/`host.User`
+  2. `virsh list --all 2>&1` → parse domain names + states (skip 2-line header, handle separator)
+  3. For running VMs: `virsh domifaddr <name>` → extract ipv4 LAN IP (strip /24 CIDR)
+  4. Resolve VM SSH credentials: prefer `cfg.FindVM(name)` User/KeyPath, fall back to host defaults
+  5. SSH to each VM: `cat /proc/loadavg && free -m | awk '/Mem:/{printf "%.1f", ...}'`
+  6. Falls back to `HandleVMStatus` when no hypervisor hosts configured
+  7. Returns `{discovered:[VirshVM], vms:[VMStatus], hosts:[], scanned_at:"RFC3339"}`
+- `server.go`: scan route now calls `HandleHypervisorScan` instead of `HandleVMStatus`
+- `api/types.ts`: added `VirshVM` interface
+- `Settings.tsx`: 
+  - Added `VirshVM` to imports from types
+  - `FleetScanPanel` now reads `discovered` from scan response
+  - Added "Hypervisor Discovery" nested `SectionCard` table: name, datacenter, LAN IP, virsh state, mem%, load avg, status badge
+  - Updated empty-state copy to reference hypervisor host config
+- Files: `internal/fleet/api/api.go` (added `"sync"` import + `VirshVM` type + `HandleHypervisorScan`), `internal/vops/web/server.go`, `internal/vops/web/frontend/src/api/types.ts`, `internal/vops/web/frontend/src/pages/Settings.tsx`
+
+**Strategic decision: master/slave vAgent architecture scoped for v1.5.0**
+- User proposed deploying agent process per VM to replace per-VM SSH polling
+- Clean architecture: `vops agent` sub-command; HTTP metrics endpoint per VM; host-level agent for libvirt
+- Decision: NOT for v1.4.5; create technical spike for v1.5.0
+
+### Verification
+- `go build ./... ` ✅
+- `go vet ./...` ✅
+- `npm run build` ✅ (648 modules, clean)
+
+### Branch State
+- HEAD: `a1ebe28`
+- All 5 bugs fixed and pushed to `origin/vLog_v1.4.5`
+- No pending todos in SQL tracker (35/35 done)
+
+### Next Steps for v1.4.5 Close
+1. Integration test on deployed instance: verify virsh scan reaches hypervisor, discovers VMs, returns metrics
+2. Verify SSH pub key display now shows the key (derived from private if no .pub file)
+3. Verify www-qc no longer appears in Chain Status table
+4. Update CHANGELOG.md for v1.4.5 with bug fix entries
+5. Cut v1.4.5 release tag once verified on deployed instance
+
+### v1.5.0 Technical Spikes Queued
+- `vops-agent`: `vops agent` sub-command; per-VM HTTP metrics push; host libvirt proxy
+- `libvirt-ssh-tunnel`: go-libvirt SSH tunnel to `/var/run/libvirt/libvirt-sock` on hypervisor

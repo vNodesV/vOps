@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react';
+import { useState, useEffect, type CSSProperties } from 'react';
 import {
   BrowserRouter,
   Routes,
@@ -17,7 +17,8 @@ import SettingsPage from './pages/Settings';
 import FleetPage from './pages/Fleet';
 import ChainsPage from './pages/Chains';
 import VMsPage from './pages/VMs';
-import { logout } from './api';
+import DebugPanel from './components/DebugPanel';
+import { logout, getDebugMode, setDebugMode } from './api';
 import { BASE } from './api/client';
 
 /* ── Query client ─────────────────────────────────────────────── */
@@ -60,6 +61,23 @@ function SideLink({
 function Shell({ children }: { children: React.ReactNode }) {
   const loc = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [debugEnabled, setDebugEnabled] = useState(false);
+
+  // Sync debug state with server on mount
+  useEffect(() => {
+    if (loc.pathname === '/login') return;
+    getDebugMode().then((d) => setDebugEnabled(d.enabled)).catch(() => {});
+  }, [loc.pathname]);
+
+  const toggleDebug = async () => {
+    const next = !debugEnabled;
+    try {
+      await setDebugMode(next);
+      setDebugEnabled(next);
+    } catch {
+      // ignore
+    }
+  };
 
   if (loc.pathname === '/login') return <>{children}</>;
 
@@ -216,18 +234,51 @@ function Shell({ children }: { children: React.ReactNode }) {
             </svg>
             Logout
           </button>
+
+          {/* Debug mode toggle */}
+          <button
+            onClick={toggleDebug}
+            title={debugEnabled ? 'Disable debug console' : 'Enable debug console'}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              padding: '0.4rem 0.75rem',
+              borderRadius: 'var(--vn-radius)',
+              border: debugEnabled ? '1px solid var(--vn-accent)' : '1px solid transparent',
+              background: debugEnabled ? 'rgba(var(--vn-accent-rgb, 230,73,128), 0.1)' : 'transparent',
+              color: debugEnabled ? 'var(--vn-accent)' : 'var(--vn-text-muted)',
+              fontSize: '0.8rem',
+              cursor: 'pointer',
+              width: '100%',
+              textAlign: 'left',
+            }}
+          >
+            🐛 Debug {debugEnabled ? 'ON' : 'OFF'}
+          </button>
         </nav>
 
         {/* Main content */}
         <main
           id="main-content"
           className="app-main"
-          style={{ flex: 1, overflow: 'auto', padding: '1.5rem', minWidth: 0 }}
+          style={{
+            flex: 1,
+            overflow: 'auto',
+            padding: '1.5rem',
+            minWidth: 0,
+            paddingBottom: debugEnabled ? '270px' : '1.5rem',
+          }}
           tabIndex={-1}
         >
           {children}
         </main>
       </div>
+
+      {/* Global debug panel — floats at bottom when enabled */}
+      {debugEnabled && (
+        <DebugPanel onDisable={() => setDebugEnabled(false)} />
+      )}
     </>
   );
 }
