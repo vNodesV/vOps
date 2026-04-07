@@ -403,7 +403,9 @@ func cmdStart(f flags) int {
 		runtimeCfg, err := fleetcfg.LoadRuntimeConfig(home, defs, cfg.VOps.Push.ChainsDir, cfg.VOps.Push.InfraDir)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "vops: fleet config warning: %v\n", err)
-		} else if len(runtimeCfg.VMs) > 0 {
+		} else if len(runtimeCfg.VMs) > 0 || len(runtimeCfg.Hosts) > 0 {
+			// Initialize fleet when at least one VM or hypervisor host is configured.
+			// Hosts alone are sufficient for virsh-based VM discovery via FleetScan.
 			svc, err := fleet.NewEmpty(cfg.VOps.Push.DBPath)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "vops: fleet db error: %v\n", err)

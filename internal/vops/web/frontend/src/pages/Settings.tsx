@@ -450,14 +450,13 @@ function FleetScanPanel() {
         style={{ backgroundColor: 'var(--vn-surface-2)', border: '1px solid var(--vn-border)' }}
       >
         <div className="font-semibold" style={{ color: 'var(--vn-text)' }}>
-          Before scanning, confirm all pre-requisites:
+          Scan requires only a <strong>hypervisor host</strong> — no VMs needed in advance.
         </div>
         <ul className="space-y-1 list-none" style={{ color: 'var(--vn-text-muted)' }}>
-          <li>1. <strong>SSH key path</strong> — set in <em>Infrastructure → SSH Defaults → key_path</em>. The key must exist on this host and be readable by the vOps process.</li>
-          <li>2. <strong>SSH user &amp; port</strong> — configured in <em>Infrastructure → SSH Defaults</em>. The user must have passwordless sudo on each VM (<code>sudoers NOPASSWD</code>).</li>
-          <li>3. <strong>VM inventory</strong> — each VM must be listed in <code>config/infra/&lt;datacenter&gt;.toml</code> with a valid <code>lan_ip</code> or <code>public_ip</code>.</li>
-          <li>4. <strong>Network reachability</strong> — the vOps host must be able to reach each VM on the configured SSH port (default 22). Check firewall rules if a VM is offline after scanning.</li>
-          <li>5. <strong>Known hosts</strong> — if <code>known_hosts_path</code> is set, each VM's host key must be pre-accepted. Run <code>ssh-keyscan &lt;vm-ip&gt; &gt;&gt; ~/.ssh/known_hosts</code> on first connection.</li>
+          <li>1. <strong>Hypervisor host</strong> — add a <code>[[host]]</code> entry in <code>config/infra/&lt;datacenter&gt;.toml</code> with <code>lan_ip</code>, <code>user</code>, and <code>ssh_key_path</code>. VMs are discovered automatically from that host via <code>virsh list --all</code>.</li>
+          <li>2. <strong>SSH key</strong> — the key at <code>ssh_key_path</code> must exist on this vOps host and be readable by the vOps process (mode 0600).</li>
+          <li>3. <strong>VM SSH access</strong> — for live metrics (CPU/mem/load), vOps will also SSH into each running VM. The same or per-VM key_path is used. Skip this step if only discovery (virsh) is needed.</li>
+          <li>4. <strong>Restart vOps</strong> after saving the host config — the fleet service initializes on startup from <code>config/infra/*.toml</code>.</li>
         </ul>
       </div>
       <div className="flex items-center justify-between flex-wrap gap-3">

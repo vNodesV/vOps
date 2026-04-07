@@ -189,7 +189,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	mux.Handle("POST /api/v1/fleet/vms/scan", s.requireSession(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.fleet == nil {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{
-				"error": "Fleet not configured — add at least one VM in Settings → Infrastructure and save.",
+				"error": "Fleet not configured — add a [[host]] entry in config/infra/<datacenter>.toml and restart vOps.",
 			})
 			return
 		}
