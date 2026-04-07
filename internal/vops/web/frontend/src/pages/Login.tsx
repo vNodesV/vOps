@@ -1,12 +1,26 @@
-import { useState, useCallback, type FormEvent } from 'react';
+import { useState, useEffect, useCallback, type FormEvent } from 'react';
 import { BASE } from '../api/client';
 import Spinner from '../components/Spinner';
+
+interface BuildInfo {
+  version: string;
+  commit: string;
+  build_date: string;
+}
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [buildInfo, setBuildInfo] = useState<BuildInfo | null>(null);
+
+  useEffect(() => {
+    fetch(BASE + '/api/v1/version')
+      .then((r) => r.ok ? r.json() : null)
+      .then((data: BuildInfo | null) => data && setBuildInfo(data))
+      .catch(() => {});
+  }, []);
 
   const handleSubmit = useCallback(
     async (e: FormEvent) => {
@@ -57,7 +71,7 @@ export default function LoginPage() {
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center p-4"
+      className="relative min-h-screen flex items-center justify-center p-4"
       style={{
         background:
           'linear-gradient(135deg, var(--vn-primary) 0%, var(--vn-accent) 100%)',
@@ -180,6 +194,16 @@ export default function LoginPage() {
           </button>
         </form>
       </div>
+
+      {/* Version badge */}
+      {buildInfo && (
+        <p
+          className="absolute bottom-4 text-xs"
+          style={{ color: 'rgba(255,255,255,0.45)' }}
+        >
+          v{buildInfo.version} · {buildInfo.commit} · {buildInfo.build_date}
+        </p>
+      )}
     </div>
   );
 }

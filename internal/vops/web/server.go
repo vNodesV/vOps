@@ -7,13 +7,14 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
-	"bytes"
 	"embed"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -45,7 +46,9 @@ type Server struct {
 	cfg      config.Config
 	home     string
 	cfgPath  string // resolved path to vops.toml (may be legacy or new layout)
-	version  string // binary version string, set at startup
+	version   string // binary version string, set at startup
+	commit    string // git commit SHA (short), set at startup
+	buildDate string // build date (YYYY-MM-DD), set at startup
 	httpSrv  *http.Server
 	fleet    *api.Handlers // nil when fleet module is not configured
 	fleetSvc *fleet.Service
@@ -69,7 +72,7 @@ type loginAttempt struct {
 
 // New creates a Server, registers all routes, and returns a server ready to Start().
 // fleetSvc is optional — pass nil to disable the fleet module routes.
-func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg config.Config, fleetSvc *fleet.Service, cfgPath, appVersion string) (*Server, error) {
+func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg config.Config, fleetSvc *fleet.Service, cfgPath, appVersion, appCommit, appBuildDate string) (*Server, error) {
 	// Build a sub-filesystem over the embedded dist/ directory so the SPA
 	// handler can serve Vite build artifacts directly.
 	distFS, err := fs.Sub(webFS, "dist")
@@ -91,6 +94,8 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		home:          config.FindHome(),
 		cfgPath:       cfgPath,
 		version:       appVersion,
+		commit:        appCommit,
+		buildDate:     appBuildDate,
 		sessions:      make(map[string]time.Time),
 		sessionKey:    sessionKey,
 		loginAttempts: make(map[string]*loginAttempt),
@@ -117,6 +122,9 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	// Login/logout routes — exempt from session check.
 	mux.HandleFunc("POST /login", s.handleLoginSubmit)
 	mux.HandleFunc("POST /logout", s.handleLogout)
+
+	// Public metadata — no session required (used by login page before auth).
+	mux.HandleFunc("GET /api/v1/version", s.handleAPIVersion)
 
 	// Static assets — exempt from session check.
 	// Serve only the "static/" subtree to prevent path traversal to dist/.
@@ -464,6 +472,17 @@ func securityHeaders(next http.Handler) http.Handler {
 // to complete or the context to expire.
 func (s *Server) Shutdown(ctx context.Context) error {
 	return s.httpSrv.Shutdown(ctx)
+}
+
+// handleAPIVersion returns build metadata — public endpoint, no session required.
+// Used by the login page to display the current version and build info.
+func (s *Server) handleAPIVersion(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"version":    s.version,
+		"commit":     s.commit,
+		"build_date": s.buildDate,
+	})
 }
 
 // buildSPAHandler returns an http.HandlerFunc that serves the React SPA.

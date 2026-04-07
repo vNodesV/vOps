@@ -428,7 +428,7 @@ func cmdStart(f flags) int {
 		}
 	}
 
-	server, err := web.New(database, enricher, ingester, cfg, fleetSvc, resolvedCfgPath, version)
+	server, err := web.New(database, enricher, ingester, cfg, fleetSvc, resolvedCfgPath, version, commit, buildDate)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "vops: web server error: %v\n", err)
 		return 1
