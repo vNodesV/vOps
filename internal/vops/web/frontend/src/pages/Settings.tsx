@@ -745,12 +745,19 @@ interface InfraHostFields {
   public_ip: string;
   user: string;
   ssh_key_path: string;
+  port: string;
+}
+
+interface InfraVproxFields {
+  user: string;
+  ssh_key_path: string;
 }
 
 interface InfraEntry {
   file: string;
   datacenter: string;
   host: Partial<InfraHostFields>;
+  vprox: Partial<InfraVproxFields>;
   vms: Array<Record<string, unknown>>;
 }
 
@@ -761,7 +768,11 @@ const emptyVM = (): InfraVM => ({
 });
 
 const emptyHost = (): InfraHostFields => ({
-  name: '', lan_ip: '', public_ip: '', user: '', ssh_key_path: '',
+  name: '', lan_ip: '', public_ip: '', user: '', ssh_key_path: '', port: '22',
+});
+
+const emptyVprox = (): InfraVproxFields => ({
+  user: '', ssh_key_path: '',
 });
 
 const VM_TYPE_OPTIONS = ['validator', 'sp', 'rpc', 'relayer', 'node', 'webserver', 'bastion', 'other'];
@@ -797,6 +808,12 @@ function DatacenterCard({ entry, onSaved }: { entry: InfraEntry; onSaved: () => 
     public_ip:    String(entry.host?.public_ip    ?? ''),
     user:         String(entry.host?.user         ?? ''),
     ssh_key_path: String(entry.host?.ssh_key_path ?? ''),
+    port:         String(entry.host?.port         ?? '22'),
+  }));
+
+  const [vprox, setVprox] = useState<InfraVproxFields>(() => ({
+    user:         String(entry.vprox?.user         ?? ''),
+    ssh_key_path: String(entry.vprox?.ssh_key_path ?? ''),
   }));
 
   const [vms, setVMs] = useState<InfraVM[]>(() =>
@@ -825,6 +842,9 @@ function DatacenterCard({ entry, onSaved }: { entry: InfraEntry; onSaved: () => 
       host_public_ip:   host.public_ip,
       host_user:        host.user,
       host_ssh_key_path:host.ssh_key_path,
+      host_port:        host.port ? Number(host.port) : 22,
+      vprox_user:       vprox.user,
+      vprox_ssh_key_path:vprox.ssh_key_path,
       vms_json:         JSON.stringify(vms.map((v) => ({
         ...v,
         port: v.port ? Number(v.port) : 22,
@@ -835,6 +855,9 @@ function DatacenterCard({ entry, onSaved }: { entry: InfraEntry; onSaved: () => 
 
   const setHostField = (k: keyof InfraHostFields) => (v: string) =>
     setHost((h) => ({ ...h, [k]: v }));
+
+  const setVproxField = (k: keyof InfraVproxFields) => (v: string) =>
+    setVprox((p) => ({ ...p, [k]: v }));
 
   const setVMField = (i: number, k: keyof InfraVM) => (v: string) =>
     setVMs((rows) => rows.map((r, idx) => idx === i ? { ...r, [k]: v } : r));
@@ -869,8 +892,21 @@ function DatacenterCard({ entry, onSaved }: { entry: InfraEntry; onSaved: () => 
           <LabeledInput label="Hostname / FQDN" value={host.name} onChange={setHostField('name')} placeholder="qc.vnodesv.net" />
           <LabeledInput label="LAN IP" value={host.lan_ip} onChange={setHostField('lan_ip')} placeholder="10.0.0.1" />
           <LabeledInput label="Public IP" value={host.public_ip} onChange={setHostField('public_ip')} placeholder="203.0.113.10" />
-          <LabeledInput label="SSH User" value={host.user} onChange={setHostField('user')} placeholder="ubuntu" />
-          <LabeledInput label="SSH Key Path" value={host.ssh_key_path} onChange={setHostField('ssh_key_path')} placeholder="/home/ubuntu/.vprox/secret/fleet_key" wide />
+          <LabeledInput label="SSH Port" value={host.port} onChange={setHostField('port')} placeholder="22" />
+          <LabeledInput label="SSH User (hypervisor only)" value={host.user} onChange={setHostField('user')} placeholder="ubuntu" />
+          <LabeledInput label="SSH Key Path (hypervisor only)" value={host.ssh_key_path} onChange={setHostField('ssh_key_path')} placeholder="/home/ubuntu/.ssh/id_rsa" />
+        </div>
+      </div>
+
+      {/* vProx section */}
+      <div>
+        <p className="text-xs font-medium mb-2" style={{ color: 'var(--vn-text-muted)' }}>
+          vProx → VM Credentials
+          <span className="ml-1 font-normal">— Default SSH user and key used to connect to VMs (separate from hypervisor).</span>
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          <LabeledInput label="VM SSH User" value={vprox.user} onChange={setVproxField('user')} placeholder="vnodesv" />
+          <LabeledInput label="VM SSH Key Path" value={vprox.ssh_key_path} onChange={setVproxField('ssh_key_path')} placeholder="/home/vnodesv/.vprox/secret/vops_ssh_key" wide />
         </div>
       </div>
 
@@ -986,27 +1022,35 @@ function NewDatacenterForm({ onSaved }: { onSaved: () => void }) {
   const [open, setOpen] = useState(false);
   const [dc, setDC] = useState('');
   const [host, setHost] = useState<InfraHostFields>(emptyHost());
+  const [vprox, setVprox] = useState<InfraVproxFields>(emptyVprox());
 
   const saveMut = useMutation({
     mutationFn: () => saveConfig('infra', {
-      datacenter:       dc.trim().toLowerCase(),
-      host_name:        host.name,
-      host_lan_ip:      host.lan_ip,
-      host_public_ip:   host.public_ip,
-      host_user:        host.user,
-      host_ssh_key_path:host.ssh_key_path,
-      vms_json:         '[]',
+      datacenter:        dc.trim().toLowerCase(),
+      host_name:         host.name,
+      host_lan_ip:       host.lan_ip,
+      host_public_ip:    host.public_ip,
+      host_user:         host.user,
+      host_ssh_key_path: host.ssh_key_path,
+      host_port:         host.port ? Number(host.port) : 22,
+      vprox_user:        vprox.user,
+      vprox_ssh_key_path:vprox.ssh_key_path,
+      vms_json:          '[]',
     }),
     onSuccess: () => {
       setOpen(false);
       setDC('');
       setHost(emptyHost());
+      setVprox(emptyVprox());
       onSaved();
     },
   });
 
   const setHostField = (k: keyof InfraHostFields) => (v: string) =>
     setHost((h) => ({ ...h, [k]: v }));
+
+  const setVproxField = (k: keyof InfraVproxFields) => (v: string) =>
+    setVprox((p) => ({ ...p, [k]: v }));
 
   if (!open) {
     return (
@@ -1036,12 +1080,18 @@ function NewDatacenterForm({ onSaved }: { onSaved: () => void }) {
         <LabeledInput label="Hostname / FQDN" value={host.name} onChange={setHostField('name')} placeholder="qc.vnodesv.net" />
         <LabeledInput label="LAN IP" value={host.lan_ip} onChange={setHostField('lan_ip')} placeholder="10.0.0.1" />
         <LabeledInput label="Public IP" value={host.public_ip} onChange={setHostField('public_ip')} placeholder="203.0.113.10" />
-        <LabeledInput label="SSH User" value={host.user} onChange={setHostField('user')} placeholder="ubuntu" />
-        <LabeledInput label="SSH Key Path" value={host.ssh_key_path} onChange={setHostField('ssh_key_path')} placeholder="/home/ubuntu/.vprox/secret/fleet_key" wide />
+        <LabeledInput label="SSH Port" value={host.port} onChange={setHostField('port')} placeholder="22" />
+        <LabeledInput label="SSH User (hypervisor only)" value={host.user} onChange={setHostField('user')} placeholder="ubuntu" />
+        <LabeledInput label="SSH Key Path (hypervisor only)" value={host.ssh_key_path} onChange={setHostField('ssh_key_path')} placeholder="/home/ubuntu/.ssh/id_rsa" />
+      </div>
+      <p className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>vProx → VM Credentials (default SSH creds for VM connections)</p>
+      <div className="grid grid-cols-2 gap-2">
+        <LabeledInput label="VM SSH User" value={vprox.user} onChange={setVproxField('user')} placeholder="vnodesv" />
+        <LabeledInput label="VM SSH Key Path" value={vprox.ssh_key_path} onChange={setVproxField('ssh_key_path')} placeholder="/home/vnodesv/.vprox/secret/vops_ssh_key" wide />
       </div>
       <SaveBar
         onSave={() => saveMut.mutate()}
-        onCancel={() => { setOpen(false); setDC(''); setHost(emptyHost()); }}
+        onCancel={() => { setOpen(false); setDC(''); setHost(emptyHost()); setVprox(emptyVprox()); }}
         isPending={saveMut.isPending}
         isSuccess={saveMut.isSuccess}
         isError={saveMut.isError}

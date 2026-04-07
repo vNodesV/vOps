@@ -106,7 +106,11 @@ func (h *Handlers) HandleHypervisorScan(w http.ResponseWriter, r *http.Request) 
 				dialAddr = host.Name
 			}
 
-			hc, err := fleetssh.Dial(dialAddr, 22, user, sshKey, "")
+			port := host.Port
+		if port == 0 {
+			port = 22
+		}
+		hc, err := fleetssh.Dial(dialAddr, port, user, sshKey, "")
 			if err != nil {
 				mu.Lock()
 				discovered = append(discovered, VirshVM{
@@ -191,9 +195,9 @@ func (h *Handlers) HandleHypervisorScan(w http.ResponseWriter, r *http.Request) 
 						}
 					}
 
-					// Resolve SSH credentials: prefer per-VM config, fall back to host defaults.
-					vmUser := host.User
-					vmKey := host.SSHKeyPath
+					// Resolve SSH credentials: prefer per-VM config, fall back to [vprox] defaults.
+					vmUser := host.VMUser
+					vmKey := host.VMKeyPath
 					vmPort := 22
 					if known := cfg.FindVM(rv.name); known != nil {
 						if known.User != "" {

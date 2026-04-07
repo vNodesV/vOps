@@ -550,6 +550,7 @@ func hostToMap(h fleetcfg.Host) map[string]any {
 		"datacenter":   h.Datacenter,
 		"user":         h.User,
 		"ssh_key_path": h.SSHKeyPath,
+		"port":         h.Port,
 	}
 }
 
@@ -558,6 +559,7 @@ func vproxToMap(v vproxEntry) map[string]any {
 		"name":         v.Name,
 		"lan_ip":       v.LanIP,
 		"key":          "",
+		"user":         v.User,
 		"ssh_key_path": v.SSHKeyPath,
 	}
 }

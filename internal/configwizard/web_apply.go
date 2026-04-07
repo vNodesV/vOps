@@ -641,6 +641,7 @@ func applyInfra(home string, f map[string]any) error {
 	inf.Host.Datacenter = fieldStr(f, "host_datacenter", "")
 	inf.Host.User = fieldStr(f, "host_user", "")
 	inf.Host.SSHKeyPath = fieldStr(f, "host_ssh_key_path", "")
+	inf.Host.Port = fieldInt(f, "host_port", 22)
 
 	if inf.Host.Name == "" {
 		if inf.Host.LanIP != "" || inf.Host.PublicIP != "" || inf.Host.Datacenter != "" || inf.Host.User != "" || inf.Host.SSHKeyPath != "" {
@@ -656,11 +657,15 @@ func applyInfra(home string, f map[string]any) error {
 		if inf.Host.PublicIP != "" && net.ParseIP(inf.Host.PublicIP) == nil {
 			return fmt.Errorf("host_public_ip must be a valid IP address")
 		}
+		if inf.Host.Port != 0 && (inf.Host.Port < 1 || inf.Host.Port > 65535) {
+			return fmt.Errorf("host_port must be between 1 and 65535")
+		}
 	}
 
 	inf.VProx.Name = fieldStr(f, "vprox_name", "vProx")
 	inf.VProx.LanIP = fieldStr(f, "vprox_lan_ip", "")
 	inf.VProx.Key = preserveRedactedStringFieldWithImport(f, "vprox_key", existing.VProx.Key, importedVProxKey)
+	inf.VProx.User = fieldStr(f, "vprox_user", "")
 	inf.VProx.SSHKeyPath = fieldStr(f, "vprox_ssh_key_path", "")
 	if inf.VProx.LanIP != "" && net.ParseIP(inf.VProx.LanIP) == nil {
 		return fmt.Errorf("vprox_lan_ip must be a valid IP address")
@@ -1665,9 +1670,11 @@ func importInfraFields(path string, data []byte) (map[string]any, error) {
 		"host_datacenter":    inf.Host.Datacenter,
 		"host_user":          inf.Host.User,
 		"host_ssh_key_path":  inf.Host.SSHKeyPath,
+		"host_port":          inf.Host.Port,
 		"vprox_name":         inf.VProx.Name,
 		"vprox_lan_ip":       inf.VProx.LanIP,
 		"vprox_key":          "",
+		"vprox_user":         inf.VProx.User,
 		"vprox_ssh_key_path": inf.VProx.SSHKeyPath,
 		"vms_json":           string(vmJSON),
 		"vms":                vmMaps,
@@ -1713,9 +1720,11 @@ func importLegacyInfraFields(path string) (map[string]any, error) {
 		"host_datacenter":    host.Datacenter,
 		"host_user":          host.User,
 		"host_ssh_key_path":  host.SSHKeyPath,
+		"host_port":          host.Port,
 		"vprox_name":         "vProx",
 		"vprox_lan_ip":       "",
 		"vprox_key":          "",
+		"vprox_user":         "",
 		"vprox_ssh_key_path": "",
 		"vms_json":           string(vmJSON),
 		"vms":                vmMaps,

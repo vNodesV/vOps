@@ -29,11 +29,18 @@ type Host struct {
 	PublicIP   string `toml:"public_ip"    json:"public_ip,omitempty"`
 	LanIP      string `toml:"lan_ip"       json:"lan_ip,omitempty"`
 	Datacenter string `toml:"datacenter"   json:"datacenter,omitempty"`
-	// User and SSHKeyPath set per-host SSH defaults.
-	// Applied to [[vm]] entries in the same file that leave user / key_path empty.
-	// Precedence: VM > [host] > [vprox].ssh_key_path
+	// User and SSHKeyPath are for hypervisor SSH only (virsh connections).
+	// For VM SSH defaults use [vprox].user / [vprox].ssh_key_path in the infra file.
 	User       string `toml:"user"         json:"user,omitempty"`
 	SSHKeyPath string `toml:"ssh_key_path" json:"ssh_key_path,omitempty"`
+	// Port is the SSH port used to reach this hypervisor (default: 22).
+	Port int `toml:"port" json:"port,omitempty"`
+
+	// VMUser and VMKeyPath are runtime-only defaults for VM SSH within this host.
+	// Populated from [vprox].user / [vprox].ssh_key_path during LoadFromInfraFiles.
+	// Used by HandleHypervisorScan as the fallback for virsh-discovered VMs.
+	VMUser    string `toml:"-" json:"-"`
+	VMKeyPath string `toml:"-" json:"-"`
 }
 
 // VM describes one validator VM (or VPS) reachable via SSH.
@@ -452,9 +459,11 @@ func chainVMName(chainName, host string) string {
 }
 
 // infraVproxSchema holds the [vprox] section from a per-datacenter infra file.
-// ssh_key_path is applied as the default key for all [[vm]] entries in the same file
-// that do not set their own key_path.
+// user and ssh_key_path are applied as VM SSH defaults for [[vm]] entries in the same
+// file that do not set their own user / key_path. This separates vProx→VM credentials
+// from hypervisor credentials ([host].user / [host].ssh_key_path).
 type infraVproxSchema struct {
+	User       string `toml:"user"`
 	SSHKeyPath string `toml:"ssh_key_path"`
 }
 
@@ -498,6 +507,18 @@ func LoadFromInfraFiles(dir string) (*Config, error) {
 			continue
 		}
 		if f.Host.Name != "" {
+			if f.Host.Port == 0 {
+				f.Host.Port = 22
+			}
+			// Populate runtime VM-SSH defaults from [vprox] section (falls back to [host] if not set).
+			f.Host.VMUser = f.Vprox.User
+			if f.Host.VMUser == "" {
+				f.Host.VMUser = f.Host.User
+			}
+			f.Host.VMKeyPath = f.Vprox.SSHKeyPath
+			if f.Host.VMKeyPath == "" {
+				f.Host.VMKeyPath = f.Host.SSHKeyPath
+			}
 			hosts = append(hosts, f.Host)
 		}
 		for i := range f.VMs {
@@ -508,16 +529,20 @@ func LoadFromInfraFiles(dir string) (*Config, error) {
 			if f.VMs[i].Port == 0 {
 				f.VMs[i].Port = 22
 			}
-			// Credential precedence: VM > [host] > [vprox].ssh_key_path
-			if f.VMs[i].User == "" && f.Host.User != "" {
-				f.VMs[i].User = f.Host.User
+			// Credential precedence for VM SSH: VM > [vprox] > [host]
+			if f.VMs[i].User == "" {
+				if f.Vprox.User != "" {
+					f.VMs[i].User = f.Vprox.User
+				} else if f.Host.User != "" {
+					f.VMs[i].User = f.Host.User
+				}
 			}
-			if f.VMs[i].KeyPath == "" && f.Host.SSHKeyPath != "" {
-				f.VMs[i].KeyPath = f.Host.SSHKeyPath
-			}
-			// Apply [vprox].ssh_key_path as final fallback when the VM still has no key.
-			if f.VMs[i].KeyPath == "" && f.Vprox.SSHKeyPath != "" {
-				f.VMs[i].KeyPath = f.Vprox.SSHKeyPath
+			if f.VMs[i].KeyPath == "" {
+				if f.Vprox.SSHKeyPath != "" {
+					f.VMs[i].KeyPath = f.Vprox.SSHKeyPath
+				} else if f.Host.SSHKeyPath != "" {
+					f.VMs[i].KeyPath = f.Host.SSHKeyPath
+				}
 			}
 			vms = append(vms, f.VMs[i])
 		}

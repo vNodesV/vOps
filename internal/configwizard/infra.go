@@ -21,6 +21,7 @@ type vproxEntry struct {
 	Name       string `toml:"name"`
 	LanIP      string `toml:"lan_ip"`
 	Key        string `toml:"key"`
+	User       string `toml:"user"`
 	SSHKeyPath string `toml:"ssh_key_path"`
 }
 
@@ -60,15 +61,17 @@ func runInfra(home, dc string) error {
 		inf.Host.LanIP = readOptionalIP("host.lan_ip", ex.Host.LanIP)
 		inf.Host.PublicIP = readOptionalIP("host.public_ip", ex.Host.PublicIP)
 		inf.Host.Datacenter = readString("host.datacenter", stringDefault(ex.Host.Datacenter, strings.ToUpper(dc)), false)
-		inf.Host.User = readString("host.user (SSH default for VMs in this file)", ex.Host.User, false)
-		inf.Host.SSHKeyPath = readString("host.ssh_key_path", ex.Host.SSHKeyPath, false)
+		inf.Host.User = readString("host.user (SSH user for hypervisor/virsh)", ex.Host.User, false)
+		inf.Host.SSHKeyPath = readString("host.ssh_key_path (SSH key for hypervisor)", ex.Host.SSHKeyPath, false)
+		inf.Host.Port = readOptionalPort("host.port (SSH port to hypervisor)", portDefault(ex.Host.Port, 22))
 	}
 
 	section("[vprox] — vProx Instance")
 	inf.VProx.Name = readString("vprox.name", stringDefault(ex.VProx.Name, "vProx"), false)
 	inf.VProx.LanIP = readOptionalIP("vprox.lan_ip", ex.VProx.LanIP)
 	inf.VProx.Key = readString("vprox.key (path to vProx private key)", ex.VProx.Key, false)
-	inf.VProx.SSHKeyPath = readString("vprox.ssh_key_path", ex.VProx.SSHKeyPath, false)
+	inf.VProx.User = readString("vprox.user (SSH user for VM connections)", ex.VProx.User, false)
+	inf.VProx.SSHKeyPath = readString("vprox.ssh_key_path (SSH key for VM connections)", ex.VProx.SSHKeyPath, false)
 
 	section("[[vm]] — Virtual Machines")
 	// Seed with existing VMs as defaults.
