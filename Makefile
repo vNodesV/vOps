@@ -64,8 +64,7 @@ EFFECTIVE_GOROOT  := $(if $(_TOOLCHAIN_GOROOT),$(_TOOLCHAIN_GOROOT),$(GOROOT))
 
 .PHONY: all install clean ufw help \
         validate-go dirs geo config config-vops config-vprox config-modules \
-        build build-vops systemd service-vops system-user-vops samples-fleet \
-        release release-vops deploy-jarvis \
+        build-vprox build-vops systemd service-vops system-user-vops samples-fleet \
         bump-patch bump-minor bump-major
 
 all: help
@@ -77,18 +76,17 @@ help:
 	@echo "  vProx / vOps — available targets"
 	@echo ""
 	@echo "  make install          Build + install vProx & vOps: bins, config, aliases, systemd"
-	@echo "  make add-<module>     Reinstall one module  (e.g. make add-vOps)"
+	@echo "  make build-vprox      Build vProx binary → .build/vProx"
+	@echo "  make build-vops       Build vOps binary → .build/vOps (rebuilds frontend if Node available)"
 	@echo "  make clean            Remove local build artifacts"
-	@echo "  make ufw              Passwordless UFW sudoers for vOps block/unblock"
-	@echo "  make release          Cross-compile vProx + vOps → dist/ (linux+darwin × amd64+arm64)"
-	@echo "  make release-vops     Cross-compile vOps only → dist/"
-	@echo "  make deploy-jarvis    Cross-compile + kill + SCP + restart vOps on jarvis"
+	@echo "  make ufw              Passwordless UFW + apt sudoers for vOps"
 	@echo ""
 	@echo "  Version management (vOps):"
 	@echo "    make bump-patch       0.0.1 → 0.0.2  (bug fixes / small improvements)"
 	@echo "    make bump-minor       0.0.x → 0.1.0  (new features, backward-compatible)"
 	@echo "    make bump-major       0.x.y → 1.0.0  (breaking changes / major milestones)"
 	@echo "    Current version: $$(cat cmd/vops/VERSION 2>/dev/null || echo 'unknown')"
+	@echo ""
 	@echo ""
 	@echo "  Paths (install):"
 	@echo "    Binaries:  $(GOPATH_BIN)/vprox  $(GOPATH_BIN)/vops"
@@ -326,37 +324,13 @@ config-modules:
 		echo "✓ $(CFG_DIR)/modules.toml already exists"; \
 	fi
 
-## Build binary
-
-build:
+## Build vProx binary to .build/vProx
+build-vprox:
 	@echo "Building $(APP_NAME)..."
 	mkdir -p "$(BUILD_DIR)"
 	GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(BUILD_OUT)" "$(BUILD_SRC)"
 	@echo "✓ Build complete"
 	@echo "  Output: $(BUILD_OUT)"
-
-## Reinstall a single module — make add-vOps | make add-vProx
-
-add-%: validate-go dirs
-	@case "$*" in \
-	  vOps|vops|vLog|vlog) \
-	    GOROOT="$(EFFECTIVE_GOROOT)" go build -ldflags "$(VOPS_LDFLAGS)" -o "$(GOPATH_BIN)/$(VOPS_NAME)" "$(VOPS_SRC)"; \
-	    echo "✓ $(VOPS_NAME) → $(GOPATH_BIN)/$(VOPS_NAME)"; \
-	    $(MAKE) config-vops; \
-	    $(MAKE) samples-fleet; \
-	    $(MAKE) service-vops; \
-	    ;; \
-	  vProx|vprox) \
-	    GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(GOPATH_BIN)/$(APP_NAME)" "$(BUILD_SRC)"; \
-	    echo "✓ $(APP_NAME) → $(GOPATH_BIN)/$(APP_NAME)"; \
-	    $(MAKE) systemd; \
-	    ;; \
-	  *) \
-	    echo "ERROR: Unknown module '$*'"; \
-	    echo "       Available: vProx  vOps"; \
-	    exit 1; \
-	    ;; \
-	esac
 
 ## Clean local build artifacts (never touches installed binary)
 
@@ -606,73 +580,6 @@ ufw:
 			echo "  sudo chmod 0440 $$SUDOERS_FILE"; \
 		fi; \
 	fi
-
-## ─── Compatibility aliases (vLog → vOps) ─────────────────────────────────────
-
-## These targets preserve backward compatibility for scripts and muscle memory
-## that reference the old vLog name. They simply delegate to the vOps targets.
-
-.PHONY: build-vlog config-vlog service-vlog
-
-build-vlog: build-vops
-config-vlog: config-vops
-service-vlog: service-vops
-
-## ─── Cross-compile + Jarvis deploy ───────────────────────────────────────────
-
-# SSH config for jarvis (reads identity + ProxyJump from ~/.ssh/config)
-JARVIS_HOST    := jarvis
-JARVIS_BIN_DST := ~/vops
-JARVIS_HOME    := ~/.vprox
-JARVIS_PID     := $(JARVIS_HOME)/vops.pid
-JARVIS_LOG     := $(JARVIS_HOME)/vops-dev.log
-JARVIS_PORT    := 18889
-
-DIST_DIR := dist
-
-## Cross-compile vProx + vOps for all supported platforms into dist/
-## Output: dist/vprox-<os>-<arch>  and  dist/vops-<os>-<arch>
-release:
-	@echo "Cross-compiling vProx + vOps for all platforms..."
-	@mkdir -p "$(DIST_DIR)"
-	@for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do \
-		os=$$(echo $$target | cut -d/ -f1); \
-		arch=$$(echo $$target | cut -d/ -f2); \
-		echo "  → $$os/$$arch"; \
-		GOOS=$$os GOARCH=$$arch GOROOT="$(EFFECTIVE_GOROOT)" \
-			go build -o "$(DIST_DIR)/vprox-$$os-$$arch" "$(BUILD_SRC)" || exit 1; \
-		GOOS=$$os GOARCH=$$arch GOROOT="$(EFFECTIVE_GOROOT)" \
-			go build -ldflags "$(VOPS_LDFLAGS)" -o "$(DIST_DIR)/vops-$$os-$$arch" "$(VOPS_SRC)" || exit 1; \
-	done
-	@echo "✓ Cross-compile complete. Outputs in $(DIST_DIR)/:"
-	@ls -lh "$(DIST_DIR)/"
-
-## Cross-compile vOps only for all supported platforms into dist/
-release-vops:
-	@echo "Cross-compiling vOps for all platforms..."
-	@mkdir -p "$(DIST_DIR)"
-	@for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do \
-		os=$$(echo $$target | cut -d/ -f1); \
-		arch=$$(echo $$target | cut -d/ -f2); \
-		echo "  → vOps $$os/$$arch"; \
-		GOOS=$$os GOARCH=$$arch GOROOT="$(EFFECTIVE_GOROOT)" \
-			go build -ldflags "$(VOPS_LDFLAGS)" -o "$(DIST_DIR)/vops-$$os-$$arch" "$(VOPS_SRC)" || exit 1; \
-	done
-	@echo "✓ Cross-compile complete. Outputs in $(DIST_DIR)/:"
-	@ls -lh "$(DIST_DIR)/"
-
-## Build vOps linux/amd64, kill jarvis process, SCP, and restart
-## Usage: make deploy-jarvis
-##   Override host: make deploy-jarvis JARVIS_HOST=myhost
-deploy-jarvis: release-vops
-	@echo "Deploying vOps to $(JARVIS_HOST)..."
-	@echo "  Killing existing vOps process..."
-	@ssh "$(JARVIS_HOST)" "kill \$$(cat $(JARVIS_PID) 2>/dev/null) 2>/dev/null; sleep 1; rm -f $(JARVIS_BIN_DST); echo '  Process stopped'" || true
-	@echo "  Uploading linux/amd64 binary..."
-	@scp "$(DIST_DIR)/vops-linux-amd64" "$(JARVIS_HOST):$(JARVIS_BIN_DST)"
-	@echo "  Starting vOps on $(JARVIS_HOST)..."
-	@ssh "$(JARVIS_HOST)" "chmod +x $(JARVIS_BIN_DST) && nohup $(JARVIS_BIN_DST) start --home $(JARVIS_HOME) > $(JARVIS_LOG) 2>&1 & echo \$$! > $(JARVIS_PID) && sleep 2 && echo '  PID:'\$$(cat $(JARVIS_PID)) && curl -s -o /dev/null -w '  HTTP:%{http_code}' http://127.0.0.1:$(JARVIS_PORT)/ && echo ''"
-	@echo "✓ Deploy complete. Tunnel with: ssh -N -L $(JARVIS_PORT):127.0.0.1:$(JARVIS_PORT) $(JARVIS_HOST)"
 
 ## ─── vOps version management ────────────────────────────────────────────────
 ## Source of truth: cmd/vops/VERSION  (format: MAJOR.MINOR.PATCH)
