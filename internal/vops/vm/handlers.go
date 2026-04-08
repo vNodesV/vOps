@@ -276,6 +276,8 @@ func (h *Handlers) findHost(name string) (HostInfo, error) {
 				LanIP:      host.LanIP,
 				Datacenter: host.Datacenter,
 				User:       user,
+				SSHKeyPath: host.SSHKeyPath, // per-host key; falls back to h.sshKeyPath in dialHost
+				Port:       host.Port,       // per-host port; falls back to h.sshPort / 22 in dialHost
 			}, nil
 		}
 	}

@@ -31,6 +31,7 @@ import (
 	"github.com/vNodesV/vProx/internal/vops/db"
 	"github.com/vNodesV/vProx/internal/vops/ingest"
 	"github.com/vNodesV/vProx/internal/vops/intel"
+	"github.com/vNodesV/vProx/internal/vops/services"
 	"github.com/vNodesV/vProx/internal/vops/vm"
 )
 
@@ -55,10 +56,11 @@ type Server struct {
 	commit    string // git commit SHA (short), set at startup
 	buildDate string // build date (YYYY-MM-DD), set at startup
 	httpSrv  *http.Server
-	fleet    *api.Handlers // nil when fleet module is not configured
+	fleet    *api.Handlers    // nil when fleet module is not configured
 	fleetSvc *fleet.Service
-	vmMgr    *vm.Handlers  // nil when no hypervisor hosts are configured
-	debug    *DebugRing    // SSH command debug recorder
+	vmMgr    *vm.Handlers     // nil when no hypervisor hosts are configured
+	svcMgr   *services.Handlers
+	debug    *DebugRing       // SSH command debug recorder
 
 	// Session state for dashboard login.
 	sessions   map[string]time.Time // token → expiry
@@ -126,6 +128,8 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		)
 		s.vmMgr.SetDebug(s.debug)
 	}
+
+	s.svcMgr = services.NewHandlers(d.DB)
 
 	mux := http.NewServeMux()
 
@@ -297,6 +301,20 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		mux.Handle("GET /api/v1/vm/hosts/{host}/domains/{domain}/interfaces",
 			s.requireSession(http.HandlerFunc(s.vmMgr.HandleDomainInterfaces)))
 	}
+
+	// Services registry routes.
+	mux.Handle("GET /api/v1/services",
+		s.requireSession(http.HandlerFunc(s.svcMgr.HandleList)))
+	mux.Handle("POST /api/v1/services",
+		s.requireSession(http.HandlerFunc(s.svcMgr.HandleCreate)))
+	mux.Handle("GET /api/v1/services/{id}",
+		s.requireSession(http.HandlerFunc(s.svcMgr.HandleGet)))
+	mux.Handle("PUT /api/v1/services/{id}",
+		s.requireSession(http.HandlerFunc(s.svcMgr.HandleUpdate)))
+	mux.Handle("DELETE /api/v1/services/{id}",
+		s.requireSession(http.HandlerFunc(s.svcMgr.HandleDelete)))
+	mux.Handle("POST /api/v1/services/{id}/status",
+		s.requireSession(http.HandlerFunc(s.svcMgr.HandlePushStatus)))
 
 	readTimeout := time.Duration(cfg.VOps.Server.ReadTimeoutSec) * time.Second
 	writeTimeout := time.Duration(cfg.VOps.Server.WriteTimeoutSec) * time.Second

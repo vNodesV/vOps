@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import {
   LineChart,
   Line,
@@ -9,7 +10,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from 'recharts';
-import { getStats, getChart, getFleetChains, triggerIngest, getIngestStats, getVMStatus, vmUpgradeURL, getVMHistory } from '../api';
+import { getStats, getChart, getFleetChains, triggerIngest, getIngestStats, getVMStatus, vmUpgradeURL, getVMHistory, getServices } from '../api';
 import type { Stats, ChartSeries, ChainStatus, ArchiveStats, VMStatus, VMMetricPoint } from '../api/types';
 import StatCard from '../components/StatCard';
 import Badge from '../components/Badge';
@@ -157,6 +158,158 @@ function fmtRelative(iso: string): string {
   } catch {
     return iso;
   }
+}
+
+/* ── Infrastructure summary boxes ─────────────────────────────── */
+
+function SummaryBoxes() {
+  const nav = useNavigate();
+
+  const { data: chainsData } = useQuery({
+    queryKey: ['fleet-chains'],
+    queryFn: getFleetChains,
+    refetchInterval: 60_000,
+    retry: false,
+  });
+
+  const { data: svcsData } = useQuery({
+    queryKey: ['services'],
+    queryFn: getServices,
+    refetchInterval: 60_000,
+    retry: false,
+  });
+
+  const { data: vmsData } = useQuery({
+    queryKey: ['vm-status'],
+    queryFn: getVMStatus,
+    refetchInterval: 60_000,
+    retry: false,
+  });
+
+  const chains = chainsData?.chains ?? [];
+  const services = svcsData?.services ?? [];
+  const vms: VMStatus[] = vmsData?.vms ?? [];
+
+  const chainsSynced = chains.filter(c => !c.catching_up).length;
+  const chainsCatching = chains.filter(c => c.catching_up).length;
+  const chainsProposals = chains.reduce((a, c) => a + (c.active_proposals ?? 0), 0);
+
+  const svcsOnline = services.filter(s => s.state === 'online').length;
+  const svcsDown = services.filter(s => s.state === 'down').length;
+  const svcsUnknown = services.length - svcsOnline - svcsDown;
+
+  const vmsRunning = vms.filter(v => v.online).length;
+  const avgMem = vms.length > 0
+    ? Math.round(vms.reduce((a, v) => a + (v.mem_pct ?? 0), 0) / vms.length)
+    : 0;
+
+  const boxStyle: React.CSSProperties = {
+    background: 'var(--vn-surface)',
+    border: '1px solid var(--vn-border)',
+    borderRadius: 'var(--vn-radius)',
+    padding: '1rem 1.25rem',
+    boxShadow: 'var(--vn-shadow)',
+    cursor: 'pointer',
+    transition: 'border-color 0.15s',
+    flex: '1 1 200px',
+    minWidth: 180,
+  };
+
+  const rowStyle: React.CSSProperties = {
+    display: 'flex',
+    gap: '0.5rem',
+    flexWrap: 'wrap',
+    marginBottom: '1.5rem',
+  };
+
+  const titleStyle: React.CSSProperties = {
+    fontSize: '0.75rem',
+    fontWeight: 600,
+    color: 'var(--vn-text-muted)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.06em',
+    marginBottom: '0.75rem',
+  };
+
+  const metricRow: React.CSSProperties = {
+    display: 'flex',
+    justifyContent: 'space-between',
+    fontSize: '0.8rem',
+    padding: '0.15rem 0',
+    color: 'var(--vn-text)',
+  };
+
+  return (
+    <div style={rowStyle}>
+      {/* Chains box */}
+      <div style={boxStyle} role="button" tabIndex={0} onClick={() => nav('/chains')}
+        onKeyDown={e => e.key === 'Enter' && nav('/chains')}
+        aria-label="Go to Chains page">
+        <div style={titleStyle}>🔗 Chains</div>
+        <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--vn-info)', marginBottom: '0.5rem' }}>
+          {chains.length}
+        </div>
+        <div style={metricRow}>
+          <span style={{ color: 'var(--vn-text-muted)' }}>Synced</span>
+          <span style={{ color: 'var(--vn-success)', fontWeight: 600 }}>{chainsSynced}</span>
+        </div>
+        <div style={metricRow}>
+          <span style={{ color: 'var(--vn-text-muted)' }}>Catching up</span>
+          <span style={{ color: 'var(--vn-warning)', fontWeight: 600 }}>{chainsCatching}</span>
+        </div>
+        {chainsProposals > 0 && (
+          <div style={metricRow}>
+            <span style={{ color: 'var(--vn-text-muted)' }}>Proposals ⚠️</span>
+            <span style={{ color: 'var(--vn-danger)', fontWeight: 600 }}>{chainsProposals}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Services box */}
+      <div style={boxStyle} role="button" tabIndex={0} onClick={() => nav('/services')}
+        onKeyDown={e => e.key === 'Enter' && nav('/services')}
+        aria-label="Go to Services page">
+        <div style={titleStyle}>⚙ Services</div>
+        <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--vn-primary)', marginBottom: '0.5rem' }}>
+          {services.length}
+        </div>
+        <div style={metricRow}>
+          <span style={{ color: 'var(--vn-text-muted)' }}>Online</span>
+          <span style={{ color: 'var(--vn-success)', fontWeight: 600 }}>{svcsOnline}</span>
+        </div>
+        <div style={metricRow}>
+          <span style={{ color: 'var(--vn-text-muted)' }}>Down</span>
+          <span style={{ color: svcsDown > 0 ? 'var(--vn-danger)' : 'var(--vn-text-muted)', fontWeight: 600 }}>{svcsDown}</span>
+        </div>
+        {svcsUnknown > 0 && (
+          <div style={metricRow}>
+            <span style={{ color: 'var(--vn-text-muted)' }}>Unknown</span>
+            <span style={{ fontWeight: 600 }}>{svcsUnknown}</span>
+          </div>
+        )}
+      </div>
+
+      {/* VMs box */}
+      <div style={boxStyle} role="button" tabIndex={0} onClick={() => nav('/vms')}
+        onKeyDown={e => e.key === 'Enter' && nav('/vms')}
+        aria-label="Go to VM Manager">
+        <div style={titleStyle}>🖥 VMs</div>
+        <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--vn-success)', marginBottom: '0.5rem' }}>
+          {vmsRunning}<span style={{ fontSize: '1rem', color: 'var(--vn-text-muted)', fontWeight: 400 }}>/{vms.length}</span>
+        </div>
+        <div style={metricRow}>
+          <span style={{ color: 'var(--vn-text-muted)' }}>Running</span>
+          <span style={{ color: 'var(--vn-success)', fontWeight: 600 }}>{vmsRunning}</span>
+        </div>
+        {vms.length > 0 && (
+          <div style={metricRow}>
+            <span style={{ color: 'var(--vn-text-muted)' }}>Avg Mem</span>
+            <span style={{ fontWeight: 600 }}>{avgMem}%</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function FleetTable() {
@@ -565,6 +718,9 @@ export default function DashboardPage() {
       <h2 className="text-lg font-semibold" style={{ color: 'var(--vn-text)' }}>
         Dashboard
       </h2>
+
+      {/* Infrastructure summary boxes — Chains · Services · VMs */}
+      <SummaryBoxes />
 
       {/* Stat Cards */}
       {isLoading ? (

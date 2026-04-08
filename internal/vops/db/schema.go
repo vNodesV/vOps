@@ -198,6 +198,30 @@ CREATE TABLE IF NOT EXISTS patch_status (
 	summary          TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_patch_status_target ON patch_status(target_name, target_type);
+
+CREATE TABLE IF NOT EXISTS services (
+	id           INTEGER PRIMARY KEY AUTOINCREMENT,
+	name         TEXT NOT NULL UNIQUE,
+	service_type TEXT NOT NULL DEFAULT 'other',
+	vm_name      TEXT NOT NULL DEFAULT '',
+	datacenter   TEXT NOT NULL DEFAULT '',
+	chain_id     TEXT NOT NULL DEFAULT '',
+	state        TEXT NOT NULL DEFAULT 'unknown',
+	config       TEXT NOT NULL DEFAULT '{}',
+	created_at   TEXT NOT NULL DEFAULT '',
+	updated_at   TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_services_type ON services(service_type);
+CREATE INDEX IF NOT EXISTS idx_services_vm   ON services(vm_name);
+
+CREATE TABLE IF NOT EXISTS service_status (
+	id         INTEGER PRIMARY KEY AUTOINCREMENT,
+	service_id INTEGER NOT NULL,
+	polled_at  TEXT NOT NULL,
+	online     INTEGER NOT NULL DEFAULT 0,
+	metrics    TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_service_status_sid ON service_status(service_id, polled_at);
 `
 
 // Migrate executes the schema DDL against db, creating all tables and

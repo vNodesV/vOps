@@ -200,3 +200,27 @@ export interface HypervisorHost {
   datacenter?: string;
   user?: string;
 }
+
+// Services registry
+export type ServiceType = 'validator' | 'api' | 'rpc' | 'node' | 'relayer' | 'webserver' | 'vprox' | 'other';
+
+export interface Service {
+  id: number;
+  name: string;
+  service_type: ServiceType;
+  vm_name: string;
+  datacenter: string;
+  chain_id: string;
+  state: string;
+  config: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ServiceStatus {
+  id?: number;
+  service_id?: number;
+  polled_at?: string;
+  online?: boolean;
+  metrics?: Record<string, unknown>;
+}

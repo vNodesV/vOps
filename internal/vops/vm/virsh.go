@@ -40,6 +40,10 @@ type HostInfo struct {
 	LanIP      string `json:"lan_ip,omitempty"`
 	Datacenter string `json:"datacenter,omitempty"`
 	User       string `json:"user,omitempty"`
+	// SSHKeyPath and Port are runtime-only: populated from the per-host config
+	// so dialHost uses the correct credentials for each hypervisor.
+	SSHKeyPath string `json:"-"`
+	Port       int    `json:"-"` // 0 → use handler default (22)
 }
 
 // sshClient is the subset of fleetssh.Client we need.
@@ -73,13 +77,25 @@ var dialFn = func(host string, port int, user, keyPath, knownHosts string) (sshC
 }
 
 // dialHost opens an SSH connection to the given hypervisor host.
+// Per-host SSHKeyPath and Port take precedence over the handler-level defaults.
 // When debug mode is active it wraps the client so every Run() is recorded.
 func (h *Handlers) dialHost(hi HostInfo) (sshClient, error) {
 	addr := hi.LanIP
 	if addr == "" {
 		addr = hi.Name
 	}
-	c, err := dialFn(addr, h.sshPort, hi.User, h.sshKeyPath, h.knownHosts)
+	keyPath := hi.SSHKeyPath
+	if keyPath == "" {
+		keyPath = h.sshKeyPath
+	}
+	port := hi.Port
+	if port == 0 {
+		port = h.sshPort
+	}
+	if port == 0 {
+		port = 22
+	}
+	c, err := dialFn(addr, port, hi.User, keyPath, h.knownHosts)
 	if err != nil {
 		if h.debug != nil && h.debug.IsEnabled() {
 			h.debug.Emit("vm-manager", addr, "ssh dial", "", err.Error(), 0)

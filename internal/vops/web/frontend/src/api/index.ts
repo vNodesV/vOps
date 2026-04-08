@@ -200,3 +200,37 @@ export const getDebugEvents = (sinceId = 0) =>
   apiFetch<{ enabled: boolean; events: DebugEvent[] }>(
     `/api/v1/debug/events?since_id=${sinceId}`,
   );
+
+// ── Services registry ────────────────────────────────────────────────────────
+
+export const getServices = () =>
+  apiFetch<{ services: import('./types').Service[] }>('/api/v1/services');
+
+export const getService = (id: number) =>
+  apiFetch<{ service: import('./types').Service; status: import('./types').ServiceStatus }>(`/api/v1/services/${id}`);
+
+export const createService = (body: {
+  name: string;
+  service_type: string;
+  vm_name?: string;
+  datacenter?: string;
+  chain_id?: string;
+  config?: Record<string, unknown>;
+}) => apiPost<{ id: number; name: string }>('/api/v1/services', body);
+
+export const updateService = (
+  id: number,
+  body: {
+    vm_name?: string;
+    datacenter?: string;
+    chain_id?: string;
+    state?: string;
+    config?: Record<string, unknown>;
+  },
+) => apiFetch<{ updated: number }>(`/api/v1/services/${id}`, {
+  method: 'PUT',
+  body: JSON.stringify(body),
+});
+
+export const deleteService = (id: number) =>
+  apiFetch<{ deleted: number }>(`/api/v1/services/${id}`, { method: 'DELETE' });
