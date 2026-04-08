@@ -7,6 +7,7 @@ import {
   hostUpgradeURL,
   vmUpgradeURL,
 } from '../api';
+import { openSSEStream } from '../api/sse';
 import type { HostInventory, VMStatus } from '../api/types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -119,7 +120,7 @@ export default function PatchesPage() {
   const [scanning, setScanning] = useState(false);
   const [log, setLog] = useState<UpgradeLog | null>(null);
   const [upgradingAll, setUpgradingAll] = useState(false);
-  const esRef = useRef<EventSource | null>(null);
+  const esRef = useRef<(() => void) | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -170,27 +171,31 @@ export default function PatchesPage() {
   const runUpgrade = (row: PatchRow) => {
     openLog(row.name);
     const url = row.kind === 'host' ? hostUpgradeURL(row.name) : vmUpgradeURL(row.name);
-    if (esRef.current) esRef.current.close();
-    const es = new EventSource(url, { withCredentials: true });
-    esRef.current = es;
-    es.onmessage = (e) => {
-      try {
-        const data = JSON.parse(e.data) as { step: string; msg: string };
-        setLog(prev => {
-          if (!prev) return prev;
-          const done = data.step === 'complete' || data.step.includes('error');
-          return { ...prev, lines: [...prev.lines, data], done };
-        });
-        if (data.step === 'complete' || data.step.includes('error')) {
-          es.close();
-          loadData();
-        }
-      } catch { /* ignore */ }
-    };
-    es.onerror = () => {
-      setLog(prev => prev ? { ...prev, lines: [...prev.lines, { step: 'error', msg: 'SSE connection lost' }], done: true } : prev);
-      es.close();
-    };
+    if (esRef.current) esRef.current();
+    const cancel = openSSEStream(
+      url,
+      'POST',
+      (msg) => {
+        try {
+          const data = JSON.parse(msg.data) as { step: string; msg: string };
+          setLog(prev => {
+            if (!prev) return prev;
+            const done = data.step === 'complete' || data.step.includes('error');
+            return { ...prev, lines: [...prev.lines, data], done };
+          });
+          if (data.step === 'complete' || data.step.includes('error')) {
+            esRef.current = null;
+            loadData();
+          }
+        } catch { /* ignore */ }
+      },
+      () => { /* onDone */ },
+      () => {
+        setLog(prev => prev ? { ...prev, lines: [...prev.lines, { step: 'error', msg: 'SSE connection lost' }], done: true } : prev);
+      },
+      {},
+    );
+    esRef.current = cancel;
   };
 
   const runUpgradeAll = async () => {
@@ -201,22 +206,26 @@ export default function PatchesPage() {
       await new Promise<void>((resolve) => {
         openLog(row.name);
         const url = row.kind === 'host' ? hostUpgradeURL(row.name) : vmUpgradeURL(row.name);
-        const es = new EventSource(url, { withCredentials: true });
-        es.onmessage = (e) => {
-          try {
-            const data = JSON.parse(e.data) as { step: string; msg: string };
-            setLog(prev => {
-              if (!prev) return prev;
-              const done = data.step === 'complete' || data.step.includes('error');
-              return { ...prev, lines: [...prev.lines, data], done };
-            });
-            if (data.step === 'complete' || data.step.includes('error')) {
-              es.close();
-              resolve();
-            }
-          } catch { resolve(); }
-        };
-        es.onerror = () => { es.close(); resolve(); };
+        openSSEStream(
+          url,
+          'POST',
+          (msg) => {
+            try {
+              const data = JSON.parse(msg.data) as { step: string; msg: string };
+              setLog(prev => {
+                if (!prev) return prev;
+                const done = data.step === 'complete' || data.step.includes('error');
+                return { ...prev, lines: [...prev.lines, data], done };
+              });
+              if (data.step === 'complete' || data.step.includes('error')) {
+                resolve();
+              }
+            } catch { resolve(); }
+          },
+          () => resolve(),
+          () => resolve(),
+          {},
+        );
       });
     }
     setUpgradingAll(false);

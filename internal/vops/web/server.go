@@ -271,7 +271,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 			s.requireSession(http.HandlerFunc(s.fleet.HandleRegisteredChainDelete)))
 		mux.Handle("POST /api/v1/fleet/poll",
 			s.requireSession(http.HandlerFunc(s.fleet.HandlePoll)))
-		mux.Handle("GET /api/v1/fleet/vms/{name}/upgrade",
+		mux.Handle("POST /api/v1/fleet/vms/{name}/upgrade",
 			s.requireSession(http.HandlerFunc(s.fleet.HandleVMUpgrade)))
 		mux.Handle("GET /api/v1/fleet/vms/{name}/history",
 			s.requireSession(http.HandlerFunc(s.fleet.HandleVMHistory)))
@@ -281,7 +281,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 			s.requireSession(http.HandlerFunc(s.fleet.HandleHostScan)))
 		mux.Handle("GET /api/v1/fleet/hosts",
 			s.requireSession(http.HandlerFunc(s.fleet.HandleListHosts)))
-		mux.Handle("GET /api/v1/fleet/hosts/{name}/upgrade",
+		mux.Handle("POST /api/v1/fleet/hosts/{name}/upgrade",
 			s.requireSession(http.HandlerFunc(s.fleet.HandleHostUpgrade)))
 		mux.Handle("GET /api/v1/audit",
 			s.requireSession(http.HandlerFunc(s.fleet.HandleListAudit)))
@@ -333,7 +333,13 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		s.requireSession(http.HandlerFunc(s.svcMgr.HandleGet)))
 	mux.Handle("PUT /api/v1/services/{id}",
 		s.requireSession(http.HandlerFunc(s.svcMgr.HandleUpdate)))
+	// POST alias for Apache environments that block PUT method pass-through.
+	mux.Handle("POST /api/v1/services/{id}/update",
+		s.requireSession(http.HandlerFunc(s.svcMgr.HandleUpdate)))
 	mux.Handle("DELETE /api/v1/services/{id}",
+		s.requireSession(http.HandlerFunc(s.svcMgr.HandleDelete)))
+	// POST alias for Apache environments that block DELETE method pass-through.
+	mux.Handle("POST /api/v1/services/{id}/delete",
 		s.requireSession(http.HandlerFunc(s.svcMgr.HandleDelete)))
 	mux.Handle("POST /api/v1/services/{id}/status",
 		s.requireSession(http.HandlerFunc(s.svcMgr.HandlePushStatus)))
@@ -351,7 +357,13 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		s.requireSession(http.HandlerFunc(s.unitsMgr.HandleGet)))
 	mux.Handle("PUT /api/v1/units/{name}",
 		s.requireSession(http.HandlerFunc(s.unitsMgr.HandleUpdate)))
+	// POST alias for Apache environments that block PUT method pass-through.
+	mux.Handle("POST /api/v1/units/{name}/update",
+		s.requireSession(http.HandlerFunc(s.unitsMgr.HandleUpdate)))
 	mux.Handle("DELETE /api/v1/units/{name}",
+		s.requireSession(http.HandlerFunc(s.unitsMgr.HandleDelete)))
+	// POST alias for Apache environments that block DELETE method pass-through.
+	mux.Handle("POST /api/v1/units/{name}/delete",
 		s.requireSession(http.HandlerFunc(s.unitsMgr.HandleDelete)))
 	mux.Handle("POST /api/v1/units/{name}/status",
 		s.requireSession(http.HandlerFunc(s.unitsMgr.HandlePushStatus)))

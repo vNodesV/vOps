@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { getFleetChains, getServices, getFleetChainTraffic } from '../api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getFleetChains, getServices, registerChain, unregisterChain } from '../api';
 import type { ChainStatus, Service, ServiceType } from '../api/types';
 import Badge from '../components/Badge';
 import Spinner from '../components/Spinner';
@@ -109,7 +109,7 @@ function UpgradePlanModal({ chain, onClose }: { chain: ChainStatus; onClose: () 
 }
 
 /* ── Chains table row ─────────────────────────────────────────── */
-function ChainRow({ chain }: { chain: ChainStatus }) {
+function ChainRow({ chain, onRemove, onEdit }: { chain: ChainStatus; onRemove: () => void; onEdit: () => void }) {
   const [showUpgrade, setShowUpgrade] = useState(false);
   const syncStatus = chain.error ? 'error' : chain.catching_up ? 'syncing' : 'synced';
   const hasUpgrade = chain.upgrade_pending && chain.upgrade_name;
@@ -213,6 +213,34 @@ function ChainRow({ chain }: { chain: ChainStatus }) {
           </div>
         )}
       </td>
+
+      {/* Actions */}
+      <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
+        <button
+          onClick={onEdit}
+          title="Edit chain"
+          style={{
+            padding: '0.2rem 0.55rem', fontSize: '0.72rem', borderRadius: 'var(--vn-radius)',
+            border: '1px solid var(--vn-border)', background: 'var(--vn-surface-2)',
+            color: 'var(--vn-text)', cursor: 'pointer', marginRight: '0.35rem',
+          }}
+        >
+          ✏ Edit
+        </button>
+        <button
+          onClick={() => {
+            if (window.confirm(`Remove chain "${chain.chain_name ?? chain.chain}"?`)) onRemove();
+          }}
+          title="Remove chain"
+          style={{
+            padding: '0.2rem 0.55rem', fontSize: '0.72rem', borderRadius: 'var(--vn-radius)',
+            border: '1px solid var(--vn-danger)', background: 'rgba(239,68,68,0.08)',
+            color: 'var(--vn-danger)', cursor: 'pointer',
+          }}
+        >
+          ✕ Remove
+        </button>
+      </td>
     </tr>
   );
 }
@@ -261,66 +289,91 @@ function ServiceItem({ svc, onClick }: { svc: Service; onClick: () => void }) {
 }
 
 /* ── Main page ────────────────────────────────────────────────── */
-/* ── Chain Traffic Section ───────────────────────────────────── */
-function TrafficSection() {
-  const { data, isLoading, isError, refetch, isFetching } = useQuery({
-    queryKey: ['chain-traffic'],
-    queryFn: getFleetChainTraffic,
-    staleTime: 60_000,
-  });
-
-  const traffic = data?.traffic ?? [];
-  const maxReqs = Math.max(...traffic.map(t => (t.requests ?? 0)), 1);
+/* ── Edit Chain Modal ────────────────────────────────────────── */
+function EditChainModal({
+  chain,
+  onClose,
+  onSave,
+}: {
+  chain: ChainStatus;
+  onClose: () => void;
+  onSave: (rpcUrl: string) => void;
+}) {
+  const [rpcUrl, setRpcUrl] = useState(chain.rpc_url ?? '');
 
   return (
-    <section>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-        <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: 'var(--vn-text)' }}>
-          📊 Chain Traffic
-          <span style={{ fontSize: '0.75rem', fontWeight: 400, color: 'var(--vn-text-muted)', marginLeft: '0.5rem' }}>requests by host</span>
-        </h2>
-        <button
-          onClick={() => refetch()}
-          disabled={isFetching}
-          style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem', borderRadius: 'var(--vn-radius)', border: '1px solid var(--vn-border)', background: 'var(--vn-surface-2)', color: 'var(--vn-text)', cursor: 'pointer' }}
-        >
-          {isFetching ? '…' : '⟳'}
-        </button>
-      </div>
-
-      {isLoading ? (
-        <Spinner />
-      ) : isError ? (
-        <p style={{ color: 'var(--vn-danger)', fontSize: '0.85rem' }}>Could not load traffic data.</p>
-      ) : traffic.length === 0 ? (
-        <p style={{ color: 'var(--vn-text-muted)', fontSize: '0.85rem' }}>No traffic data available.</p>
-      ) : (
-        <div style={{ background: 'var(--vn-surface)', border: '1px solid var(--vn-border)', borderRadius: 'var(--vn-radius)', padding: '1rem' }}>
-          {traffic.sort((a, b) => (b.requests ?? 0) - (a.requests ?? 0)).map(t => (
-            <div key={t.host} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.6rem' }}>
-              <span style={{ fontSize: '0.8rem', color: 'var(--vn-text)', minWidth: 160, fontFamily: 'monospace' }}>{t.host}</span>
-              <div style={{ flex: 1, height: 14, background: 'var(--vn-surface-2)', borderRadius: 4, overflow: 'hidden' }}>
-                <div style={{
-                  height: '100%',
-                  width: `${Math.round(((t.requests ?? 0) / maxReqs) * 100)}%`,
-                  background: 'var(--vn-primary)',
-                  borderRadius: 4,
-                  transition: 'width 0.3s',
-                }} />
-              </div>
-              <span style={{ fontSize: '0.75rem', color: 'var(--vn-text-muted)', minWidth: 60, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                {(t.requests ?? 0).toLocaleString()} req
-              </span>
-            </div>
-          ))}
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: 'var(--vn-surface)', borderRadius: 'var(--vn-radius)', padding: '1.5rem', minWidth: 360, maxWidth: 500, boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <h3 style={{ margin: '0 0 1rem', fontSize: '1rem' }}>✏ Edit Chain — {chain.chain_name ?? chain.chain}</h3>
+        <div style={{ marginBottom: '0.75rem' }}>
+          <label style={{ fontSize: '0.78rem', color: 'var(--vn-text-muted)', display: 'block', marginBottom: '0.25rem' }}>
+            Chain ID (read-only)
+          </label>
+          <input
+            readOnly
+            value={chain.chain}
+            style={{
+              width: '100%', boxSizing: 'border-box',
+              background: 'var(--vn-surface-2)', border: '1px solid var(--vn-border)',
+              borderRadius: 'var(--vn-radius)', padding: '0.4rem 0.6rem',
+              color: 'var(--vn-text-muted)', fontSize: '0.85rem',
+            }}
+          />
         </div>
-      )}
-    </section>
+        <div style={{ marginBottom: '1.25rem' }}>
+          <label style={{ fontSize: '0.78rem', color: 'var(--vn-text-muted)', display: 'block', marginBottom: '0.25rem' }}>
+            RPC URL
+          </label>
+          <input
+            value={rpcUrl}
+            onChange={e => setRpcUrl(e.target.value)}
+            placeholder="https://rpc.example.com"
+            style={{
+              width: '100%', boxSizing: 'border-box',
+              background: 'var(--vn-surface-2)', border: '1px solid var(--vn-border)',
+              borderRadius: 'var(--vn-radius)', padding: '0.4rem 0.6rem',
+              color: 'var(--vn-text)', fontSize: '0.85rem',
+            }}
+          />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+          <button
+            onClick={onClose}
+            style={{
+              padding: '0.4rem 1rem', fontSize: '0.82rem', borderRadius: 'var(--vn-radius)',
+              background: 'var(--vn-surface-2)', border: '1px solid var(--vn-border)',
+              color: 'var(--vn-text)', cursor: 'pointer',
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onSave(rpcUrl)}
+            style={{
+              padding: '0.4rem 1rem', fontSize: '0.82rem', borderRadius: 'var(--vn-radius)',
+              background: 'var(--vn-primary)', border: 'none',
+              color: 'var(--vn-on-primary)', cursor: 'pointer', fontWeight: 600,
+            }}
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
 export default function ChainsPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  const [editChain, setEditChain] = useState<ChainStatus | null>(null);
 
   const chainsQ = useQuery({
     queryKey: ['fleet-chains'],
@@ -332,6 +385,20 @@ export default function ChainsPage() {
     queryKey: ['services'],
     queryFn: getServices,
     refetchInterval: 30_000,
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: (chain: string) => unregisterChain(chain),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['fleet-chains'] }),
+  });
+
+  const editMutation = useMutation({
+    mutationFn: ({ chain, rpc_url }: { chain: string; rpc_url: string }) =>
+      registerChain({ chain, rpc_url }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['fleet-chains'] });
+      setEditChain(null);
+    },
   });
 
   const chains = chainsQ.data?.chains ?? [];
@@ -407,14 +474,19 @@ export default function ChainsPage() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
                 <thead>
                   <tr style={{ background: 'var(--vn-surface-2)', borderBottom: '1px solid var(--vn-border)' }}>
-                    {['Chain / ID', 'Height', 'Block Speed', 'Proposals', 'Upgrade', 'Validator', 'Status'].map(h => (
+                    {['Chain / ID', 'Height', 'Block Speed', 'Proposals', 'Upgrade', 'Validator', 'Status', 'Actions'].map(h => (
                       <th key={h} style={thStyle}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {chains.map(c => (
-                    <ChainRow key={`${c.chain}-${c.type}`} chain={c} />
+                    <ChainRow
+                      key={`${c.chain}-${c.type}`}
+                      chain={c}
+                      onRemove={() => removeMutation.mutate(c.chain)}
+                      onEdit={() => setEditChain(c)}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -493,8 +565,14 @@ export default function ChainsPage() {
         )}
       </section>
 
-      {/* ── Chain Traffic ────────────────────────────────────────── */}
-      <TrafficSection />
+      {/* ── Edit Chain Modal ─────────────────────────────────────── */}
+      {editChain && (
+        <EditChainModal
+          chain={editChain}
+          onClose={() => setEditChain(null)}
+          onSave={(rpcUrl) => editMutation.mutate({ chain: editChain.chain, rpc_url: rpcUrl })}
+        />
+      )}
 
     </div>
   );

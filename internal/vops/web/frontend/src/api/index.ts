@@ -249,13 +249,10 @@ export const updateService = (
     state?: string;
     config?: Record<string, unknown>;
   },
-) => apiFetch<{ updated: number }>(`/api/v1/services/${id}`, {
-  method: 'PUT',
-  body: JSON.stringify(body),
-});
+) => apiPost<{ updated: number }>(`/api/v1/services/${id}/update`, body);
 
 export const deleteService = (id: number) =>
-  apiFetch<{ deleted: number }>(`/api/v1/services/${id}`, { method: 'DELETE' });
+  apiPost<{ deleted: number }>(`/api/v1/services/${id}/delete`, {});
 
 export const getServiceSchema = () =>
   apiFetch<import('./types').ServiceSchema>('/api/v1/services/schema');
@@ -275,13 +272,10 @@ export const createUnit = (body: Partial<import('./types').CosmosUnit>) =>
   apiPost<{ ok: string; name: string }>('/api/v1/units', body);
 
 export const updateUnit = (name: string, body: Partial<import('./types').CosmosUnit>) =>
-  apiFetch<{ ok: string }>(`/api/v1/units/${encodeURIComponent(name)}`, {
-    method: 'PUT',
-    body: JSON.stringify(body),
-  });
+  apiPost<{ ok: string }>(`/api/v1/units/${encodeURIComponent(name)}/update`, body);
 
 export const deleteUnit = (name: string) =>
-  apiFetch<{ ok: string }>(`/api/v1/units/${encodeURIComponent(name)}`, { method: 'DELETE' });
+  apiPost<{ ok: string }>(`/api/v1/units/${encodeURIComponent(name)}/delete`, {});
 
 export const getUnitStatusHistory = (name: string) =>
   apiFetch<{ history: import('./types').UnitStatus[] }>(
@@ -309,9 +303,8 @@ export const pingMultiProxInstance = (name: string) =>
 export const pingAllMultiProxInstances = () =>
   apiPost<{ instances: Array<{ name: string; status: string; last_seen: string }>; summary: string }>('/api/v1/multiprox/ping-all', {});
 
-// Fleet chain traffic
-export const getFleetChainTraffic = () =>
-  apiFetch<{ traffic: Array<{ host: string; requests: number }> }>('/api/v1/fleet/chains/traffic');
+// Fleet chain traffic — removed (host_traffic table unpopulated)
+// export const getFleetChainTraffic = () => ...
 
 // Fleet deployments
 export const deployFleet = (body: { vm: string; chain: string; component: string; script: string; dry_run?: boolean; env?: Record<string, string> }) =>
