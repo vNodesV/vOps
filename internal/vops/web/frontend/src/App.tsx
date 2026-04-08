@@ -20,6 +20,8 @@ import VMsPage from './pages/VMs';
 import ServicesPage from './pages/Services';
 import PatchesPage from './pages/Patches';
 import UnitsPage from './pages/Units';
+import TopologyPage from './pages/Topology';
+import MultiProxPage from './pages/MultiProx';
 import DebugPanel from './components/DebugPanel';
 import { logout, getDebugMode, setDebugMode } from './api';
 import { BASE } from './api/client';
@@ -223,6 +225,20 @@ function Shell({ children }: { children: React.ReactNode }) {
             </svg>
             Units
           </SideLink>
+          <SideLink to="/topology">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <circle cx="12" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/>
+              <line x1="12" y1="7" x2="5" y2="17"/><line x1="12" y1="7" x2="19" y2="17"/><line x1="5" y1="19" x2="19" y2="19"/>
+            </svg>
+            Topology
+          </SideLink>
+          <SideLink to="/multiprox">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <rect x="2" y="3" width="20" height="4" rx="1"/><rect x="2" y="10" width="20" height="4" rx="1"/>
+              <circle cx="6" cy="5" r="1" fill="currentColor"/><circle cx="6" cy="12" r="1" fill="currentColor"/>
+            </svg>
+            Multi-vProx
+          </SideLink>
           <SideLink to="/settings">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
               <circle cx="12" cy="12" r="3" />
@@ -324,6 +340,8 @@ export default function App() {
             <Route path="/vms" element={<VMsPage />} />
             <Route path="/patches" element={<PatchesPage />} />
             <Route path="/units" element={<UnitsPage />} />
+            <Route path="/topology" element={<TopologyPage />} />
+            <Route path="/multiprox" element={<MultiProxPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

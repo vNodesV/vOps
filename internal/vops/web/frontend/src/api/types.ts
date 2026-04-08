@@ -307,6 +307,8 @@ export interface UnitStatus {
   voting_power: number;
   gov_pending: number;
   service_active: boolean;
+  upgrade_name?: string;
+  upgrade_height?: number;
   error?: string;
 }
 
@@ -314,3 +316,13 @@ export interface CosmosUnitWithStatus extends CosmosUnit {
   status?: UnitStatus;
 }
 
+
+export interface VProxInstance {
+  id: number;
+  name: string;
+  url: string;
+  datacenter?: string;
+  status: string;
+  last_seen?: string;
+  created_at?: string;
+}

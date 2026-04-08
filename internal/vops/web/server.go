@@ -32,6 +32,7 @@ import (
 	"github.com/vNodesV/vProx/internal/vops/ingest"
 	"github.com/vNodesV/vProx/internal/vops/intel"
 	"github.com/vNodesV/vProx/internal/vops/services"
+	"github.com/vNodesV/vProx/internal/vops/multiprox"
 	"github.com/vNodesV/vProx/internal/vops/units"
 	"github.com/vNodesV/vProx/internal/vops/vm"
 )
@@ -62,6 +63,7 @@ type Server struct {
 	vmMgr    *vm.Handlers     // nil when no hypervisor hosts are configured
 	svcMgr      *services.Handlers
 	unitsMgr    *units.Handlers
+	multiproxMgr *multiprox.Handlers
 	unitsPoller *units.Poller
 	debug    *DebugRing       // SSH command debug recorder
 
@@ -134,6 +136,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 
 	s.svcMgr = services.NewHandlers(d.DB)
 	s.unitsMgr = units.NewHandlers(d.DB)
+	s.multiproxMgr = multiprox.New(d.DB)
 
 	// Build the units poller — uses fleetSvc to resolve VM LAN IPs.
 	lanIPFunc := func(vmName string) string {
@@ -356,6 +359,22 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		s.requireSession(http.HandlerFunc(s.unitsMgr.HandleCurrentStatus)))
 	mux.Handle("GET /api/v1/units/{name}/status/history",
 		s.requireSession(http.HandlerFunc(s.unitsMgr.HandleStatusHistory)))
+	mux.Handle("GET /api/v1/units/{name}/logs",
+		s.requireSession(http.HandlerFunc(s.handleUnitLogStream)))
+	mux.Handle("GET /api/v1/units/{name}/deploy",
+		s.requireSession(http.HandlerFunc(s.handleUnitDeploy)))
+
+	// Multi-vProx instance management routes.
+	mux.Handle("GET /api/v1/multiprox",
+		s.requireSession(http.HandlerFunc(s.multiproxMgr.HandleList)))
+	mux.Handle("POST /api/v1/multiprox",
+		s.requireSession(http.HandlerFunc(s.multiproxMgr.HandleCreate)))
+	mux.Handle("DELETE /api/v1/multiprox/{name}",
+		s.requireSession(http.HandlerFunc(s.multiproxMgr.HandleDelete)))
+	mux.Handle("POST /api/v1/multiprox/{name}/ping",
+		s.requireSession(http.HandlerFunc(s.multiproxMgr.HandlePing)))
+	mux.Handle("POST /api/v1/multiprox/ping-all",
+		s.requireSession(http.HandlerFunc(s.multiproxMgr.HandlePingAll)))
 
 	readTimeout := time.Duration(cfg.VOps.Server.ReadTimeoutSec) * time.Second
 	writeTimeout := time.Duration(cfg.VOps.Server.WriteTimeoutSec) * time.Second

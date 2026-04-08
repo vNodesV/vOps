@@ -7,6 +7,8 @@ import {
 } from '../api';
 import type { CosmosUnit, CosmosUnitWithStatus, NodeType, NetworkType, UnitStatus } from '../api/types';
 
+const BASE = (import.meta.env.VITE_API_BASE ?? '') as string;
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const NODE_TYPES: NodeType[] = ['validator', 'node', 'api', 'rpc', 'relayer', 'other'];
@@ -224,16 +226,156 @@ function StatusHistoryModal({ unit, onClose }: { unit: CosmosUnitWithStatus; onC
   );
 }
 
+// ── LogModal ──────────────────────────────────────────────────────────────────
+
+function LogModal({ unit, onClose }: { unit: CosmosUnitWithStatus; onClose: () => void }) {
+  const [lines, setLines] = useState<string[]>([]);
+  const [connected, setConnected] = useState(false);
+  const [error, setError] = useState('');
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const es = new EventSource(`${BASE}/api/v1/units/${encodeURIComponent(unit.name)}/logs`);
+    es.onmessage = ev => {
+      try {
+        const d = JSON.parse(ev.data) as { step: string; msg: string };
+        if (d.step === 'connected') { setConnected(true); }
+        if (d.step === 'error') { setError(d.msg); }
+        if (d.step === 'log' || d.step === 'tail:start') {
+          setLines(prev => [...prev.slice(-500), d.msg]);
+        }
+      } catch { /* ignore */ }
+    };
+    es.onerror = () => { setError('Connection lost'); es.close(); };
+    return () => es.close();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unit.name]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [lines]);
+
+  const overlay: React.CSSProperties = {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999,
+  };
+  const modal: React.CSSProperties = {
+    background: '#0f172a', border: '1px solid #1f2937',
+    borderRadius: 8, padding: '1.25rem', width: '720px', maxWidth: '95vw',
+    display: 'flex', flexDirection: 'column', maxHeight: '80vh',
+  };
+  return (
+    <div style={overlay} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={modal}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+          <strong style={{ color: '#e2e8f0' }}>📋 Logs — {unit.name}</strong>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {connected && <span style={{ color: '#4ade80', fontSize: 12 }}>● live</span>}
+            {error && <span style={{ color: '#f87171', fontSize: 12 }}>{error}</span>}
+            <button style={{ background: '#1f2937', color: '#9ca3af', border: '1px solid #374151', borderRadius: 5, padding: '3px 8px', cursor: 'pointer', fontSize: 12 }} onClick={onClose}>✕</button>
+          </div>
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', fontFamily: 'monospace', fontSize: '0.72rem', background: '#020617', borderRadius: 4, padding: '0.5rem', lineHeight: 1.5, color: '#94a3b8' }}>
+          {lines.map((l, i) => <div key={i}>{l}</div>)}
+          <div ref={bottomRef} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── DeployModal ───────────────────────────────────────────────────────────────
+
+function DeployModal({ unit, onClose }: { unit: CosmosUnitWithStatus; onClose: () => void }) {
+  const [sudoPwd, setSudoPwd] = useState('');
+  const [lines, setLines] = useState<string[]>([]);
+  const [running, setRunning] = useState(false);
+  const [done, setDone] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [lines]);
+
+  async function startDeploy() {
+    setRunning(true);
+    setLines([]);
+    setDone(false);
+    const es = new EventSource(
+      `${BASE}/api/v1/units/${encodeURIComponent(unit.name)}/deploy?sudo_password=${encodeURIComponent(sudoPwd)}`
+    );
+    es.onmessage = ev => {
+      try {
+        const d = JSON.parse(ev.data) as { step: string; msg: string };
+        setLines(prev => [...prev, `[${d.step}] ${d.msg}`]);
+        if (d.step === 'complete') { setDone(true); es.close(); setRunning(false); }
+        if (d.step === 'error') { setDone(true); es.close(); setRunning(false); }
+      } catch { /* ignore */ }
+    };
+    es.onerror = () => { setRunning(false); es.close(); setLines(prev => [...prev, '[error] Connection lost']); };
+  }
+
+  const overlay: React.CSSProperties = {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999,
+  };
+  const modal: React.CSSProperties = {
+    background: '#0f172a', border: '1px solid #1f2937',
+    borderRadius: 8, padding: '1.25rem', width: '620px', maxWidth: '95vw',
+    display: 'flex', flexDirection: 'column',
+  };
+  const inp: React.CSSProperties = {
+    padding: '0.35rem 0.5rem', background: '#1e293b', border: '1px solid #334155',
+    borderRadius: 4, color: '#e2e8f0', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box',
+  };
+
+  return (
+    <div style={overlay} onClick={e => e.target === e.currentTarget && !running && onClose()}>
+      <div style={modal}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+          <strong style={{ color: '#e2e8f0' }}>🚀 Deploy cosmovisor — {unit.name}</strong>
+          <button style={{ background: '#1f2937', color: '#9ca3af', border: '1px solid #374151', borderRadius: 5, padding: '3px 8px', cursor: 'pointer', fontSize: 12 }} onClick={onClose} disabled={running}>✕</button>
+        </div>
+        {!running && !done && (
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ fontSize: '0.8rem', color: '#94a3b8', display: 'block', marginBottom: '0.25rem' }}>Sudo password (leave blank if NOPASSWD)</label>
+            <input type="password" style={inp} value={sudoPwd} onChange={e => setSudoPwd(e.target.value)} placeholder="optional" />
+            <p style={{ fontSize: '0.75rem', color: '#64748b', margin: '0.5rem 0 0' }}>
+              This will install cosmovisor (if missing), create directory structure, and write a systemd service on <strong style={{ color: '#94a3b8' }}>{unit.vm_name}</strong>.
+            </p>
+            <button onClick={startDeploy} style={{ marginTop: '0.75rem', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 5, padding: '0.35rem 1rem', cursor: 'pointer', fontSize: '0.85rem' }}>
+              Start Deploy
+            </button>
+          </div>
+        )}
+        {lines.length > 0 && (
+          <div style={{ maxHeight: '40vh', overflowY: 'auto', fontFamily: 'monospace', fontSize: '0.72rem', background: '#020617', borderRadius: 4, padding: '0.5rem', lineHeight: 1.6, color: '#94a3b8' }}>
+            {lines.map((l, i) => (
+              <div key={i} style={{ color: l.includes('[error]') ? '#f87171' : l.includes('[complete]') ? '#4ade80' : '#94a3b8' }}>{l}</div>
+            ))}
+            <div ref={bottomRef} />
+          </div>
+        )}
+        {done && <button onClick={onClose} style={{ marginTop: '0.75rem', alignSelf: 'flex-end', background: '#1f2937', color: '#9ca3af', border: '1px solid #374151', borderRadius: 5, padding: '0.3rem 0.75rem', cursor: 'pointer', fontSize: '0.85rem' }}>Close</button>}
+      </div>
+    </div>
+  );
+}
+
 // ── UnitCard ──────────────────────────────────────────────────────────────────
 
 function UnitCard({
   unit,
   onDelete,
   onHistory,
+  onLogs,
+  onDeploy,
 }: {
   unit: CosmosUnitWithStatus;
   onDelete: (name: string) => void;
   onHistory: (u: CosmosUnitWithStatus) => void;
+  onLogs: (u: CosmosUnitWithStatus) => void;
+  onDeploy: (u: CosmosUnitWithStatus) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const st = unit.status;
@@ -268,6 +410,11 @@ function UnitCard({
               </span>
             )}
             {st?.syncing && <span style={{ color: '#fbbf24', fontSize: 12 }}>⟳ syncing</span>}
+            {st?.upgrade_height != null && st.upgrade_height > 0 && (
+              <span style={{ background: '#422006', color: '#fb923c', borderRadius: 4, padding: '1px 6px', fontSize: 11 }}>
+                ⬆ upgrade {st.upgrade_name} @ {fmtHeight(st.upgrade_height)}
+              </span>
+            )}
             {st?.gov_pending != null && st.gov_pending > 0 && (
               <span style={{ background: '#451a03', color: '#fbbf24', borderRadius: 4, padding: '1px 6px', fontSize: 11 }}>
                 {st.gov_pending} gov
@@ -295,6 +442,20 @@ function UnitCard({
             style={{ background: '#1f2937', color: '#9ca3af', border: '1px solid #374151', borderRadius: 5, padding: '3px 8px', cursor: 'pointer', fontSize: 12 }}
           >
             📊
+          </button>
+          <button
+            onClick={() => onLogs(unit)}
+            title="Stream logs"
+            style={{ background: '#1f2937', color: '#60a5fa', border: '1px solid #374151', borderRadius: 5, padding: '3px 8px', cursor: 'pointer', fontSize: 12 }}
+          >
+            📋
+          </button>
+          <button
+            onClick={() => onDeploy(unit)}
+            title="Deploy cosmovisor"
+            style={{ background: '#1f2937', color: '#4ade80', border: '1px solid #374151', borderRadius: 5, padding: '3px 8px', cursor: 'pointer', fontSize: 12 }}
+          >
+            🚀
           </button>
           <button
             onClick={() => onDelete(unit.name)}
@@ -347,6 +508,8 @@ export default function UnitsPage() {
   const [loading, setLoading] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [historyUnit, setHistoryUnit] = useState<CosmosUnitWithStatus | null>(null);
+  const [logUnit, setLogUnit] = useState<CosmosUnitWithStatus | null>(null);
+  const [deployUnit, setDeployUnit] = useState<CosmosUnitWithStatus | null>(null);
   const [filter, setFilter] = useState('');
   const [filterType, setFilterType] = useState<NodeType | 'all'>('all');
   const [filterNet, setFilterNet] = useState<NetworkType | 'all'>('all');
@@ -499,6 +662,8 @@ export default function UnitsPage() {
                   unit={u}
                   onDelete={handleDelete}
                   onHistory={setHistoryUnit}
+                  onLogs={setLogUnit}
+                  onDeploy={setDeployUnit}
                 />
               ))}
             </div>
@@ -509,6 +674,8 @@ export default function UnitsPage() {
       {/* Modals */}
       {showAdd && <AddUnitModal onClose={() => setShowAdd(false)} onCreated={load} />}
       {historyUnit && <StatusHistoryModal unit={historyUnit} onClose={() => setHistoryUnit(null)} />}
+      {logUnit && <LogModal unit={logUnit} onClose={() => setLogUnit(null)} />}
+      {deployUnit && <DeployModal unit={deployUnit} onClose={() => setDeployUnit(null)} />}
     </div>
   );
 }

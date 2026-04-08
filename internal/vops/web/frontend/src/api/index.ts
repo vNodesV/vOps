@@ -177,6 +177,13 @@ export const createVMSnapshot = (host: string, domain: string, name: string) =>
     { name },
   );
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const createVM = (host: string, body: Record<string, any>) =>
+  apiPost<{ result: string }>(
+    `/api/v1/vm/hosts/${encodeURIComponent(host)}/domains`,
+    body,
+  );
+
 export const revertVMSnapshot = (host: string, domain: string, snap: string) =>
   apiPost<{ result: string }>(
     `/api/v1/vm/hosts/${encodeURIComponent(host)}/domains/${encodeURIComponent(domain)}/snapshots/${encodeURIComponent(snap)}/revert`,
@@ -282,3 +289,19 @@ export const getUnitStatus = (name: string) =>
   apiFetch<{ status: import('./types').UnitStatus | null }>(
     `/api/v1/units/${encodeURIComponent(name)}/status`,
   );
+
+// Multi-vProx instance management
+export const getMultiProxInstances = () =>
+  apiFetch<{ instances: import('./types').VProxInstance[] }>('/api/v1/multiprox');
+
+export const createMultiProxInstance = (body: { name: string; url: string; api_key?: string; datacenter?: string }) =>
+  apiPost<{ ok: string }>('/api/v1/multiprox', body);
+
+export const deleteMultiProxInstance = (name: string) =>
+  apiFetch<{ ok: string }>(`/api/v1/multiprox/${encodeURIComponent(name)}`, { method: 'DELETE' });
+
+export const pingMultiProxInstance = (name: string) =>
+  apiPost<{ name: string; status: string; last_seen: string }>(`/api/v1/multiprox/${encodeURIComponent(name)}/ping`, {});
+
+export const pingAllMultiProxInstances = () =>
+  apiPost<{ instances: Array<{ name: string; status: string; last_seen: string }>; summary: string }>('/api/v1/multiprox/ping-all', {});

@@ -222,6 +222,17 @@ CREATE TABLE IF NOT EXISTS service_status (
 	metrics    TEXT NOT NULL DEFAULT '{}'
 );
 CREATE INDEX IF NOT EXISTS idx_service_status_sid ON service_status(service_id, polled_at);
+
+CREATE TABLE IF NOT EXISTS vprox_instances (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  name        TEXT    NOT NULL UNIQUE,
+  url         TEXT    NOT NULL DEFAULT '',
+  api_key     TEXT    NOT NULL DEFAULT '',
+  datacenter  TEXT    NOT NULL DEFAULT '',
+  status      TEXT    NOT NULL DEFAULT 'unknown',
+  last_seen   TEXT    NOT NULL DEFAULT '',
+  created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+);
 `
 
 // Migrate executes the schema DDL against db, creating all tables and
@@ -255,6 +266,18 @@ func Migrate(db *sql.DB) error {
 			return fmt.Errorf("migrate ip_accounts: %w", err)
 		}
 	}
+
+	// unit_status: upgrade awareness columns.
+	unitStatusCols := []string{
+		"upgrade_name TEXT NOT NULL DEFAULT ''",
+		"upgrade_height INTEGER NOT NULL DEFAULT 0",
+	}
+	for _, col := range unitStatusCols {
+		if err := addColumnIfMissing(db, "unit_status", col); err != nil {
+			return fmt.Errorf("migrate unit_status: %w", err)
+		}
+	}
+
 	return nil
 }
 

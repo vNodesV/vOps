@@ -68,7 +68,7 @@ func (p *Poller) run() {
 
 func (p *Poller) poll() {
 	rows, err := p.db.Query(
-		`SELECT name, vm_name, rpc_port, service_name FROM units`)
+		`SELECT name, vm_name, rpc_port, api_port, service_name FROM units`)
 	if err != nil {
 		return
 	}
@@ -76,11 +76,11 @@ func (p *Poller) poll() {
 
 	for rows.Next() {
 		var name, vmName, serviceName string
-		var rpcPort int
-		if scanErr := rows.Scan(&name, &vmName, &rpcPort, &serviceName); scanErr != nil {
+		var rpcPort, apiPort int
+		if scanErr := rows.Scan(&name, &vmName, &rpcPort, &apiPort, &serviceName); scanErr != nil {
 			continue
 		}
-		st := p.pollUnit(name, vmName, rpcPort)
+		st := p.pollUnit(name, vmName, rpcPort, apiPort)
 		p.saveStatus(st)
 	}
 
@@ -106,9 +106,17 @@ type cometNetInfoResp struct {
 	} `json:"result"`
 }
 
+// cometUpgradePlan is the shape of Cosmos REST /cosmos/upgrade/v1beta1/current_plan.
+type cometUpgradePlan struct {
+	Plan *struct {
+		Name   string `json:"name"`
+		Height string `json:"height"`
+	} `json:"plan"`
+}
+
 // ── poll one unit ─────────────────────────────────────────────────────────────
 
-func (p *Poller) pollUnit(name, vmName string, rpcPort int) UnitStatus {
+func (p *Poller) pollUnit(name, vmName string, rpcPort, apiPort int) UnitStatus {
 	st := UnitStatus{
 		UnitName: name,
 		PolledAt: time.Now().UTC().Format(time.RFC3339),
@@ -147,6 +155,17 @@ func (p *Poller) pollUnit(name, vmName string, rpcPort int) UnitStatus {
 	defer cancel2()
 	if ni, niErr := p.fetchNetInfo(ctx2, baseURL); niErr == nil {
 		st.Peers = ni.Result.NPeers
+	}
+
+	// /cosmos/upgrade/v1beta1/current_plan (REST, best-effort) ────────────
+	if apiPort > 0 {
+		restBase := fmt.Sprintf("http://%s:%d", lanIP, apiPort)
+		ctx3, cancel3 := context.WithTimeout(context.Background(), pollHTTPTimeout)
+		defer cancel3()
+		if up, upErr := p.fetchUpgradePlan(ctx3, restBase); upErr == nil && up.Plan != nil {
+			st.UpgradeName = up.Plan.Name
+			fmt.Sscanf(up.Plan.Height, "%d", &st.UpgradeHeight) //nolint:errcheck
+		}
 	}
 
 	return st
@@ -194,6 +213,28 @@ func (p *Poller) fetchNetInfo(ctx context.Context, baseURL string) (*cometNetInf
 	return &r, nil
 }
 
+func (p *Poller) fetchUpgradePlan(ctx context.Context, restBase string) (*cometUpgradePlan, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		restBase+"/cosmos/upgrade/v1beta1/current_plan", nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 16*1024))
+	if err != nil {
+		return nil, err
+	}
+	var r cometUpgradePlan
+	if err := json.Unmarshal(body, &r); err != nil {
+		return nil, fmt.Errorf("parse upgrade plan: %w", err)
+	}
+	return &r, nil
+}
+
 // ── persistence ───────────────────────────────────────────────────────────────
 
 func (p *Poller) saveStatus(st UnitStatus) {
@@ -207,10 +248,12 @@ func (p *Poller) saveStatus(st UnitStatus) {
 	}
 	p.db.Exec( //nolint:errcheck
 		`INSERT INTO unit_status
-			(unit_name, polled_at, syncing, block_height, peers, voting_power, gov_pending, service_active, error)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			(unit_name, polled_at, syncing, block_height, peers, voting_power, gov_pending,
+			 service_active, upgrade_name, upgrade_height, error)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		st.UnitName, st.PolledAt,
 		syncing, st.BlockHeight, st.Peers,
-		st.VotingPower, st.GovPending, svcActive, st.Error,
+		st.VotingPower, st.GovPending, svcActive,
+		st.UpgradeName, st.UpgradeHeight, st.Error,
 	)
 }

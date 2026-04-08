@@ -56,6 +56,8 @@ type UnitStatus struct {
 	VotingPower   int64  `json:"voting_power"`
 	GovPending    int    `json:"gov_pending"`
 	ServiceActive bool   `json:"service_active"`
+	UpgradeName   string `json:"upgrade_name,omitempty"`
+	UpgradeHeight int64  `json:"upgrade_height,omitempty"`
 	Error         string `json:"error,omitempty"`
 }
 
@@ -272,10 +274,10 @@ func (h *Handlers) HandlePushStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	_, err := h.db.Exec(`
 		INSERT INTO unit_status (unit_name, polled_at, syncing, block_height, peers,
-			voting_power, gov_pending, service_active, error)
-		VALUES (?,?,?,?,?,?,?,?,?)`,
+			voting_power, gov_pending, service_active, upgrade_name, upgrade_height, error)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
 		st.UnitName, st.PolledAt, syncing, st.BlockHeight, st.Peers,
-		st.VotingPower, st.GovPending, serviceActive, st.Error,
+		st.VotingPower, st.GovPending, serviceActive, st.UpgradeName, st.UpgradeHeight, st.Error,
 	)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -291,7 +293,8 @@ func (h *Handlers) HandleStatusHistory(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	rows, err := h.db.Query(`
 		SELECT id, unit_name, polled_at, syncing, block_height, peers,
-		       voting_power, gov_pending, service_active, error
+		       voting_power, gov_pending, service_active,
+		       COALESCE(upgrade_name,''), COALESCE(upgrade_height,0), error
 		FROM unit_status
 		WHERE unit_name = ?
 		ORDER BY polled_at DESC LIMIT 100`, name)
@@ -305,7 +308,8 @@ func (h *Handlers) HandleStatusHistory(w http.ResponseWriter, r *http.Request) {
 		var st UnitStatus
 		var syncing, serviceActive int
 		if err := rows.Scan(&st.ID, &st.UnitName, &st.PolledAt, &syncing, &st.BlockHeight,
-			&st.Peers, &st.VotingPower, &st.GovPending, &serviceActive, &st.Error); err != nil {
+			&st.Peers, &st.VotingPower, &st.GovPending, &serviceActive,
+			&st.UpgradeName, &st.UpgradeHeight, &st.Error); err != nil {
 			continue
 		}
 		st.Syncing = syncing != 0
@@ -331,14 +335,16 @@ func (h *Handlers) HandleCurrentStatus(w http.ResponseWriter, r *http.Request) {
 func latestStatus(db *sql.DB, unitName string) *UnitStatus {
 	row := db.QueryRow(`
 		SELECT id, unit_name, polled_at, syncing, block_height, peers,
-		       voting_power, gov_pending, service_active, error
+		       voting_power, gov_pending, service_active,
+		       COALESCE(upgrade_name,''), COALESCE(upgrade_height,0), error
 		FROM unit_status
 		WHERE unit_name = ?
 		ORDER BY polled_at DESC LIMIT 1`, unitName)
 	var st UnitStatus
 	var syncing, serviceActive int
 	if err := row.Scan(&st.ID, &st.UnitName, &st.PolledAt, &syncing, &st.BlockHeight,
-		&st.Peers, &st.VotingPower, &st.GovPending, &serviceActive, &st.Error); err != nil {
+		&st.Peers, &st.VotingPower, &st.GovPending, &serviceActive,
+		&st.UpgradeName, &st.UpgradeHeight, &st.Error); err != nil {
 		return nil
 	}
 	st.Syncing = syncing != 0

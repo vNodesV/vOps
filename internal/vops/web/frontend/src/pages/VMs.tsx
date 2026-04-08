@@ -8,6 +8,7 @@ import {
   createVMSnapshot,
   revertVMSnapshot,
   deleteVMSnapshot,
+  createVM,
 } from '../api';
 import type { HypervisorHost, LibvirtDomain, LibvirtSnapshot } from '../api/types';
 import Spinner from '../components/Spinner';
@@ -370,8 +371,157 @@ function HostPanel({ host }: { host: HypervisorHost }) {
   );
 }
 
+/* ── CreateVM Modal ───────────────────────────────────────────── */
+function CreateVMModal({ hosts, onClose }: { hosts: HypervisorHost[]; onClose: () => void }) {
+  const [mode, setMode] = useState<'clone' | 'create'>('clone');
+  const [host, setHost] = useState(hosts[0]?.name ?? '');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState('');
+
+  // clone fields
+  const [sourceDomain, setSourceDomain] = useState('');
+  const [newDiskPath, setNewDiskPath] = useState('');
+  // create fields
+  const [baseImage, setBaseImage] = useState('');
+  const [diskPath, setDiskPath] = useState('');
+  const [diskSizeGb, setDiskSizeGb] = useState(20);
+  const [osVariant, setOsVariant] = useState('ubuntu22.04');
+  const [network, setNetwork] = useState('default');
+  // shared
+  const [vmName, setVmName] = useState('');
+  const [memMib, setMemMib] = useState(2048);
+  const [vcpus, setVcpus] = useState(2);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setResult('');
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const body: Record<string, any> = { mode, name: vmName, memory_mib: memMib, vcpus };
+      if (mode === 'clone') {
+        body.source_domain = sourceDomain;
+        body.new_disk_path = newDiskPath;
+      } else {
+        body.base_image = baseImage;
+        body.disk_path = diskPath;
+        body.disk_size_gb = diskSizeGb;
+        body.os_variant = osVariant;
+        body.network = network;
+      }
+      const r = await createVM(host, body);
+      setResult('✓ ' + (r.result ?? 'Done'));
+    } catch (err: unknown) {
+      setResult('✗ ' + String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const overlay: React.CSSProperties = {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999,
+  };
+  const modal: React.CSSProperties = {
+    background: 'var(--vn-surface)', border: '1px solid var(--vn-border)',
+    borderRadius: 'var(--vn-radius)', padding: '1.5rem', width: '480px', maxWidth: '95vw',
+  };
+  const fld: React.CSSProperties = { marginBottom: '0.75rem' };
+  const lbl: React.CSSProperties = { display: 'block', fontSize: '0.8rem', marginBottom: '0.25rem', color: 'var(--vn-text-muted)' };
+  const inp: React.CSSProperties = {
+    width: '100%', boxSizing: 'border-box', padding: '0.35rem 0.5rem',
+    background: 'var(--vn-surface-2)', border: '1px solid var(--vn-border)',
+    borderRadius: 'var(--vn-radius)', color: 'var(--vn-text)', fontSize: '0.85rem',
+  };
+
+  return (
+    <div style={overlay} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={modal}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <strong style={{ fontSize: '1rem' }}>Create / Clone VM</strong>
+          <button style={btn} onClick={onClose}>✕</button>
+        </div>
+
+        {/* mode tabs */}
+        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+          {(['clone', 'create'] as const).map(m => (
+            <button key={m} style={{ ...btn, ...(mode === m ? { background: 'var(--vn-primary)', color: 'var(--vn-on-primary)', border: 'none' } : {}) }}
+              onClick={() => setMode(m)}>{m === 'clone' ? '📋 Clone' : '➕ Create'}</button>
+          ))}
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          <div style={fld}>
+            <label style={lbl}>Hypervisor host</label>
+            <select style={inp} value={host} onChange={e => setHost(e.target.value)}>
+              {hosts.map(h => <option key={h.name} value={h.name}>{h.name}</option>)}
+            </select>
+          </div>
+          <div style={fld}>
+            <label style={lbl}>VM name</label>
+            <input style={inp} value={vmName} onChange={e => setVmName(e.target.value)} placeholder="my-vm-01" required />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '0.75rem' }}>
+            <div>
+              <label style={lbl}>Memory (MiB)</label>
+              <input style={inp} type="number" value={memMib} onChange={e => setMemMib(+e.target.value)} min={512} step={512} />
+            </div>
+            <div>
+              <label style={lbl}>vCPUs</label>
+              <input style={inp} type="number" value={vcpus} onChange={e => setVcpus(+e.target.value)} min={1} />
+            </div>
+          </div>
+
+          {mode === 'clone' ? (<>
+            <div style={fld}>
+              <label style={lbl}>Source domain (to clone from)</label>
+              <input style={inp} value={sourceDomain} onChange={e => setSourceDomain(e.target.value)} placeholder="source-vm" required />
+            </div>
+            <div style={fld}>
+              <label style={lbl}>New disk path</label>
+              <input style={inp} value={newDiskPath} onChange={e => setNewDiskPath(e.target.value)} placeholder="/var/lib/libvirt/images/my-vm-01.qcow2" />
+            </div>
+          </>) : (<>
+            <div style={fld}>
+              <label style={lbl}>Base image path</label>
+              <input style={inp} value={baseImage} onChange={e => setBaseImage(e.target.value)} placeholder="/var/lib/libvirt/images/ubuntu-22.04-base.qcow2" required />
+            </div>
+            <div style={fld}>
+              <label style={lbl}>New disk path</label>
+              <input style={inp} value={diskPath} onChange={e => setDiskPath(e.target.value)} placeholder="/var/lib/libvirt/images/my-vm-01.qcow2" required />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '0.75rem' }}>
+              <div>
+                <label style={lbl}>Disk size (GB)</label>
+                <input style={inp} type="number" value={diskSizeGb} onChange={e => setDiskSizeGb(+e.target.value)} min={5} />
+              </div>
+              <div>
+                <label style={lbl}>Network</label>
+                <input style={inp} value={network} onChange={e => setNetwork(e.target.value)} placeholder="default" />
+              </div>
+            </div>
+            <div style={fld}>
+              <label style={lbl}>OS variant (virt-install)</label>
+              <input style={inp} value={osVariant} onChange={e => setOsVariant(e.target.value)} placeholder="ubuntu22.04" />
+            </div>
+          </>)}
+
+          {result && (
+            <p style={{ fontSize: '0.8rem', color: result.startsWith('✓') ? 'var(--vn-success)' : 'var(--vn-danger)', margin: '0.5rem 0' }}>{result}</p>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '1rem' }}>
+            <button type="button" style={btn} onClick={onClose}>Cancel</button>
+            <button type="submit" style={primaryBtn} disabled={busy}>{busy ? '…' : mode === 'clone' ? 'Clone VM' : 'Create VM'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 /* ── VMs Page ─────────────────────────────────────────────────── */
 export default function VMsPage() {
+  const [showCreate, setShowCreate] = useState(false);
   const { data, isLoading, isError } = useQuery({
     queryKey: ['vm-hosts'],
     queryFn: getVMHosts,
@@ -382,6 +532,7 @@ export default function VMsPage() {
 
   return (
     <div>
+      {showCreate && <CreateVMModal hosts={hosts} onClose={() => setShowCreate(false)} />}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
         <div>
           <h1 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700 }}>VM Manager</h1>
@@ -389,6 +540,9 @@ export default function VMsPage() {
             Manage libvirt/KVM domains on hypervisor hosts via SSH — virsh commands, snapshots, lifecycle actions.
           </p>
         </div>
+        {hosts.length > 0 && (
+          <button style={primaryBtn} onClick={() => setShowCreate(true)}>+ Create VM</button>
+        )}
       </div>
 
       {isLoading ? <Spinner /> : isError ? (
