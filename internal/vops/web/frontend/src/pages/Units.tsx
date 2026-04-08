@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   getUnits,
   createUnit,
   deleteUnit,
+  updateUnit,
   getUnitStatusHistory,
 } from '../api';
 import type { CosmosUnit, CosmosUnitWithStatus, NodeType, NetworkType, UnitStatus } from '../api/types';
@@ -362,6 +364,113 @@ function DeployModal({ unit, onClose }: { unit: CosmosUnitWithStatus; onClose: (
   );
 }
 
+// ── EditUnitModal ─────────────────────────────────────────────────────────────
+
+function EditUnitModal({ unit, onClose, onSaved }: { unit: CosmosUnitWithStatus; onClose: () => void; onSaved: () => void }) {
+  const [form, setForm] = useState<Partial<CosmosUnit>>({
+    chain_name: unit.chain_name,
+    chain_id: unit.chain_id,
+    network_type: unit.network_type,
+    node_type: unit.node_type,
+    vm_name: unit.vm_name,
+    datacenter: unit.datacenter,
+    binary_path: unit.binary_path,
+    cosmovisor_path: unit.cosmovisor_path,
+    cosmovisor_enabled: unit.cosmovisor_enabled,
+    config_dir: unit.config_dir,
+    rpc_port: unit.rpc_port,
+    api_port: unit.api_port,
+    p2p_port: unit.p2p_port,
+    valoper: unit.valoper,
+    notes: unit.notes,
+  });
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+
+  const set = (k: keyof CosmosUnit, v: unknown) => setForm(f => ({ ...f, [k]: v }));
+
+  const save = async () => {
+    setSaving(true);
+    setErr('');
+    try {
+      await updateUnit(unit.name, form as CosmosUnit);
+      onSaved();
+      onClose();
+    } catch (e: unknown) {
+      setErr((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inp: React.CSSProperties = {
+    padding: '0.4rem 0.6rem', borderRadius: 6, border: '1px solid #374151',
+    background: '#111827', color: '#e5e7eb', fontSize: '0.85rem', width: '100%',
+  };
+  const fld: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: 4, marginBottom: '0.75rem' };
+  const lbl: React.CSSProperties = { fontSize: '0.78rem', color: '#9ca3af' };
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: '#1f2937', borderRadius: 10, padding: '1.5rem', width: 480, maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <h3 style={{ margin: '0 0 1.25rem', fontSize: '1rem', color: '#f9fafb' }}>✏ Edit Unit — {unit.name}</h3>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 1rem' }}>
+          <div style={fld}><label style={lbl}>Chain Name</label><input style={inp} value={form.chain_name ?? ''} onChange={e => set('chain_name', e.target.value)} /></div>
+          <div style={fld}><label style={lbl}>Chain ID</label><input style={inp} value={form.chain_id ?? ''} onChange={e => set('chain_id', e.target.value)} /></div>
+          <div style={fld}><label style={lbl}>VM Name</label><input style={inp} value={form.vm_name ?? ''} onChange={e => set('vm_name', e.target.value)} /></div>
+          <div style={fld}><label style={lbl}>Datacenter</label><input style={inp} value={form.datacenter ?? ''} onChange={e => set('datacenter', e.target.value)} /></div>
+          <div style={fld}>
+            <label style={lbl}>Node Type</label>
+            <select style={inp} value={form.node_type ?? 'node'} onChange={e => set('node_type', e.target.value as NodeType)}>
+              {(['validator', 'node', 'relayer', 'other'] as NodeType[]).map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div style={fld}>
+            <label style={lbl}>Network Type</label>
+            <select style={inp} value={form.network_type ?? 'mainnet'} onChange={e => set('network_type', e.target.value as NetworkType)}>
+              {(['mainnet', 'testnet', 'devnet'] as NetworkType[]).map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div style={fld}><label style={lbl}>Binary Path</label><input style={inp} value={form.binary_path ?? ''} onChange={e => set('binary_path', e.target.value)} placeholder="/usr/local/bin/cosmosd" /></div>
+          <div style={fld}><label style={lbl}>Cosmovisor Path</label><input style={inp} value={form.cosmovisor_path ?? ''} onChange={e => set('cosmovisor_path', e.target.value)} placeholder="/home/cosmos/.cosmovisor" /></div>
+          <div style={fld}><label style={lbl}>Config Dir</label><input style={inp} value={form.config_dir ?? ''} onChange={e => set('config_dir', e.target.value)} placeholder="/home/cosmos/.chain" /></div>
+          <div style={fld}><label style={lbl}>Valoper</label><input style={inp} value={form.valoper ?? ''} onChange={e => set('valoper', e.target.value)} /></div>
+          <div style={fld}><label style={lbl}>RPC Port</label><input style={inp} type="number" value={form.rpc_port ?? 26657} onChange={e => set('rpc_port', Number(e.target.value))} /></div>
+          <div style={fld}><label style={lbl}>API Port</label><input style={inp} type="number" value={form.api_port ?? 1317} onChange={e => set('api_port', Number(e.target.value))} /></div>
+          <div style={fld}><label style={lbl}>P2P Port</label><input style={inp} type="number" value={form.p2p_port ?? 26656} onChange={e => set('p2p_port', Number(e.target.value))} /></div>
+          <div style={{ ...fld, gridColumn: '1 / -1' }}>
+            <label style={lbl}>Cosmovisor Enabled</label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <input type="checkbox" checked={form.cosmovisor_enabled ?? false} onChange={e => set('cosmovisor_enabled', e.target.checked)} />
+              <span style={{ fontSize: '0.85rem', color: '#e5e7eb' }}>Enable cosmovisor for upgrades</span>
+            </label>
+          </div>
+          <div style={{ ...fld, gridColumn: '1 / -1' }}>
+            <label style={lbl}>Notes</label>
+            <textarea style={{ ...inp, minHeight: 60, resize: 'vertical' }} value={form.notes ?? ''} onChange={e => set('notes', e.target.value)} />
+          </div>
+        </div>
+
+        {err && <p style={{ color: '#f87171', fontSize: '0.82rem', margin: '0.5rem 0' }}>{err}</p>}
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: '1rem' }}>
+          <button onClick={onClose} style={{ padding: '0.4rem 1rem', fontSize: '0.85rem', borderRadius: 6, border: '1px solid #374151', background: '#111827', color: '#9ca3af', cursor: 'pointer' }}>Cancel</button>
+          <button onClick={save} disabled={saving} style={{ padding: '0.4rem 1rem', fontSize: '0.85rem', borderRadius: 6, border: 'none', background: '#3b82f6', color: '#fff', cursor: 'pointer', fontWeight: 600 }}>
+            {saving ? 'Saving…' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── UnitCard ──────────────────────────────────────────────────────────────────
 
 function UnitCard({
@@ -370,12 +479,14 @@ function UnitCard({
   onHistory,
   onLogs,
   onDeploy,
+  onEdit,
 }: {
   unit: CosmosUnitWithStatus;
   onDelete: (name: string) => void;
   onHistory: (u: CosmosUnitWithStatus) => void;
   onLogs: (u: CosmosUnitWithStatus) => void;
   onDeploy: (u: CosmosUnitWithStatus) => void;
+  onEdit: (u: CosmosUnitWithStatus) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const st = unit.status;
@@ -458,6 +569,13 @@ function UnitCard({
             🚀
           </button>
           <button
+            onClick={() => onEdit(unit)}
+            title="Edit unit"
+            style={{ background: '#1f2937', color: '#fbbf24', border: '1px solid #374151', borderRadius: 5, padding: '3px 8px', cursor: 'pointer', fontSize: 12 }}
+          >
+            ✏
+          </button>
+          <button
             onClick={() => onDelete(unit.name)}
             title="Delete unit"
             style={{ background: '#1f2937', color: '#f87171', border: '1px solid #374151', borderRadius: 5, padding: '3px 8px', cursor: 'pointer', fontSize: 12 }}
@@ -510,7 +628,9 @@ export default function UnitsPage() {
   const [historyUnit, setHistoryUnit] = useState<CosmosUnitWithStatus | null>(null);
   const [logUnit, setLogUnit] = useState<CosmosUnitWithStatus | null>(null);
   const [deployUnit, setDeployUnit] = useState<CosmosUnitWithStatus | null>(null);
-  const [filter, setFilter] = useState('');
+  const [editUnit, setEditUnit] = useState<CosmosUnitWithStatus | null>(null);
+  const [searchParams] = useSearchParams();
+  const [filter, setFilter] = useState(() => searchParams.get('filter') ?? '');
   const [filterType, setFilterType] = useState<NodeType | 'all'>('all');
   const [filterNet, setFilterNet] = useState<NetworkType | 'all'>('all');
   const filterRef = useRef(filter);
@@ -664,6 +784,7 @@ export default function UnitsPage() {
                   onHistory={setHistoryUnit}
                   onLogs={setLogUnit}
                   onDeploy={setDeployUnit}
+                  onEdit={setEditUnit}
                 />
               ))}
             </div>
@@ -676,6 +797,7 @@ export default function UnitsPage() {
       {historyUnit && <StatusHistoryModal unit={historyUnit} onClose={() => setHistoryUnit(null)} />}
       {logUnit && <LogModal unit={logUnit} onClose={() => setLogUnit(null)} />}
       {deployUnit && <DeployModal unit={deployUnit} onClose={() => setDeployUnit(null)} />}
+      {editUnit && <EditUnitModal unit={editUnit} onClose={() => setEditUnit(null)} onSaved={load} />}
     </div>
   );
 }

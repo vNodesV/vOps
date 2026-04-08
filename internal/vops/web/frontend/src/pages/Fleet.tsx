@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   getFleetVMs,
@@ -10,6 +10,7 @@ import {
   getVMStatus,
   vmUpgradeURL,
   getVMHistory,
+  deployFleet,
 } from '../api';
 import type { RegisteredChain, VMView, Deployment, VMStatus, VMMetricPoint } from '../api/types';
 import Spinner from '../components/Spinner';
@@ -471,11 +472,136 @@ function DeploymentsSection() {
   );
 }
 
+/* ── Deploy Wizard Modal ──────────────────────────────────────── */
+function DeployWizardModal({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient();
+
+  const vmsQ = useQuery({ queryKey: ['fleet-vms'], queryFn: getFleetVMs, staleTime: 60_000 });
+  const chainsQ = useQuery({ queryKey: ['registered-chains'], queryFn: getRegisteredChains, staleTime: 60_000 });
+
+  const vms: VMView[] = vmsQ.data?.vms ?? [];
+  const chains: RegisteredChain[] = chainsQ.data?.chains ?? [];
+
+  const [vm, setVm] = useState('');
+  const [chain, setChain] = useState('');
+  const [component, setComponent] = useState('');
+  const [script, setScript] = useState('');
+  const [dryRun, setDryRun] = useState(false);
+  const [result, setResult] = useState<{ deployment_id: number; status: string } | null>(null);
+  const [err, setErr] = useState('');
+  const [running, setRunning] = useState(false);
+
+  const deploy = async () => {
+    if (!vm || !chain || !component || !script) { setErr('All fields are required.'); return; }
+    setRunning(true);
+    setErr('');
+    try {
+      const res = await deployFleet({ vm, chain, component, script, dry_run: dryRun });
+      setResult(res);
+      qc.invalidateQueries({ queryKey: ['deployments'] });
+    } catch (e: unknown) {
+      setErr((e as Error).message);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const inp: React.CSSProperties = {
+    padding: '0.45rem 0.75rem', borderRadius: 'var(--vn-radius)', border: '1px solid var(--vn-border)',
+    background: 'var(--vn-surface)', color: 'var(--vn-text)', fontSize: '0.875rem', width: '100%',
+  };
+  const fld: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: '0.25rem', marginBottom: '0.85rem' };
+  const lbl: React.CSSProperties = { fontSize: '0.8rem', color: 'var(--vn-text-muted)', fontWeight: 500 };
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: 'var(--vn-surface)', borderRadius: 'var(--vn-radius)', padding: '1.75rem', width: 460, maxWidth: '95vw', boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <h2 style={{ margin: '0 0 1.25rem', fontSize: '1.1rem', color: 'var(--vn-text)' }}>🚀 Fleet Deploy</h2>
+
+        {result ? (
+          <div>
+            <div style={{ background: 'color-mix(in srgb, var(--vn-success) 12%, transparent)', color: 'var(--vn-success)', borderRadius: 'var(--vn-radius)', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.875rem' }}>
+              Deployment #{result.deployment_id} started — status: <strong>{result.status}</strong>.
+              <br />
+              <span style={{ fontSize: '0.78rem', color: 'var(--vn-text-muted)' }}>Check the Recent Deployments table for progress.</span>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <button onClick={onClose} style={{ padding: '0.4rem 1rem', fontSize: '0.85rem', borderRadius: 'var(--vn-radius)', border: '1px solid var(--vn-border)', background: 'var(--vn-surface-2)', color: 'var(--vn-text)', cursor: 'pointer' }}>Close</button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div style={fld}>
+              <label style={lbl}>Target VM *</label>
+              <select style={inp} value={vm} onChange={e => setVm(e.target.value)}>
+                <option value="">Select VM…</option>
+                {vms.map(v => <option key={v.name} value={v.name}>{v.name}{v.datacenter ? ` (${v.datacenter})` : ''}</option>)}
+              </select>
+            </div>
+            <div style={fld}>
+              <label style={lbl}>Chain *</label>
+              <select style={inp} value={chain} onChange={e => setChain(e.target.value)}>
+                <option value="">Select chain…</option>
+                {chains.map(c => <option key={c.chain} value={c.chain}>{c.chain}</option>)}
+              </select>
+            </div>
+            <div style={fld}>
+              <label style={lbl}>Component *</label>
+              <input style={inp} value={component} onChange={e => setComponent(e.target.value)} placeholder="e.g. cosmosd, relayer, nginx" />
+            </div>
+            <div style={fld}>
+              <label style={lbl}>Script / Command *</label>
+              <input style={inp} value={script} onChange={e => setScript(e.target.value)} placeholder="e.g. /opt/scripts/deploy.sh" />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+              <input type="checkbox" id="dry-run-chk" checked={dryRun} onChange={e => setDryRun(e.target.checked)} />
+              <label htmlFor="dry-run-chk" style={{ fontSize: '0.85rem', cursor: 'pointer' }}>Dry run (simulate only)</label>
+            </div>
+
+            {err && <p style={{ color: 'var(--vn-danger)', fontSize: '0.82rem', margin: '0.5rem 0' }}>{err}</p>}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+              <button onClick={onClose} style={{ padding: '0.4rem 1rem', fontSize: '0.85rem', borderRadius: 'var(--vn-radius)', border: '1px solid var(--vn-border)', background: 'var(--vn-surface-2)', color: 'var(--vn-text)', cursor: 'pointer' }}>Cancel</button>
+              <button
+                onClick={deploy}
+                disabled={running}
+                style={{ padding: '0.4rem 1rem', fontSize: '0.85rem', borderRadius: 'var(--vn-radius)', border: 'none', background: 'var(--vn-primary)', color: 'var(--vn-on-primary)', cursor: 'pointer', fontWeight: 600 }}
+              >
+                {running ? 'Deploying…' : dryRun ? '🔍 Dry Run' : '🚀 Deploy'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ── Page ────────────────────────────────────────────────────── */
 export default function FleetPage() {
+  const [showDeploy, setShowDeploy] = useState(false);
   return (
     <div>
-      <h1 style={{ margin: '0 0 1.5rem', fontSize: '1.5rem', fontWeight: 700 }}>Fleet</h1>
+      {showDeploy && <DeployWizardModal onClose={() => setShowDeploy(false)} />}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+        <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700 }}>Fleet</h1>
+        <button
+          onClick={() => setShowDeploy(true)}
+          style={{
+            padding: '0.45rem 1rem', fontSize: '0.85rem', borderRadius: 'var(--vn-radius)',
+            border: 'none', background: 'var(--vn-primary)', color: 'var(--vn-on-primary)',
+            cursor: 'pointer', fontWeight: 600,
+          }}
+        >
+          🚀 Deploy
+        </button>
+      </div>
       <ServersLiveSection />
       <RegisteredChainsSection />
       <VMsSection />

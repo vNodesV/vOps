@@ -63,6 +63,9 @@ export const syncUFW = (sudoPassword?: string) =>
 export const triggerIngest = () =>
   apiPost<{ ok: boolean; count: number }>('/api/v1/ingest');
 
+export const triggerBackupAndIngest = () =>
+  apiPost<{ processed: number; output: string }>('/api/v1/ingest/backup', {});
+
 export const getIngestStats = () =>
   apiFetch<ArchiveStats>('/api/v1/ingest/stats');
 
@@ -305,3 +308,15 @@ export const pingMultiProxInstance = (name: string) =>
 
 export const pingAllMultiProxInstances = () =>
   apiPost<{ instances: Array<{ name: string; status: string; last_seen: string }>; summary: string }>('/api/v1/multiprox/ping-all', {});
+
+// Fleet chain traffic
+export const getFleetChainTraffic = () =>
+  apiFetch<{ traffic: Array<{ host: string; requests: number }> }>('/api/v1/fleet/chains/traffic');
+
+// Fleet deployments
+export const deployFleet = (body: { vm: string; chain: string; component: string; script: string; dry_run?: boolean; env?: Record<string, string> }) =>
+  apiPost<{ deployment_id: number; status: string }>('/api/v1/fleet/deploy', body);
+
+// Audit log
+export const getAuditLog = (limit = 100, offset = 0) =>
+  apiFetch<{ entries: Array<{ id: number; ts: string; actor: string; action: string; target_type: string; target_name: string; params?: string; result?: string; error?: string }> }>(`/api/v1/audit?limit=${limit}&offset=${offset}`);

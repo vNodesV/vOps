@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { getFleetChains, getServices } from '../api';
+import { getFleetChains, getServices, getFleetChainTraffic } from '../api';
 import type { ChainStatus, Service, ServiceType } from '../api/types';
 import Badge from '../components/Badge';
 import Spinner from '../components/Spinner';
@@ -62,8 +63,54 @@ function fmtHeight(h: number): string {
   return h > 0 ? h.toLocaleString() : '—';
 }
 
+/* ── Upgrade Plan Modal ───────────────────────────────────────── */
+function UpgradePlanModal({ chain, onClose }: { chain: ChainStatus; onClose: () => void }) {
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: 'var(--vn-surface)', borderRadius: 'var(--vn-radius)', padding: '1.5rem', minWidth: 340, maxWidth: 500, boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <h3 style={{ margin: '0 0 1rem', fontSize: '1rem' }}>⬆ Upgrade Plan — {chain.chain_name ?? chain.chain}</h3>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+          <tbody>
+            <tr><td style={{ padding: '0.3rem 0.5rem', color: 'var(--vn-text-muted)' }}>Upgrade Name</td><td style={{ fontWeight: 600 }}>{chain.upgrade_name}</td></tr>
+            {chain.upgrade_height && <tr><td style={{ padding: '0.3rem 0.5rem', color: 'var(--vn-text-muted)' }}>Upgrade Height</td><td style={{ fontVariantNumeric: 'tabular-nums' }}>{chain.upgrade_height.toLocaleString()}</td></tr>}
+            <tr><td style={{ padding: '0.3rem 0.5rem', color: 'var(--vn-text-muted)' }}>Current Height</td><td style={{ fontVariantNumeric: 'tabular-nums' }}>{chain.height > 0 ? chain.height.toLocaleString() : '—'}</td></tr>
+            {chain.upgrade_height && chain.height > 0 && (
+              <tr>
+                <td style={{ padding: '0.3rem 0.5rem', color: 'var(--vn-text-muted)' }}>Blocks Remaining</td>
+                <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--vn-warning)' }}>
+                  {(chain.upgrade_height - chain.height).toLocaleString()}
+                  {chain.avg_block_sec ? ` (~${Math.round((chain.upgrade_height - chain.height) * chain.avg_block_sec / 60)} min)` : ''}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+        <div style={{ marginTop: '1.25rem', textAlign: 'right' }}>
+          <button
+            onClick={onClose}
+            style={{
+              padding: '0.4rem 1rem', fontSize: '0.82rem', borderRadius: 'var(--vn-radius)',
+              background: 'var(--vn-surface-2)', border: '1px solid var(--vn-border)',
+              color: 'var(--vn-text)', cursor: 'pointer',
+            }}
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Chains table row ─────────────────────────────────────────── */
 function ChainRow({ chain }: { chain: ChainStatus }) {
+  const [showUpgrade, setShowUpgrade] = useState(false);
   const syncStatus = chain.error ? 'error' : chain.catching_up ? 'syncing' : 'synced';
   const hasUpgrade = chain.upgrade_pending && chain.upgrade_name;
 
@@ -114,21 +161,35 @@ function ChainRow({ chain }: { chain: ChainStatus }) {
 
       {/* Upgrade */}
       <td style={tdStyle}>
+        {showUpgrade && <UpgradePlanModal chain={chain} onClose={() => setShowUpgrade(false)} />}
         {hasUpgrade ? (
-          <span style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.3rem',
-            background: 'rgba(255,167,38,0.12)',
-            color: 'var(--vn-warning)',
-            borderRadius: '1rem',
-            padding: '0.15rem 0.6rem',
-            fontSize: '0.75rem',
-            fontWeight: 600,
-          }}>
-            ⚡ {chain.upgrade_name}
-            {chain.upgrade_height ? ` @${chain.upgrade_height.toLocaleString()}` : ''}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+            <span style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.3rem',
+              background: 'rgba(255,167,38,0.12)',
+              color: 'var(--vn-warning)',
+              borderRadius: '1rem',
+              padding: '0.15rem 0.6rem',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+            }}>
+              ⚡ {chain.upgrade_name}
+              {chain.upgrade_height ? ` @${chain.upgrade_height.toLocaleString()}` : ''}
+            </span>
+            <button
+              onClick={() => setShowUpgrade(true)}
+              title="View upgrade plan details"
+              style={{
+                padding: '0.1rem 0.5rem', fontSize: '0.7rem', borderRadius: 'var(--vn-radius)',
+                border: '1px solid var(--vn-border)', background: 'var(--vn-surface-2)',
+                color: 'var(--vn-text)', cursor: 'pointer',
+              }}
+            >
+              🔍 Plan
+            </button>
+          </div>
         ) : (
           <span style={{ color: 'var(--vn-text-muted)', fontSize: '0.8rem' }}>—</span>
         )}
@@ -200,6 +261,64 @@ function ServiceItem({ svc, onClick }: { svc: Service; onClick: () => void }) {
 }
 
 /* ── Main page ────────────────────────────────────────────────── */
+/* ── Chain Traffic Section ───────────────────────────────────── */
+function TrafficSection() {
+  const { data, isLoading, isError, refetch, isFetching } = useQuery({
+    queryKey: ['chain-traffic'],
+    queryFn: getFleetChainTraffic,
+    staleTime: 60_000,
+  });
+
+  const traffic = data?.traffic ?? [];
+  const maxReqs = Math.max(...traffic.map(t => t.requests), 1);
+
+  return (
+    <section>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+        <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: 'var(--vn-text)' }}>
+          📊 Chain Traffic
+          <span style={{ fontSize: '0.75rem', fontWeight: 400, color: 'var(--vn-text-muted)', marginLeft: '0.5rem' }}>requests by host</span>
+        </h2>
+        <button
+          onClick={() => refetch()}
+          disabled={isFetching}
+          style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem', borderRadius: 'var(--vn-radius)', border: '1px solid var(--vn-border)', background: 'var(--vn-surface-2)', color: 'var(--vn-text)', cursor: 'pointer' }}
+        >
+          {isFetching ? '…' : '⟳'}
+        </button>
+      </div>
+
+      {isLoading ? (
+        <Spinner />
+      ) : isError ? (
+        <p style={{ color: 'var(--vn-danger)', fontSize: '0.85rem' }}>Could not load traffic data.</p>
+      ) : traffic.length === 0 ? (
+        <p style={{ color: 'var(--vn-text-muted)', fontSize: '0.85rem' }}>No traffic data available.</p>
+      ) : (
+        <div style={{ background: 'var(--vn-surface)', border: '1px solid var(--vn-border)', borderRadius: 'var(--vn-radius)', padding: '1rem' }}>
+          {traffic.sort((a, b) => b.requests - a.requests).map(t => (
+            <div key={t.host} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.6rem' }}>
+              <span style={{ fontSize: '0.8rem', color: 'var(--vn-text)', minWidth: 160, fontFamily: 'monospace' }}>{t.host}</span>
+              <div style={{ flex: 1, height: 14, background: 'var(--vn-surface-2)', borderRadius: 4, overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%',
+                  width: `${Math.round((t.requests / maxReqs) * 100)}%`,
+                  background: 'var(--vn-primary)',
+                  borderRadius: 4,
+                  transition: 'width 0.3s',
+                }} />
+              </div>
+              <span style={{ fontSize: '0.75rem', color: 'var(--vn-text-muted)', minWidth: 60, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                {t.requests.toLocaleString()} req
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function ChainsPage() {
   const navigate = useNavigate();
 
@@ -373,6 +492,9 @@ export default function ChainsPage() {
           </div>
         )}
       </section>
+
+      {/* ── Chain Traffic ────────────────────────────────────────── */}
+      <TrafficSection />
 
     </div>
   );

@@ -138,6 +138,15 @@ function InstanceRow({ inst, onRefresh }: { inst: VProxInstance; onRefresh: () =
       </td>
       <td style={{ padding: '0.5rem 0.75rem' }}>
         <div style={{ display: 'flex', gap: '0.4rem' }}>
+          <a
+            href={inst.url.replace(/\/$/, '') + '/vlog/'}
+            target="_blank"
+            rel="noreferrer"
+            style={{ ...btn, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
+            title="Open vProx dashboard"
+          >
+            🔗 Dashboard
+          </a>
           <button style={btn} onClick={handlePing} disabled={pinging} title="Ping health check">{pinging ? '…' : '⟳ Ping'}</button>
           <button style={dangerBtn} onClick={handleDelete} title="Remove instance">✕</button>
         </div>

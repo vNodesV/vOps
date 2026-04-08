@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getServices, createService, deleteService, getServiceETA } from '../api';
+import { getServices, createService, deleteService, getServiceETA, updateService } from '../api';
 import type { Service, ServiceType, ServiceETA } from '../api/types';
 import Badge from '../components/Badge';
 import Spinner from '../components/Spinner';
@@ -145,9 +145,112 @@ function ETABadge({ svcId }: { svcId: number }) {
   return <button style={{ ...btn, padding: '0.2rem 0.5rem', fontSize: '0.7rem' }} onClick={check}>Check ETA</button>;
 }
 
+/* ── Edit Service Modal ───────────────────────────────────────── */
+function EditServiceModal({ svc, onClose }: { svc: Service; onClose: () => void }) {
+  const qc = useQueryClient();
+  const cfg = (svc.config ?? {}) as Record<string, string>;
+  const [vmName, setVmName] = useState(svc.vm_name ?? '');
+  const [datacenter, setDatacenter] = useState(svc.datacenter ?? '');
+  const [chainId, setChainId] = useState(svc.chain_id ?? '');
+  const [configFields, setConfigFields] = useState<Record<string, string>>(cfg);
+  const [err, setErr] = useState('');
+
+  const setField = (key: string, val: string) =>
+    setConfigFields(prev => ({ ...prev, [key]: val }));
+
+  const mut = useMutation({
+    mutationFn: () => updateService(svc.id, {
+      vm_name: vmName,
+      datacenter,
+      chain_id: chainId,
+      config: Object.fromEntries(Object.entries(configFields).filter(([, v]) => v !== '')),
+    }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['services'] }); onClose(); },
+    onError: (e: Error) => setErr(e.message),
+  });
+
+  const overlay: React.CSSProperties = {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+  };
+  const modal: React.CSSProperties = {
+    background: 'var(--vn-surface)', borderRadius: 'var(--vn-radius)',
+    padding: '2rem', width: 460, maxWidth: '95vw', maxHeight: '90vh',
+    overflowY: 'auto', boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
+  };
+  const fieldStyle: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: '0.25rem', marginBottom: '0.85rem' };
+  const labelStyle: React.CSSProperties = { fontSize: '0.8rem', color: 'var(--vn-text-muted)', fontWeight: 500 };
+  const inputStyle: React.CSSProperties = {
+    padding: '0.45rem 0.75rem', borderRadius: 'var(--vn-radius)', border: '1px solid var(--vn-border)',
+    background: 'var(--vn-surface)', color: 'var(--vn-text)', fontSize: '0.875rem',
+  };
+
+  const extraFields = TYPE_FIELDS[svc.service_type] ?? [];
+
+  return (
+    <div style={overlay} role="dialog" aria-modal aria-label={`Edit service ${svc.name}`} onClick={onClose}>
+      <div style={modal} onClick={e => e.stopPropagation()}>
+        <h2 style={{ margin: '0 0 1.25rem', fontSize: '1.1rem', color: 'var(--vn-text)' }}>
+          ✏ Edit Service — {svc.name}
+          <span style={{ fontSize: '0.8rem', fontWeight: 400, color: 'var(--vn-text-muted)', marginLeft: '0.5rem' }}>
+            ({typeLabel[svc.service_type] ?? svc.service_type})
+          </span>
+        </h2>
+
+        <div style={fieldStyle}>
+          <label style={labelStyle}>VM Name</label>
+          <input style={inputStyle} value={vmName} onChange={e => setVmName(e.target.value)} placeholder="e.g. cosmos-vm-01" />
+        </div>
+        <div style={fieldStyle}>
+          <label style={labelStyle}>Datacenter</label>
+          <input style={inputStyle} value={datacenter} onChange={e => setDatacenter(e.target.value)} placeholder="e.g. QC" />
+        </div>
+        <div style={fieldStyle}>
+          <label style={labelStyle}>Chain ID</label>
+          <input style={inputStyle} value={chainId} onChange={e => setChainId(e.target.value)} placeholder="e.g. chihuahua-1" />
+        </div>
+
+        {extraFields.map(f => (
+          <div key={f.key} style={fieldStyle}>
+            <label style={labelStyle}>{f.label}{f.required ? ' *' : ''}</label>
+            {f.inputType === 'select' ? (
+              <select style={inputStyle} value={configFields[f.key] ?? ''} onChange={e => setField(f.key, e.target.value)}>
+                <option value="">Select…</option>
+                {f.options?.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            ) : (
+              <input
+                style={inputStyle}
+                value={configFields[f.key] ?? ''}
+                onChange={e => setField(f.key, e.target.value)}
+                placeholder={f.placeholder}
+              />
+            )}
+            {f.hint && <span style={{ fontSize: '0.72rem', color: 'var(--vn-text-muted)' }}>{f.hint}</span>}
+          </div>
+        ))}
+
+        {err && <p style={{ color: 'var(--vn-danger)', fontSize: '0.82rem', margin: '0.5rem 0' }}>{err}</p>}
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.25rem' }}>
+          <button onClick={onClose} style={{ ...btn, background: 'var(--vn-surface-2)' }}>Cancel</button>
+          <button
+            onClick={() => mut.mutate()}
+            disabled={mut.isPending}
+            style={{ ...btn, background: 'var(--vn-primary)', color: '#fff' }}
+          >
+            {mut.isPending ? 'Saving…' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Service row (with expandable detail) ─────────────────────── */
 function ServiceRow({ svc, onDelete }: { svc: Service; onDelete: () => void }) {
   const [expanded, setExpanded] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
   const status = stateStatus(svc);
   const cfg = (svc.config ?? {}) as Record<string, string>;
   const moniker = cfg.moniker;
@@ -157,6 +260,7 @@ function ServiceRow({ svc, onDelete }: { svc: Service; onDelete: () => void }) {
 
   return (
     <>
+      {showEdit && <EditServiceModal svc={svc} onClose={() => setShowEdit(false)} />}
       <tr
         style={{ borderBottom: expanded ? 'none' : '1px solid var(--vn-border)', cursor: 'pointer' }}
         onClick={() => setExpanded(v => !v)}
@@ -190,9 +294,18 @@ function ServiceRow({ svc, onDelete }: { svc: Service; onDelete: () => void }) {
           {svc.updated_at ? new Date(svc.updated_at).toLocaleDateString() : '—'}
         </td>
         <td style={{ padding: '0.75rem 1rem' }} onClick={e => e.stopPropagation()}>
-          <button style={dangerBtn} onClick={onDelete} aria-label={`Delete service ${svc.name}`}>
-            Remove
-          </button>
+          <div style={{ display: 'flex', gap: '0.35rem' }}>
+            <button
+              style={{ ...btn, padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}
+              onClick={() => setShowEdit(true)}
+              aria-label={`Edit service ${svc.name}`}
+            >
+              ✏ Edit
+            </button>
+            <button style={dangerBtn} onClick={onDelete} aria-label={`Delete service ${svc.name}`}>
+              Remove
+            </button>
+          </div>
         </td>
       </tr>
       {expanded && (

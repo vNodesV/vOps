@@ -10,7 +10,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from 'recharts';
-import { getStats, getChart, getFleetChains, triggerIngest, getIngestStats, getVMStatus, vmUpgradeURL, getVMHistory, getServices } from '../api';
+import { getStats, getChart, getFleetChains, triggerIngest, triggerBackupAndIngest, getIngestStats, getVMStatus, vmUpgradeURL, getVMHistory, getServices } from '../api';
 import type { Stats, ChartSeries, ChainStatus, ArchiveStats, VMStatus, VMMetricPoint } from '../api/types';
 import StatCard from '../components/StatCard';
 import Badge from '../components/Badge';
@@ -673,6 +673,14 @@ function IngestSection() {
     },
   });
 
+  const backupMut = useMutation({
+    mutationFn: triggerBackupAndIngest,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ingest-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['stats'] });
+    },
+  });
+
   const archiveStats: ArchiveStats | undefined = statsQ.data;
 
   return (
@@ -688,16 +696,31 @@ function IngestSection() {
         <h3 className="text-sm font-medium" style={{ color: 'var(--vn-text-muted)' }}>
           Archive Ingest
         </h3>
-        <button
-          onClick={() => ingestMut.mutate()}
-          disabled={ingestMut.isPending}
-          className="px-3 py-1.5 text-xs font-medium rounded-md btn-vn-primary
-                     disabled:opacity-50 cursor-pointer
-                     focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-          style={{ backgroundColor: 'var(--vn-primary)' }}
-        >
-          {ingestMut.isPending ? 'Ingesting\u2026' : 'Trigger Ingest'}
-        </button>
+        <div style={{ display: 'flex', gap: '0.4rem' }}>
+          <button
+            onClick={() => backupMut.mutate()}
+            disabled={backupMut.isPending || ingestMut.isPending}
+            title="Run vprox --new-backup then ingest"
+            style={{
+              cursor: 'pointer', fontSize: '0.75rem', fontWeight: 500,
+              padding: '0.3rem 0.65rem', borderRadius: 'var(--vn-radius)',
+              border: '1px solid var(--vn-border)', background: 'var(--vn-surface)',
+              color: 'var(--vn-text)', opacity: backupMut.isPending ? 0.5 : 1,
+            }}
+          >
+            {backupMut.isPending ? 'Backing up…' : '💾 Backup & Ingest'}
+          </button>
+          <button
+            onClick={() => ingestMut.mutate()}
+            disabled={ingestMut.isPending || backupMut.isPending}
+            className="px-3 py-1.5 text-xs font-medium rounded-md btn-vn-primary
+                       disabled:opacity-50 cursor-pointer
+                       focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
+            style={{ backgroundColor: 'var(--vn-primary)' }}
+          >
+            {ingestMut.isPending ? 'Ingesting\u2026' : 'Trigger Ingest'}
+          </button>
+        </div>
       </div>
 
       {ingestMut.isSuccess && (
@@ -707,6 +730,24 @@ function IngestSection() {
           role="alert"
         >
           Ingest complete &mdash; {ingestMut.data.count} events processed.
+        </div>
+      )}
+      {backupMut.isSuccess && (
+        <div
+          className="mb-3 p-2 rounded text-xs"
+          style={{ backgroundColor: 'color-mix(in srgb, var(--vn-success) 12%, transparent)', color: 'var(--vn-success)' }}
+          role="alert"
+        >
+          Backup &amp; ingest complete &mdash; {backupMut.data.processed} archives processed.
+        </div>
+      )}
+      {backupMut.isError && (
+        <div
+          className="mb-3 p-2 rounded text-xs"
+          style={{ backgroundColor: 'color-mix(in srgb, var(--vn-danger) 12%, transparent)', color: 'var(--vn-danger)' }}
+          role="alert"
+        >
+          Backup failed: {(backupMut.error as Error).message}
         </div>
       )}
       {ingestMut.isError && (

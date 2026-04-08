@@ -22,6 +22,7 @@ import PatchesPage from './pages/Patches';
 import UnitsPage from './pages/Units';
 import TopologyPage from './pages/Topology';
 import MultiProxPage from './pages/MultiProx';
+import AuditPage from './pages/Audit';
 import DebugPanel from './components/DebugPanel';
 import { logout, getDebugMode, setDebugMode } from './api';
 import { BASE } from './api/client';
@@ -239,6 +240,12 @@ function Shell({ children }: { children: React.ReactNode }) {
             </svg>
             Multi-vProx
           </SideLink>
+          <SideLink to="/audit">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+            </svg>
+            Audit Log
+          </SideLink>
           <SideLink to="/settings">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
               <circle cx="12" cy="12" r="3" />
@@ -342,6 +349,7 @@ export default function App() {
             <Route path="/units" element={<UnitsPage />} />
             <Route path="/topology" element={<TopologyPage />} />
             <Route path="/multiprox" element={<MultiProxPage />} />
+            <Route path="/audit" element={<AuditPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

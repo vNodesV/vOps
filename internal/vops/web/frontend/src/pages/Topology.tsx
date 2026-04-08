@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { getHosts, getFleetVMs, getUnits } from '../api';
 import type { HostInventory, CosmosUnitWithStatus } from '../api/types';
@@ -201,10 +202,18 @@ export default function TopologyPage() {
 
 /* ── VM row ───────────────────────────────────────────────────── */
 function VMRow({ vm, unitsByVM }: { vm: VMView; unitsByVM: Record<string, CosmosUnitWithStatus[]> }) {
+  const navigate = useNavigate();
   const vmUnits = unitsByVM[vm.name] ?? [];
   const color = statusColor(vm.state);
   return (
-    <div style={vmCard}>
+    <div
+      style={{ ...vmCard, cursor: 'pointer' }}
+      onClick={() => navigate(`/vms?filter=${encodeURIComponent(vm.name)}`)}
+      title={`Open ${vm.name} in VM Manager`}
+      role="button"
+      tabIndex={0}
+      onKeyDown={e => e.key === 'Enter' && navigate(`/vms?filter=${encodeURIComponent(vm.name)}`)}
+    >
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
         {dot(color)}
         <strong style={{ fontSize: '0.85rem' }}>{vm.name}</strong>
@@ -215,17 +224,26 @@ function VMRow({ vm, unitsByVM }: { vm: VMView; unitsByVM: Record<string, Cosmos
           {vm.mem_mib && vm.max_mem_mib ? ` · Mem ${Math.round(vm.mem_mib / vm.max_mem_mib * 100)}%` : ''}
           {vm.os ? ` · ${vm.os}` : ''}
         </span>
+        <span style={{ fontSize: '0.68rem', color: 'var(--vn-text-muted)', marginLeft: 'auto' }}>→ VM Manager</span>
       </div>
 
       {/* Unit badges */}
       {vmUnits.length > 0 && (
-        <div style={{ marginTop: '0.35rem' }}>
+        <div style={{ marginTop: '0.35rem' }} onClick={e => e.stopPropagation()}>
           {vmUnits.map(u => {
             const uColor = u.status
               ? statusColor(u.status.service_active ? (u.status.syncing ? 'syncing' : 'running') : 'down')
               : 'var(--vn-text-muted)';
             return (
-              <span key={u.name} style={unitBadge} title={`chain: ${u.chain_id} | height: ${u.status?.block_height ?? '?'} | peers: ${u.status?.peers ?? '?'}`}>
+              <span
+                key={u.name}
+                style={{ ...unitBadge, cursor: 'pointer' }}
+                title={`chain: ${u.chain_id} | height: ${u.status?.block_height ?? '?'} | peers: ${u.status?.peers ?? '?'} — click to manage`}
+                onClick={() => navigate(`/units?filter=${encodeURIComponent(u.name)}`)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={e => e.key === 'Enter' && navigate(`/units?filter=${encodeURIComponent(u.name)}`)}
+              >
                 {dot(uColor)}
                 {u.name}
                 {u.status?.upgrade_name && (

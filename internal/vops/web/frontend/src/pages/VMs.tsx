@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   getVMHosts,
@@ -317,7 +318,7 @@ function DomainCard({ host, domain }: { host: string; domain: LibvirtDomain }) {
 }
 
 /* ── Host Panel ───────────────────────────────────────────────── */
-function HostPanel({ host }: { host: HypervisorHost }) {
+function HostPanel({ host, search }: { host: HypervisorHost; search?: string }) {
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['vm-domains', host.name],
     queryFn: () => getVMDomains(host.name),
@@ -325,9 +326,12 @@ function HostPanel({ host }: { host: HypervisorHost }) {
     retry: false,
   });
 
-  const domains: LibvirtDomain[] = data?.domains ?? [];
-  const running = domains.filter(d => d.state === 'running').length;
-  const total = domains.length;
+  const allDomains: LibvirtDomain[] = data?.domains ?? [];
+  const domains = search
+    ? allDomains.filter(d => d.name.toLowerCase().includes(search.toLowerCase()))
+    : allDomains;
+  const running = allDomains.filter(d => d.state === 'running').length;
+  const total = allDomains.length;
 
   return (
     <div style={card}>
@@ -358,6 +362,8 @@ function HostPanel({ host }: { host: HypervisorHost }) {
         <p style={{ color: 'var(--vn-danger)', fontSize: '0.875rem' }}>
           SSH connection failed — check fleet config and SSH key for this host.
         </p>
+      ) : domains.length === 0 && search ? (
+        <p style={{ color: 'var(--vn-text-muted)', fontSize: '0.875rem' }}>No VMs match "{search}".</p>
       ) : domains.length === 0 ? (
         <p style={{ color: 'var(--vn-text-muted)', fontSize: '0.875rem' }}>No domains found on this host.</p>
       ) : (
@@ -522,6 +528,9 @@ function CreateVMModal({ hosts, onClose }: { hosts: HypervisorHost[]; onClose: (
 /* ── VMs Page ─────────────────────────────────────────────────── */
 export default function VMsPage() {
   const [showCreate, setShowCreate] = useState(false);
+  const [hostFilter, setHostFilter] = useState('');
+  const [searchParams] = useSearchParams();
+  const [search, setSearch] = useState(() => searchParams.get('filter') ?? '');
   const { data, isLoading, isError } = useQuery({
     queryKey: ['vm-hosts'],
     queryFn: getVMHosts,
@@ -529,6 +538,7 @@ export default function VMsPage() {
   });
 
   const hosts: HypervisorHost[] = data?.hosts ?? [];
+  const visibleHosts = hostFilter ? hosts.filter(h => h.name === hostFilter) : hosts;
 
   return (
     <div>
@@ -544,6 +554,49 @@ export default function VMsPage() {
           <button style={primaryBtn} onClick={() => setShowCreate(true)}>+ Create VM</button>
         )}
       </div>
+
+      {/* Filter bar — only shown when hosts are loaded */}
+      {hosts.length > 0 && (
+        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+          <select
+            value={hostFilter}
+            onChange={e => setHostFilter(e.target.value)}
+            style={{
+              padding: '0.35rem 0.6rem', fontSize: '0.8rem', borderRadius: 'var(--vn-radius)',
+              border: '1px solid var(--vn-border)', background: 'var(--vn-surface-2)',
+              color: 'var(--vn-text)', cursor: 'pointer',
+            }}
+            aria-label="Filter by host"
+          >
+            <option value="">All hosts</option>
+            {hosts.map(h => <option key={h.name} value={h.name}>{h.name}{h.datacenter ? ` (${h.datacenter})` : ''}</option>)}
+          </select>
+          <input
+            type="search"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search VM name…"
+            style={{
+              padding: '0.35rem 0.6rem', fontSize: '0.8rem', borderRadius: 'var(--vn-radius)',
+              border: '1px solid var(--vn-border)', background: 'var(--vn-surface-2)',
+              color: 'var(--vn-text)', minWidth: 180,
+            }}
+            aria-label="Search VM by name"
+          />
+          {(hostFilter || search) && (
+            <button
+              onClick={() => { setHostFilter(''); setSearch(''); }}
+              style={{
+                padding: '0.35rem 0.6rem', fontSize: '0.75rem', borderRadius: 'var(--vn-radius)',
+                border: '1px solid var(--vn-border)', background: 'var(--vn-surface)',
+                color: 'var(--vn-text-muted)', cursor: 'pointer',
+              }}
+            >
+              ✕ Clear
+            </button>
+          )}
+        </div>
+      )}
 
       {isLoading ? <Spinner /> : isError ? (
         <div style={card}>
@@ -566,7 +619,7 @@ user       = "ubuntu"
 datacenter = "QC"`}</pre>
         </div>
       ) : (
-        hosts.map(h => <HostPanel key={h.name} host={h} />)
+        visibleHosts.map(h => <HostPanel key={h.name} host={h} search={search} />)
       )}
     </div>
   );
