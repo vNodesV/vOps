@@ -96,6 +96,10 @@ func (h *Handlers) HandleCreate(w http.ResponseWriter, r *http.Request) {
 	if len(req.Config) > 0 {
 		cfg = string(req.Config)
 	}
+	if missing := validateConfig(req.ServiceType, json.RawMessage(cfg)); missing != "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("required config field missing: %s", missing)})
+		return
+	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	res, err := h.db.Exec(`
 		INSERT INTO services (name, service_type, vm_name, datacenter, chain_id, state, config, created_at, updated_at)

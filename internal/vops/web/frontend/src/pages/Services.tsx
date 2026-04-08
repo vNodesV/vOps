@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getServices, createService, deleteService } from '../api';
-import type { Service, ServiceType } from '../api/types';
+import { getServices, createService, deleteService, getServiceETA } from '../api';
+import type { Service, ServiceType, ServiceETA } from '../api/types';
 import Badge from '../components/Badge';
 import Spinner from '../components/Spinner';
 
@@ -53,6 +53,60 @@ const typeLabel: Record<ServiceType, string> = {
 
 const SERVICE_TYPES: ServiceType[] = ['validator', 'api', 'rpc', 'node', 'relayer', 'webserver', 'vprox', 'other'];
 
+/** Types that support ETA polling (they have rpc_url). */
+const ETA_TYPES = new Set<ServiceType>(['validator', 'api', 'rpc', 'node', 'relayer']);
+
+/* ── Per-type config field definitions (mirrors backend schema.go) ── */
+type FieldDef = { key: string; label: string; inputType: 'text' | 'select'; required?: boolean; placeholder?: string; options?: string[]; hint?: string };
+
+const TYPE_FIELDS: Partial<Record<ServiceType, FieldDef[]>> = {
+  validator: [
+    { key: 'rpc_url', label: 'Node RPC URL', inputType: 'text', required: true, placeholder: 'http://localhost:26657', hint: "Local node's CometBFT RPC" },
+    { key: 'moniker', label: 'Moniker', inputType: 'text', required: true, placeholder: 'my-validator' },
+    { key: 'valoper', label: 'Valoper Address', inputType: 'text', required: true, placeholder: 'chihuahuavaloper1…' },
+    { key: 'wallet_key_name', label: 'Wallet Key Name', inputType: 'text', placeholder: 'validator-key' },
+    { key: 'preferred_explorer', label: 'Explorer URL', inputType: 'text', placeholder: 'https://ping.pub/chihuahua' },
+    { key: 'ref_rpc_url', label: 'Reference RPC (synced)', inputType: 'text', placeholder: 'https://rpc.chihuahua.wtf', hint: 'Used for ETA calculation' },
+  ],
+  api: [
+    { key: 'rpc_url', label: 'API URL', inputType: 'text', required: true, placeholder: 'http://localhost:1317' },
+    { key: 'moniker', label: 'Moniker', inputType: 'text', required: true },
+    { key: 'preferred_explorer', label: 'Explorer URL', inputType: 'text', placeholder: 'https://ping.pub/chihuahua' },
+    { key: 'ref_rpc_url', label: 'Reference RPC (synced)', inputType: 'text', hint: 'Used for ETA calculation' },
+  ],
+  rpc: [
+    { key: 'rpc_url', label: 'RPC URL', inputType: 'text', required: true, placeholder: 'http://localhost:26657' },
+    { key: 'moniker', label: 'Moniker', inputType: 'text', required: true },
+    { key: 'preferred_explorer', label: 'Explorer URL', inputType: 'text', placeholder: 'https://ping.pub/chihuahua' },
+    { key: 'ref_rpc_url', label: 'Reference RPC (synced)', inputType: 'text', hint: 'Used for ETA calculation' },
+  ],
+  node: [
+    { key: 'rpc_url', label: 'Node RPC URL', inputType: 'text', required: true, placeholder: 'http://localhost:26657' },
+    { key: 'moniker', label: 'Moniker', inputType: 'text', required: true },
+    { key: 'preferred_explorer', label: 'Explorer URL', inputType: 'text', placeholder: 'https://ping.pub/chihuahua' },
+    { key: 'ref_rpc_url', label: 'Reference RPC (synced)', inputType: 'text', hint: 'Used for ETA calculation' },
+  ],
+  relayer: [
+    { key: 'rpc_url', label: 'Relayer RPC URL', inputType: 'text', required: true, placeholder: 'http://localhost:26657' },
+    { key: 'moniker', label: 'Moniker', inputType: 'text', required: true },
+    { key: 'wallet_key_name', label: 'Wallet Key Name', inputType: 'text', placeholder: 'relayer-key' },
+    { key: 'channels', label: 'IBC Channels', inputType: 'text', placeholder: 'channel-0,channel-1', hint: 'Comma-separated' },
+    { key: 'preferred_explorer', label: 'Explorer URL', inputType: 'text' },
+    { key: 'ref_rpc_url', label: 'Reference RPC (synced)', inputType: 'text', hint: 'Used for ETA calculation' },
+  ],
+  webserver: [
+    { key: 'engine', label: 'Web Server Engine', inputType: 'select', required: true, options: ['nginx', 'apache2', 'caddy', 'other'] },
+    { key: 'public_ip', label: 'Public IP / Domain', inputType: 'text', required: true, placeholder: '1.2.3.4 or example.com' },
+    { key: 'cert_domain', label: 'TLS Certificate Domain', inputType: 'text', placeholder: 'example.com', hint: 'Domain to check cert expiry' },
+  ],
+  vprox: [
+    { key: 'api_url', label: 'vProx API URL', inputType: 'text', placeholder: 'http://localhost:8080' },
+  ],
+  other: [
+    { key: 'note', label: 'Notes', inputType: 'text', placeholder: 'Describe this service' },
+  ],
+};
+
 function stateStatus(s: Service): 'online' | 'error' | 'inactive' | 'unknown' {
   if (s.state === 'online') return 'online';
   if (s.state === 'down') return 'error';
@@ -60,13 +114,45 @@ function stateStatus(s: Service): 'online' | 'error' | 'inactive' | 'unknown' {
   return 'inactive';
 }
 
+/* ── ETA badge ────────────────────────────────────────────────── */
+function ETABadge({ svcId }: { svcId: number }) {
+  const [eta, setEta] = useState<ServiceETA | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const check = async () => {
+    setLoading(true);
+    try { setEta(await getServiceETA(svcId)); } catch { setEta(null); } finally { setLoading(false); }
+  };
+
+  if (loading) return <span style={{ fontSize: '0.75rem', color: 'var(--vn-text-muted)' }}>…</span>;
+  if (eta) {
+    if (eta.error) return <span style={{ fontSize: '0.75rem', color: 'var(--vn-danger)' }} title={eta.error}>⚠ err</span>;
+    if (!eta.catching_up) return <span style={{ fontSize: '0.75rem', color: 'var(--vn-success)' }}>✓ synced</span>;
+    return (
+      <span style={{ fontSize: '0.75rem', color: 'var(--vn-warning)' }} title={`${eta.blocks_behind} blocks behind | avg ${eta.avg_block_sec.toFixed(1)}s`}>
+        ⏳ {eta.eta_human}
+      </span>
+    );
+  }
+  return <button style={{ ...btn, padding: '0.2rem 0.5rem', fontSize: '0.7rem' }} onClick={check}>ETA</button>;
+}
+
 /* ── Service row ──────────────────────────────────────────────── */
 function ServiceRow({ svc, onDelete }: { svc: Service; onDelete: () => void }) {
   const status = stateStatus(svc);
+  const cfg = svc.config ?? {};
+  const moniker = (cfg as Record<string, string>).moniker;
+  const showETA = ETA_TYPES.has(svc.service_type);
+
   return (
     <tr style={{ borderBottom: '1px solid var(--vn-border)' }}>
       <td style={{ padding: '0.75rem 1rem', fontWeight: 600, color: 'var(--vn-text)' }}>
         {svc.name}
+        {moniker && moniker !== svc.name && (
+          <span style={{ fontWeight: 400, color: 'var(--vn-text-muted)', marginLeft: '0.4rem', fontSize: '0.8rem' }}>
+            ({moniker})
+          </span>
+        )}
       </td>
       <td style={{ padding: '0.75rem 1rem', color: 'var(--vn-text-muted)', fontSize: '0.8rem' }}>
         {typeLabel[svc.service_type] ?? svc.service_type}
@@ -79,6 +165,9 @@ function ServiceRow({ svc, onDelete }: { svc: Service; onDelete: () => void }) {
       </td>
       <td style={{ padding: '0.75rem 1rem' }}>
         <Badge status={status} />
+      </td>
+      <td style={{ padding: '0.75rem 1rem' }}>
+        {showETA ? <ETABadge svcId={svc.id} /> : <span style={{ color: 'var(--vn-text-muted)', fontSize: '0.75rem' }}>—</span>}
       </td>
       <td style={{ padding: '0.75rem 1rem', fontSize: '0.75rem', color: 'var(--vn-text-muted)' }}>
         {svc.updated_at ? new Date(svc.updated_at).toLocaleDateString() : '—'}
@@ -100,10 +189,21 @@ function AddServiceModal({ onClose }: { onClose: () => void }) {
   const [vmName, setVmName] = useState('');
   const [datacenter, setDatacenter] = useState('');
   const [chainId, setChainId] = useState('');
+  const [configFields, setConfigFields] = useState<Record<string, string>>({});
   const [err, setErr] = useState('');
 
+  const setField = (key: string, val: string) =>
+    setConfigFields(prev => ({ ...prev, [key]: val }));
+
   const mut = useMutation({
-    mutationFn: () => createService({ name, service_type: serviceType, vm_name: vmName, datacenter, chain_id: chainId }),
+    mutationFn: () => createService({
+      name,
+      service_type: serviceType,
+      vm_name: vmName,
+      datacenter,
+      chain_id: chainId,
+      config: Object.fromEntries(Object.entries(configFields).filter(([, v]) => v !== '')),
+    }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['services'] }); onClose(); },
     onError: (e: Error) => setErr(e.message),
   });
@@ -114,46 +214,81 @@ function AddServiceModal({ onClose }: { onClose: () => void }) {
   };
   const modal: React.CSSProperties = {
     background: 'var(--vn-surface)', borderRadius: 'var(--vn-radius)',
-    padding: '2rem', minWidth: 400, maxWidth: '90vw', boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
+    padding: '2rem', width: 460, maxWidth: '95vw', maxHeight: '90vh',
+    overflowY: 'auto', boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
   };
-  const field: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: '0.25rem', marginBottom: '1rem' };
-  const label: React.CSSProperties = { fontSize: '0.8rem', color: 'var(--vn-text-muted)', fontWeight: 500 };
-  const input: React.CSSProperties = {
+  const fieldStyle: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: '0.25rem', marginBottom: '0.85rem' };
+  const labelStyle: React.CSSProperties = { fontSize: '0.8rem', color: 'var(--vn-text-muted)', fontWeight: 500 };
+  const inputStyle: React.CSSProperties = {
     padding: '0.45rem 0.75rem', borderRadius: 'var(--vn-radius)', border: '1px solid var(--vn-border)',
     background: 'var(--vn-surface)', color: 'var(--vn-text)', fontSize: '0.875rem',
   };
+
+  const extraFields = TYPE_FIELDS[serviceType] ?? [];
 
   return (
     <div style={overlay} role="dialog" aria-modal aria-label="Add service">
       <div style={modal}>
         <h2 style={{ margin: '0 0 1.25rem', fontSize: '1.1rem', color: 'var(--vn-text)' }}>Add Service</h2>
 
-        <div style={field}>
-          <label style={label}>Service name *</label>
-          <input style={input} value={name} onChange={e => setName(e.target.value)} placeholder="e.g. chihuahua-validator" />
+        {/* Core fields */}
+        <div style={fieldStyle}>
+          <label style={labelStyle}>Service name *</label>
+          <input style={inputStyle} value={name} onChange={e => setName(e.target.value)} placeholder="e.g. chihuahua-validator" />
         </div>
-        <div style={field}>
-          <label style={label}>Service type *</label>
-          <select style={input} value={serviceType} onChange={e => setServiceType(e.target.value as ServiceType)}>
+        <div style={fieldStyle}>
+          <label style={labelStyle}>Service type *</label>
+          <select style={inputStyle} value={serviceType} onChange={e => { setServiceType(e.target.value as ServiceType); setConfigFields({}); }}>
             {SERVICE_TYPES.map(t => <option key={t} value={t}>{typeLabel[t]}</option>)}
           </select>
         </div>
-        <div style={field}>
-          <label style={label}>Running on VM</label>
-          <input style={input} value={vmName} onChange={e => setVmName(e.target.value)} placeholder="e.g. chihuahua" />
+        <div style={fieldStyle}>
+          <label style={labelStyle}>Running on VM</label>
+          <input style={inputStyle} value={vmName} onChange={e => setVmName(e.target.value)} placeholder="e.g. chihuahua" />
         </div>
-        <div style={field}>
-          <label style={label}>Datacenter</label>
-          <input style={input} value={datacenter} onChange={e => setDatacenter(e.target.value)} placeholder="e.g. QC-BHE1" />
+        <div style={fieldStyle}>
+          <label style={labelStyle}>Datacenter</label>
+          <input style={inputStyle} value={datacenter} onChange={e => setDatacenter(e.target.value)} placeholder="e.g. QC-BHE1" />
         </div>
-        <div style={field}>
-          <label style={label}>Chain ID</label>
-          <input style={input} value={chainId} onChange={e => setChainId(e.target.value)} placeholder="e.g. chihuahua-1" />
+        <div style={fieldStyle}>
+          <label style={labelStyle}>Chain ID</label>
+          <input style={inputStyle} value={chainId} onChange={e => setChainId(e.target.value)} placeholder="e.g. chihuahua-1" />
         </div>
+
+        {/* Type-specific config fields */}
+        {extraFields.length > 0 && (
+          <>
+            <hr style={{ margin: '0.75rem 0', borderColor: 'var(--vn-border)' }} />
+            <p style={{ margin: '0 0 0.75rem', fontSize: '0.75rem', color: 'var(--vn-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
+              {typeLabel[serviceType]} configuration
+            </p>
+            {extraFields.map(f => (
+              <div key={f.key} style={fieldStyle}>
+                <label style={labelStyle}>
+                  {f.label}{f.required ? ' *' : ''}
+                  {f.hint && <span style={{ fontWeight: 400, marginLeft: 4 }}>— {f.hint}</span>}
+                </label>
+                {f.inputType === 'select' ? (
+                  <select style={inputStyle} value={configFields[f.key] ?? ''} onChange={e => setField(f.key, e.target.value)}>
+                    <option value="">— select —</option>
+                    {f.options?.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                ) : (
+                  <input
+                    style={inputStyle}
+                    value={configFields[f.key] ?? ''}
+                    onChange={e => setField(f.key, e.target.value)}
+                    placeholder={f.placeholder ?? ''}
+                  />
+                )}
+              </div>
+            ))}
+          </>
+        )}
 
         {err && <p style={{ color: 'var(--vn-danger)', fontSize: '0.8rem', margin: '0 0 1rem' }}>{err}</p>}
 
-        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
           <button style={btn} onClick={onClose}>Cancel</button>
           <button style={primaryBtn} disabled={!name || mut.isPending}
             onClick={() => { setErr(''); mut.mutate(); }}>
@@ -228,26 +363,28 @@ export default function ServicesPage() {
 
       {services.length > 0 && (
         <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-            <thead>
-              <tr style={{ background: 'var(--vn-surface-2)', borderBottom: '1px solid var(--vn-border)' }}>
-                {['Name', 'Type', 'VM', 'Chain', 'Status', 'Updated', ''].map(h => (
-                  <th key={h} style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 600, color: 'var(--vn-text-muted)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    {h}
-                  </th>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+              <thead>
+                <tr style={{ background: 'var(--vn-surface-2)', borderBottom: '1px solid var(--vn-border)' }}>
+                  {['Name', 'Type', 'VM', 'Chain', 'Status', 'Sync ETA', 'Updated', ''].map(h => (
+                    <th key={h} style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 600, color: 'var(--vn-text-muted)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {services.map(svc => (
+                  <ServiceRow
+                    key={svc.id}
+                    svc={svc}
+                    onDelete={() => { if (confirm(`Remove service "${svc.name}"?`)) delMut.mutate(svc.id); }}
+                  />
                 ))}
-              </tr>
-            </thead>
-            <tbody>
-              {services.map(svc => (
-                <ServiceRow
-                  key={svc.id}
-                  svc={svc}
-                  onDelete={() => { if (confirm(`Remove service "${svc.name}"?`)) delMut.mutate(svc.id); }}
-                />
-              ))}
-            </tbody>
-          </table>
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

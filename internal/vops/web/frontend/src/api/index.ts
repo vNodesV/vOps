@@ -234,3 +234,9 @@ export const updateService = (
 
 export const deleteService = (id: number) =>
   apiFetch<{ deleted: number }>(`/api/v1/services/${id}`, { method: 'DELETE' });
+
+export const getServiceSchema = () =>
+  apiFetch<import('./types').ServiceSchema>('/api/v1/services/schema');
+
+export const getServiceETA = (id: number) =>
+  apiFetch<import('./types').ServiceETA>(`/api/v1/services/${id}/eta`);

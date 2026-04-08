@@ -315,6 +315,10 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		s.requireSession(http.HandlerFunc(s.svcMgr.HandleDelete)))
 	mux.Handle("POST /api/v1/services/{id}/status",
 		s.requireSession(http.HandlerFunc(s.svcMgr.HandlePushStatus)))
+	mux.Handle("GET /api/v1/services/schema",
+		s.requireSession(http.HandlerFunc(s.svcMgr.HandleSchema)))
+	mux.Handle("GET /api/v1/services/{id}/eta",
+		s.requireSession(http.HandlerFunc(s.svcMgr.HandleETA)))
 
 	readTimeout := time.Duration(cfg.VOps.Server.ReadTimeoutSec) * time.Second
 	writeTimeout := time.Duration(cfg.VOps.Server.WriteTimeoutSec) * time.Second

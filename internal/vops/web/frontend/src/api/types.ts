@@ -224,3 +224,29 @@ export interface ServiceStatus {
   online?: boolean;
   metrics?: Record<string, unknown>;
 }
+
+// Service field schema (from GET /api/v1/services/schema)
+export interface ServiceFieldDef {
+  key: string;
+  label: string;
+  type: 'text' | 'select' | 'bool';
+  required?: boolean;
+  placeholder?: string;
+  options?: string[];
+  hint?: string;
+}
+export type ServiceSchema = Record<ServiceType, ServiceFieldDef[]>;
+
+// Sync ETA result (from GET /api/v1/services/{id}/eta)
+export interface ServiceETA {
+  service_id: number;
+  catching_up: boolean;
+  local_height: number;
+  ext_height: number;
+  blocks_behind: number;
+  avg_block_sec: number;
+  eta_seconds: number;
+  eta_human: string;
+  polled_at: string;
+  error?: string;
+}
