@@ -365,7 +365,14 @@ function HostPanel({ host, search }: { host: HypervisorHost; search?: string }) 
       ) : domains.length === 0 && search ? (
         <p style={{ color: 'var(--vn-text-muted)', fontSize: '0.875rem' }}>No VMs match "{search}".</p>
       ) : domains.length === 0 ? (
-        <p style={{ color: 'var(--vn-text-muted)', fontSize: '0.875rem' }}>No domains found on this host.</p>
+        <div style={{ color: 'var(--vn-text-muted)', fontSize: '0.875rem' }}>
+          <p style={{ margin: '0 0 0.5rem' }}>No VMs found on this hypervisor.</p>
+          <p style={{ margin: 0, fontSize: '0.8rem' }}>
+            This can mean: (a) no VMs are defined yet — use <strong>+ Create VM</strong> to deploy one,
+            or (b) the SSH connection to libvirtd failed. Verify with:{' '}
+            <code style={{ background: 'var(--vn-surface-2)', padding: '0.1rem 0.3rem', borderRadius: 3 }}>ssh user@host virsh list --all</code>
+          </p>
+        </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '0.75rem' }}>
           {domains.map(d => (

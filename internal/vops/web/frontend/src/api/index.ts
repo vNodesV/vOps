@@ -301,7 +301,7 @@ export const createMultiProxInstance = (body: { name: string; url: string; api_k
   apiPost<{ ok: string }>('/api/v1/multiprox', body);
 
 export const deleteMultiProxInstance = (name: string) =>
-  apiFetch<{ ok: string }>(`/api/v1/multiprox/${encodeURIComponent(name)}`, { method: 'DELETE' });
+  apiPost<{ ok: string }>(`/api/v1/multiprox/${encodeURIComponent(name)}/delete`, {});
 
 export const pingMultiProxInstance = (name: string) =>
   apiPost<{ name: string; status: string; last_seen: string }>(`/api/v1/multiprox/${encodeURIComponent(name)}/ping`, {});

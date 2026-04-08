@@ -270,7 +270,7 @@ function TrafficSection() {
   });
 
   const traffic = data?.traffic ?? [];
-  const maxReqs = Math.max(...traffic.map(t => t.requests), 1);
+  const maxReqs = Math.max(...traffic.map(t => (t.requests ?? 0)), 1);
 
   return (
     <section>
@@ -296,20 +296,20 @@ function TrafficSection() {
         <p style={{ color: 'var(--vn-text-muted)', fontSize: '0.85rem' }}>No traffic data available.</p>
       ) : (
         <div style={{ background: 'var(--vn-surface)', border: '1px solid var(--vn-border)', borderRadius: 'var(--vn-radius)', padding: '1rem' }}>
-          {traffic.sort((a, b) => b.requests - a.requests).map(t => (
+          {traffic.sort((a, b) => (b.requests ?? 0) - (a.requests ?? 0)).map(t => (
             <div key={t.host} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.6rem' }}>
               <span style={{ fontSize: '0.8rem', color: 'var(--vn-text)', minWidth: 160, fontFamily: 'monospace' }}>{t.host}</span>
               <div style={{ flex: 1, height: 14, background: 'var(--vn-surface-2)', borderRadius: 4, overflow: 'hidden' }}>
                 <div style={{
                   height: '100%',
-                  width: `${Math.round((t.requests / maxReqs) * 100)}%`,
+                  width: `${Math.round(((t.requests ?? 0) / maxReqs) * 100)}%`,
                   background: 'var(--vn-primary)',
                   borderRadius: 4,
                   transition: 'width 0.3s',
                 }} />
               </div>
               <span style={{ fontSize: '0.75rem', color: 'var(--vn-text-muted)', minWidth: 60, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                {t.requests.toLocaleString()} req
+                {(t.requests ?? 0).toLocaleString()} req
               </span>
             </div>
           ))}

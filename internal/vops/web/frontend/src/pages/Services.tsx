@@ -61,12 +61,12 @@ type FieldDef = { key: string; label: string; inputType: 'text' | 'select'; requ
 
 const TYPE_FIELDS: Partial<Record<ServiceType, FieldDef[]>> = {
   validator: [
-    { key: 'rpc_url', label: 'Node RPC URL', inputType: 'text', required: true, placeholder: 'http://localhost:26657', hint: "Local node's CometBFT RPC" },
-    { key: 'moniker', label: 'Moniker', inputType: 'text', required: true, placeholder: 'my-validator' },
     { key: 'valoper', label: 'Valoper Address', inputType: 'text', required: true, placeholder: 'chihuahuavaloper1…' },
+    { key: 'moniker', label: 'Moniker', inputType: 'text', required: true, placeholder: 'my-validator' },
+    { key: 'rpc_url', label: 'Node RPC URL', inputType: 'text', placeholder: 'http://localhost:26657', hint: "Local node's CometBFT RPC (optional — omit if not running a node)" },
     { key: 'wallet_key_name', label: 'Wallet Key Name', inputType: 'text', placeholder: 'validator-key' },
     { key: 'preferred_explorer', label: 'Explorer URL', inputType: 'text', placeholder: 'https://ping.pub/chihuahua' },
-    { key: 'ref_rpc_url', label: 'Reference RPC (synced)', inputType: 'text', placeholder: 'https://rpc.chihuahua.wtf', hint: 'Used for ETA calculation' },
+    { key: 'ref_rpc_url', label: 'Reference RPC (synced)', inputType: 'text', placeholder: 'https://rpc.chihuahua.wtf', hint: 'Used for ETA calculation — auto-filled from cosmos.directory' },
   ],
   api: [
     { key: 'rpc_url', label: 'API URL', inputType: 'text', required: true, placeholder: 'http://localhost:1317' },
@@ -210,6 +210,33 @@ function EditServiceModal({ svc, onClose }: { svc: Service; onClose: () => void 
           <input style={inputStyle} value={chainId} onChange={e => setChainId(e.target.value)} placeholder="e.g. chihuahua-1" />
         </div>
 
+        {svc.service_type === 'validator' && chainId && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--vn-surface-2)', padding: '0.5rem 0.75rem', borderRadius: 'var(--vn-radius)', border: '1px solid var(--vn-border)', marginBottom: '0.75rem' }}>
+            <span style={{ fontSize: '0.75rem', color: 'var(--vn-text-muted)' }}>Auto-fill from cosmos.directory</span>
+            <button
+              type="button"
+              style={{ fontSize: '0.72rem', padding: '0.2rem 0.6rem', cursor: 'pointer', border: '1px solid var(--vn-border)', borderRadius: 'var(--vn-radius)', background: 'var(--vn-surface)', color: 'var(--vn-text)' }}
+              onClick={async () => {
+                try {
+                  const res = await fetch(`https://cosmos.directory/${chainId.toLowerCase()}/chain`);
+                  if (!res.ok) return;
+                  const d = await res.json();
+                  const rpcs: Array<{ address: string }> = d?.chain?.apis?.rpc ?? [];
+                  if (rpcs.length > 0) {
+                    setConfigFields(prev => ({ ...prev, ref_rpc_url: rpcs[0].address }));
+                  }
+                  const explorers: Array<{ url: string }> = d?.chain?.explorers ?? [];
+                  if (explorers.length > 0 && !configFields.preferred_explorer) {
+                    setConfigFields(prev => ({ ...prev, preferred_explorer: explorers[0].url }));
+                  }
+                } catch { /* ignore network errors */ }
+              }}
+            >
+              ↓ Fetch RPC + Explorer
+            </button>
+          </div>
+        )}
+
         {extraFields.map(f => (
           <div key={f.key} style={fieldStyle}>
             <label style={labelStyle}>{f.label}{f.required ? ' *' : ''}</label>
@@ -311,22 +338,30 @@ function ServiceRow({ svc, onDelete }: { svc: Service; onDelete: () => void }) {
       {expanded && (
         <tr style={{ borderBottom: '1px solid var(--vn-border)', background: 'var(--vn-surface-2)' }}>
           <td colSpan={colSpan} style={{ padding: '0.75rem 1.5rem 1rem' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '0.5rem 1.5rem' }}>
-              {fields.map(f => {
-                const val = cfg[f.key];
-                if (!val) return null;
-                return (
-                  <div key={f.key} style={{ fontSize: '0.78rem' }}>
-                    <span style={{ color: 'var(--vn-text-muted)', fontWeight: 500 }}>{f.label}: </span>
-                    <span style={{ color: 'var(--vn-text)', fontFamily: f.key.includes('url') ? 'monospace' : undefined }}>
-                      {val}
-                    </span>
-                  </div>
-                );
-              })}
-              {fields.every(f => !cfg[f.key]) && (
-                <span style={{ fontSize: '0.78rem', color: 'var(--vn-text-muted)' }}>No config fields set.</span>
-              )}
+            {fields.length === 0 ? (
+              <span style={{ fontSize: '0.78rem', color: 'var(--vn-text-muted)' }}>No config fields for this service type.</span>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '0.5rem 1.5rem' }}>
+                {fields.map(f => {
+                  const val = cfg[f.key];
+                  return (
+                    <div key={f.key} style={{ fontSize: '0.78rem' }}>
+                      <span style={{ color: 'var(--vn-text-muted)', fontWeight: 500 }}>{f.label}: </span>
+                      <span style={{ color: val ? 'var(--vn-text)' : 'var(--vn-text-muted)', fontFamily: f.key.includes('url') ? 'monospace' : undefined, fontStyle: val ? 'normal' : 'italic' }}>
+                        {val || '—'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <div style={{ marginTop: '0.5rem' }}>
+              <button
+                onClick={e => { e.stopPropagation(); setShowEdit(true); }}
+                style={{ fontSize: '0.72rem', padding: '0.2rem 0.6rem', cursor: 'pointer', border: '1px solid var(--vn-border)', borderRadius: 'var(--vn-radius)', background: 'var(--vn-surface)', color: 'var(--vn-text)' }}
+              >
+                ✏ Edit Config
+              </button>
             </div>
           </td>
         </tr>
@@ -416,6 +451,32 @@ function AddServiceModal({ onClose }: { onClose: () => void }) {
             <p style={{ margin: '0 0 0.75rem', fontSize: '0.75rem', color: 'var(--vn-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
               {typeLabel[serviceType]} configuration
             </p>
+            {serviceType === 'validator' && chainId && (
+              <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--vn-surface-2)', padding: '0.5rem 0.75rem', borderRadius: 'var(--vn-radius)', border: '1px solid var(--vn-border)', marginBottom: '0.75rem' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--vn-text-muted)' }}>Auto-fill from cosmos.directory</span>
+                <button
+                  type="button"
+                  style={{ fontSize: '0.72rem', padding: '0.2rem 0.6rem', cursor: 'pointer', border: '1px solid var(--vn-border)', borderRadius: 'var(--vn-radius)', background: 'var(--vn-surface)', color: 'var(--vn-text)' }}
+                  onClick={async () => {
+                    try {
+                      const res = await fetch(`https://cosmos.directory/${chainId.toLowerCase()}/chain`);
+                      if (!res.ok) return;
+                      const d = await res.json();
+                      const rpcs: Array<{ address: string }> = d?.chain?.apis?.rpc ?? [];
+                      if (rpcs.length > 0) {
+                        setConfigFields(prev => ({ ...prev, ref_rpc_url: rpcs[0].address }));
+                      }
+                      const explorers: Array<{ url: string }> = d?.chain?.explorers ?? [];
+                      if (explorers.length > 0 && !configFields.preferred_explorer) {
+                        setConfigFields(prev => ({ ...prev, preferred_explorer: explorers[0].url }));
+                      }
+                    } catch { /* ignore network errors */ }
+                  }}
+                >
+                  ↓ Fetch RPC + Explorer
+                </button>
+              </div>
+            )}
             {extraFields.map(f => (
               <div key={f.key} style={fieldStyle}>
                 <label style={labelStyle}>

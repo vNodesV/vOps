@@ -137,6 +137,7 @@ function HistorySparkline({ vmName }: { vmName: string }) {
 
 function ServersLiveSection() {
   const [upgradeTarget, setUpgradeTarget] = useState<VMStatus | null>(null);
+  const [editTarget, setEditTarget] = useState<VMStatus | null>(null);
 
   const { data, isLoading, isError, dataUpdatedAt } = useQuery({
     queryKey: ['vm-status'],
@@ -195,6 +196,14 @@ function ServersLiveSection() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <Badge status={vm.online ? 'online' : 'offline'} />
                   {vm.type && <Badge status={vm.type} />}
+                  <button
+                    onClick={e => { e.stopPropagation(); setEditTarget(vm); }}
+                    title="View VM details"
+                    style={{ fontSize: '0.7rem', padding: '0.2rem 0.4rem', cursor: 'pointer', border: '1px solid var(--vn-border)', borderRadius: 'var(--vn-radius)', background: 'var(--vn-surface)', color: 'var(--vn-text-muted)' }}
+                    type="button"
+                  >
+                    ✏
+                  </button>
                 </div>
               </div>
 
@@ -256,6 +265,41 @@ function ServersLiveSection() {
           upgradeURL={vmUpgradeURL(upgradeTarget.name)}
           onClose={() => setUpgradeTarget(null)}
         />
+      )}
+
+      {editTarget && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setEditTarget(null)}>
+          <div style={{ background: 'var(--vn-surface)', borderRadius: 'var(--vn-radius)', padding: '1.25rem', minWidth: 320, maxWidth: 480, boxShadow: '0 8px 24px rgba(0,0,0,0.3)' }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 1rem', fontSize: '0.95rem' }}>🖥 {editTarget.name}</h3>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+              <tbody>
+                {([
+                  ['LAN IP', editTarget.lan_ip],
+                  ['Public IP', editTarget.public_ip],
+                  ['Datacenter', editTarget.datacenter],
+                  ['OS', editTarget.os],
+                  ['Type', editTarget.type || 'vm'],
+                  ['Status', editTarget.online ? 'online' : 'offline'],
+                  ['Load', editTarget.load_avg || '—'],
+                  ['Pending Updates', String(editTarget.apt_count ?? 0)],
+                ] as [string, string | undefined][]).map(([label, val]) => (
+                  <tr key={label} style={{ borderBottom: '1px solid var(--vn-border)' }}>
+                    <td style={{ padding: '0.3rem 0.5rem', color: 'var(--vn-text-muted)', width: '40%' }}>{label}</td>
+                    <td style={{ padding: '0.3rem 0.5rem', fontFamily: label === 'LAN IP' || label === 'Public IP' ? 'monospace' : undefined }}>{val || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p style={{ fontSize: '0.72rem', color: 'var(--vn-text-muted)', margin: '0.75rem 0 0.5rem' }}>
+              To edit VM config, update the corresponding <code>config/infra/*.toml</code> file.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button onClick={() => setEditTarget(null)} style={{ padding: '0.35rem 0.9rem', fontSize: '0.82rem', cursor: 'pointer', border: '1px solid var(--vn-border)', borderRadius: 'var(--vn-radius)', background: 'var(--vn-surface-2)', color: 'var(--vn-text)' }}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

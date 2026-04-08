@@ -271,7 +271,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 			s.requireSession(http.HandlerFunc(s.fleet.HandleRegisteredChainDelete)))
 		mux.Handle("POST /api/v1/fleet/poll",
 			s.requireSession(http.HandlerFunc(s.fleet.HandlePoll)))
-		mux.Handle("POST /api/v1/fleet/vms/{name}/upgrade",
+		mux.Handle("GET /api/v1/fleet/vms/{name}/upgrade",
 			s.requireSession(http.HandlerFunc(s.fleet.HandleVMUpgrade)))
 		mux.Handle("GET /api/v1/fleet/vms/{name}/history",
 			s.requireSession(http.HandlerFunc(s.fleet.HandleVMHistory)))
@@ -281,7 +281,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 			s.requireSession(http.HandlerFunc(s.fleet.HandleHostScan)))
 		mux.Handle("GET /api/v1/fleet/hosts",
 			s.requireSession(http.HandlerFunc(s.fleet.HandleListHosts)))
-		mux.Handle("POST /api/v1/fleet/hosts/{name}/upgrade",
+		mux.Handle("GET /api/v1/fleet/hosts/{name}/upgrade",
 			s.requireSession(http.HandlerFunc(s.fleet.HandleHostUpgrade)))
 		mux.Handle("GET /api/v1/audit",
 			s.requireSession(http.HandlerFunc(s.fleet.HandleListAudit)))
@@ -370,6 +370,8 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	mux.Handle("POST /api/v1/multiprox",
 		s.requireSession(http.HandlerFunc(s.multiproxMgr.HandleCreate)))
 	mux.Handle("DELETE /api/v1/multiprox/{name}",
+		s.requireSession(http.HandlerFunc(s.multiproxMgr.HandleDelete)))
+	mux.Handle("POST /api/v1/multiprox/{name}/delete",
 		s.requireSession(http.HandlerFunc(s.multiproxMgr.HandleDelete)))
 	mux.Handle("POST /api/v1/multiprox/{name}/ping",
 		s.requireSession(http.HandlerFunc(s.multiproxMgr.HandlePing)))
