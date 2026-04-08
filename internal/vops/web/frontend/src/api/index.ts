@@ -252,3 +252,29 @@ export const getServiceSchema = () =>
 
 export const getServiceETA = (id: number) =>
   apiFetch<import('./types').ServiceETA>(`/api/v1/services/${id}/eta`);
+
+// ── Units registry ─────────────────────────────────────────────────────────
+
+export const getUnits = () =>
+  apiFetch<{ units: import('./types').CosmosUnitWithStatus[] }>('/api/v1/units');
+
+export const getUnit = (name: string) =>
+  apiFetch<import('./types').CosmosUnitWithStatus>(`/api/v1/units/${encodeURIComponent(name)}`);
+
+export const createUnit = (body: Partial<import('./types').CosmosUnit>) =>
+  apiPost<{ ok: string; name: string }>('/api/v1/units', body);
+
+export const updateUnit = (name: string, body: Partial<import('./types').CosmosUnit>) =>
+  apiFetch<{ ok: string }>(`/api/v1/units/${encodeURIComponent(name)}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+
+export const deleteUnit = (name: string) =>
+  apiFetch<{ ok: string }>(`/api/v1/units/${encodeURIComponent(name)}`, { method: 'DELETE' });
+
+export const getUnitStatusHistory = (name: string) =>
+  apiFetch<{ history: import('./types').UnitStatus[] }>(
+    `/api/v1/units/${encodeURIComponent(name)}/status/history`,
+  );
+

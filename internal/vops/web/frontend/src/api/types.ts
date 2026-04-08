@@ -268,3 +268,49 @@ export interface ServiceETA {
   polled_at: string;
   error?: string;
 }
+
+// ── Units registry ─────────────────────────────────────────────────────────
+
+export type NodeType = 'validator' | 'node' | 'api' | 'rpc' | 'relayer' | 'other';
+export type NetworkType = 'mainnet' | 'testnet' | 'devnet';
+
+export interface CosmosUnit {
+  id: number;
+  name: string;
+  chain_name: string;
+  chain_id: string;
+  network_type: NetworkType;
+  node_type: NodeType;
+  vm_name: string;
+  datacenter: string;
+  service_name: string;
+  binary_path: string;
+  cosmovisor_path: string;
+  cosmovisor_enabled: boolean;
+  config_dir: string;
+  rpc_port: number;
+  api_port: number;
+  p2p_port: number;
+  valoper: string;
+  state: string;
+  deployed_at: string;
+  notes: string;
+}
+
+export interface UnitStatus {
+  id: number;
+  unit_name: string;
+  polled_at: string;
+  syncing: boolean;
+  block_height: number;
+  peers: number;
+  voting_power: number;
+  gov_pending: number;
+  service_active: boolean;
+  error?: string;
+}
+
+export interface CosmosUnitWithStatus extends CosmosUnit {
+  status?: UnitStatus;
+}
+

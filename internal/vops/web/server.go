@@ -32,6 +32,7 @@ import (
 	"github.com/vNodesV/vProx/internal/vops/ingest"
 	"github.com/vNodesV/vProx/internal/vops/intel"
 	"github.com/vNodesV/vProx/internal/vops/services"
+	"github.com/vNodesV/vProx/internal/vops/units"
 	"github.com/vNodesV/vProx/internal/vops/vm"
 )
 
@@ -60,6 +61,7 @@ type Server struct {
 	fleetSvc *fleet.Service
 	vmMgr    *vm.Handlers     // nil when no hypervisor hosts are configured
 	svcMgr   *services.Handlers
+	unitsMgr *units.Handlers
 	debug    *DebugRing       // SSH command debug recorder
 
 	// Session state for dashboard login.
@@ -130,6 +132,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	}
 
 	s.svcMgr = services.NewHandlers(d.DB)
+	s.unitsMgr = units.NewHandlers(d.DB)
 
 	mux := http.NewServeMux()
 
@@ -321,6 +324,22 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		s.requireSession(http.HandlerFunc(s.svcMgr.HandleSchema)))
 	mux.Handle("GET /api/v1/services/{id}/eta",
 		s.requireSession(http.HandlerFunc(s.svcMgr.HandleETA)))
+
+	// Units registry routes.
+	mux.Handle("GET /api/v1/units",
+		s.requireSession(http.HandlerFunc(s.unitsMgr.HandleList)))
+	mux.Handle("POST /api/v1/units",
+		s.requireSession(http.HandlerFunc(s.unitsMgr.HandleCreate)))
+	mux.Handle("GET /api/v1/units/{name}",
+		s.requireSession(http.HandlerFunc(s.unitsMgr.HandleGet)))
+	mux.Handle("PUT /api/v1/units/{name}",
+		s.requireSession(http.HandlerFunc(s.unitsMgr.HandleUpdate)))
+	mux.Handle("DELETE /api/v1/units/{name}",
+		s.requireSession(http.HandlerFunc(s.unitsMgr.HandleDelete)))
+	mux.Handle("POST /api/v1/units/{name}/status",
+		s.requireSession(http.HandlerFunc(s.unitsMgr.HandlePushStatus)))
+	mux.Handle("GET /api/v1/units/{name}/status/history",
+		s.requireSession(http.HandlerFunc(s.unitsMgr.HandleStatusHistory)))
 
 	readTimeout := time.Duration(cfg.VOps.Server.ReadTimeoutSec) * time.Second
 	writeTimeout := time.Duration(cfg.VOps.Server.WriteTimeoutSec) * time.Second
