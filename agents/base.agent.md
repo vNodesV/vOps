@@ -54,6 +54,11 @@ Before I proceed:
   - `gofmt` touched files
   - `go build ./...`
   - `go test ./...` when behavior changes
+- **After every successful build** (frontend `npm run build` + `go build ./...` both pass), increment the
+  patch version in `cmd/vops/VERSION`. Schema: `x.y.z`, each digit 0–9, max `9.9.9`.
+  Increment rules: `z` → `z+1`; if `z` was `9` reset to `0` and carry to `y`; if `y` was `9` reset to `0`
+  and carry to `x`. Read the current value, compute the next, write the file, then commit along with the
+  build artifacts. Current version: `0.1.1`.
 - Fix root causes.
 - Treat log schema changes as compatibility-sensitive.
 
