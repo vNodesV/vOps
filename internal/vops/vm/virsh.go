@@ -111,7 +111,7 @@ func (h *Handlers) dialHost(hi HostInfo) (sshClient, error) {
 // ListDomains returns all libvirt domains visible to virsh on the host,
 // including their state, memory, vCPU count, and persistence flags.
 func ListDomains(client sshClient) ([]Domain, error) {
-	out, err := client.Run("virsh list --all --name")
+	out, err := client.Run("virsh -c qemu:///system list --all --name")
 	if err != nil {
 		return nil, fmt.Errorf("virsh list: %w", err)
 	}
@@ -134,7 +134,7 @@ func ListDomains(client sshClient) ([]Domain, error) {
 
 // domainInfo fetches detailed info for one domain via virsh dominfo.
 func domainInfo(client sshClient, name string) (Domain, error) {
-	out, err := client.Run(fmt.Sprintf("virsh dominfo %s", shellescape(name)))
+	out, err := client.Run(fmt.Sprintf("virsh -c qemu:///system dominfo %s", shellescape(name)))
 	if err != nil {
 		return Domain{Name: name, State: "unknown"}, nil
 	}
@@ -172,17 +172,17 @@ func DomainAction(client sshClient, domainName, action string) (string, error) {
 	var cmd string
 	switch action {
 	case "start":
-		cmd = fmt.Sprintf("virsh start %s", shellescape(domainName))
+		cmd = fmt.Sprintf("virsh -c qemu:///system start %s", shellescape(domainName))
 	case "shutdown":
-		cmd = fmt.Sprintf("virsh shutdown %s", shellescape(domainName))
+		cmd = fmt.Sprintf("virsh -c qemu:///system shutdown %s", shellescape(domainName))
 	case "destroy":
-		cmd = fmt.Sprintf("virsh destroy %s", shellescape(domainName))
+		cmd = fmt.Sprintf("virsh -c qemu:///system destroy %s", shellescape(domainName))
 	case "suspend":
-		cmd = fmt.Sprintf("virsh suspend %s", shellescape(domainName))
+		cmd = fmt.Sprintf("virsh -c qemu:///system suspend %s", shellescape(domainName))
 	case "resume":
-		cmd = fmt.Sprintf("virsh resume %s", shellescape(domainName))
+		cmd = fmt.Sprintf("virsh -c qemu:///system resume %s", shellescape(domainName))
 	case "reboot":
-		cmd = fmt.Sprintf("virsh reboot %s", shellescape(domainName))
+		cmd = fmt.Sprintf("virsh -c qemu:///system reboot %s", shellescape(domainName))
 	default:
 		return "", fmt.Errorf("unknown action: %s", action)
 	}
@@ -196,7 +196,7 @@ func DomainAction(client sshClient, domainName, action string) (string, error) {
 // ListSnapshots returns the snapshots for a domain, ordered newest-first.
 func ListSnapshots(client sshClient, domainName string) ([]Snapshot, error) {
 	out, err := client.Run(fmt.Sprintf(
-		"virsh snapshot-list %s --name --no-metadata 2>/dev/null || virsh snapshot-list %s --name",
+		"virsh -c qemu:///system snapshot-list %s --name --no-metadata 2>/dev/null || virsh -c qemu:///system snapshot-list %s --name",
 		shellescape(domainName), shellescape(domainName),
 	))
 	if err != nil {
@@ -216,7 +216,7 @@ func ListSnapshots(client sshClient, domainName string) ([]Snapshot, error) {
 // CreateSnapshot creates a new snapshot with the given name for domainName.
 func CreateSnapshot(client sshClient, domainName, snapName string) error {
 	out, err := client.Run(fmt.Sprintf(
-		"virsh snapshot-create-as %s %s",
+		"virsh -c qemu:///system snapshot-create-as %s %s",
 		shellescape(domainName), shellescape(snapName),
 	))
 	if err != nil {
@@ -228,7 +228,7 @@ func CreateSnapshot(client sshClient, domainName, snapName string) error {
 // RevertSnapshot reverts a domain to the named snapshot.
 func RevertSnapshot(client sshClient, domainName, snapName string) error {
 	out, err := client.Run(fmt.Sprintf(
-		"virsh snapshot-revert %s %s",
+		"virsh -c qemu:///system snapshot-revert %s %s",
 		shellescape(domainName), shellescape(snapName),
 	))
 	if err != nil {
@@ -240,7 +240,7 @@ func RevertSnapshot(client sshClient, domainName, snapName string) error {
 // DeleteSnapshot deletes the named snapshot from a domain.
 func DeleteSnapshot(client sshClient, domainName, snapName string) error {
 	out, err := client.Run(fmt.Sprintf(
-		"virsh snapshot-delete %s %s",
+		"virsh -c qemu:///system snapshot-delete %s %s",
 		shellescape(domainName), shellescape(snapName),
 	))
 	if err != nil {
@@ -253,7 +253,7 @@ func DeleteSnapshot(client sshClient, domainName, snapName string) error {
 // Returns empty map if the domain is not running (virsh domstats will error).
 func DomainStats(client sshClient, domainName string) (map[string]string, error) {
 	out, err := client.Run(fmt.Sprintf(
-		"virsh domstats --raw %s 2>/dev/null", shellescape(domainName),
+		"virsh -c qemu:///system domstats --raw %s 2>/dev/null", shellescape(domainName),
 	))
 	if err != nil {
 		return map[string]string{}, nil
@@ -347,7 +347,7 @@ type CreateFromImageOpts struct {
 
 // ListNetworks returns all libvirt virtual networks on the host.
 func ListNetworks(client sshClient) ([]Network, error) {
-	out, err := client.Run("virsh net-list --all 2>&1")
+	out, err := client.Run("virsh -c qemu:///system net-list --all 2>&1")
 	if err != nil {
 		return nil, fmt.Errorf("virsh net-list: %w", err)
 	}
@@ -376,7 +376,7 @@ func ListNetworks(client sshClient) ([]Network, error) {
 
 // ListDomainInterfaces returns the network interfaces attached to a domain.
 func ListDomainInterfaces(client sshClient, domainName string) ([]Interface, error) {
-	out, err := client.Run(fmt.Sprintf("virsh domiflist %s 2>&1", shellescape(domainName)))
+	out, err := client.Run(fmt.Sprintf("virsh -c qemu:///system domiflist %s 2>&1", shellescape(domainName)))
 	if err != nil {
 		return nil, fmt.Errorf("virsh domiflist: %w", err)
 	}
@@ -411,7 +411,7 @@ func UndefineVM(client sshClient, domainName string, opts UndefineOpts) error {
 	// Force-stop if running.
 	state, _ := getDomainState(client, domainName)
 	if strings.Contains(state, "running") {
-		out, err := client.Run(fmt.Sprintf("virsh destroy %s 2>&1", shellescape(domainName)))
+		out, err := client.Run(fmt.Sprintf("virsh -c qemu:///system destroy %s 2>&1", shellescape(domainName)))
 		if err != nil {
 			return fmt.Errorf("virsh destroy: %w — %s", err, out)
 		}
@@ -425,7 +425,7 @@ func UndefineVM(client sshClient, domainName string, opts UndefineOpts) error {
 
 	// Undefine; --nvram removes firmware state for UEFI guests.
 	out, err := client.Run(fmt.Sprintf(
-		"virsh undefine %s --nvram 2>/dev/null || virsh undefine %s 2>&1",
+		"virsh -c qemu:///system undefine %s --nvram 2>/dev/null || virsh -c qemu:///system undefine %s 2>&1",
 		shellescape(domainName), shellescape(domainName),
 	))
 	if err != nil {
@@ -441,7 +441,7 @@ func UndefineVM(client sshClient, domainName string, opts UndefineOpts) error {
 			vol := filepath.Base(path)
 			// Try pool-aware vol-delete first; fall back to direct rm.
 			_, _ = client.Run(fmt.Sprintf(
-				"virsh vol-delete %s --pool %s 2>/dev/null || rm -f %s 2>&1",
+				"virsh -c qemu:///system vol-delete %s --pool %s 2>/dev/null || rm -f %s 2>&1",
 				shellescape(vol), shellescape(pool), shellquote(path),
 			))
 		}
@@ -456,13 +456,13 @@ func UndefineVM(client sshClient, domainName string, opts UndefineOpts) error {
 func SetVCPUs(client sshClient, domainName string, count int, live bool) error {
 	n := strconv.Itoa(count)
 	if out, err := client.Run(fmt.Sprintf(
-		"virsh setvcpus %s %s --config 2>&1", shellescape(domainName), n,
+		"virsh -c qemu:///system setvcpus %s %s --config 2>&1", shellescape(domainName), n,
 	)); err != nil {
 		return fmt.Errorf("virsh setvcpus --config: %w — %s", err, out)
 	}
 	if live {
 		if out, err := client.Run(fmt.Sprintf(
-			"virsh setvcpus %s %s --live 2>&1", shellescape(domainName), n,
+			"virsh -c qemu:///system setvcpus %s %s --live 2>&1", shellescape(domainName), n,
 		)); err != nil {
 			return fmt.Errorf("virsh setvcpus --live: %w — %s", err, out)
 		}
@@ -478,8 +478,8 @@ func SetMemory(client sshClient, domainName string, mib int64, live bool) error 
 	kib := strconv.FormatInt(mib*1024, 10)
 	// Set max memory before current to avoid "cannot exceed max" errors.
 	for _, cmd := range []string{
-		fmt.Sprintf("virsh setmaxmem %s %s --config 2>&1", shellescape(domainName), kib),
-		fmt.Sprintf("virsh setmem %s %s --config 2>&1", shellescape(domainName), kib),
+		fmt.Sprintf("virsh -c qemu:///system setmaxmem %s %s --config 2>&1", shellescape(domainName), kib),
+		fmt.Sprintf("virsh -c qemu:///system setmem %s %s --config 2>&1", shellescape(domainName), kib),
 	} {
 		if out, err := client.Run(cmd); err != nil {
 			return fmt.Errorf("virsh setmem --config: %w — %s", err, out)
@@ -487,7 +487,7 @@ func SetMemory(client sshClient, domainName string, mib int64, live bool) error 
 	}
 	if live {
 		if out, err := client.Run(fmt.Sprintf(
-			"virsh setmem %s %s --live 2>&1", shellescape(domainName), kib,
+			"virsh -c qemu:///system setmem %s %s --live 2>&1", shellescape(domainName), kib,
 		)); err != nil {
 			return fmt.Errorf("virsh setmem --live: %w — %s", err, out)
 		}
@@ -589,7 +589,7 @@ func CreateVMFromImage(client sshClient, opts CreateFromImageOpts) error {
 
 // getDomainState returns the current state string for a domain (e.g. "running", "shut off").
 func getDomainState(client sshClient, domainName string) (string, error) {
-	out, err := client.Run(fmt.Sprintf("virsh domstate %s 2>&1", shellescape(domainName)))
+	out, err := client.Run(fmt.Sprintf("virsh -c qemu:///system domstate %s 2>&1", shellescape(domainName)))
 	if err != nil {
 		return "", fmt.Errorf("virsh domstate: %w", err)
 	}
@@ -598,7 +598,7 @@ func getDomainState(client sshClient, domainName string) (string, error) {
 
 // domainDiskPaths returns the full file paths of all disk volumes attached to a domain.
 func domainDiskPaths(client sshClient, domainName string) ([]string, error) {
-	out, err := client.Run(fmt.Sprintf("virsh domblklist %s --details 2>&1", shellescape(domainName)))
+	out, err := client.Run(fmt.Sprintf("virsh -c qemu:///system domblklist %s --details 2>&1", shellescape(domainName)))
 	if err != nil {
 		return nil, fmt.Errorf("virsh domblklist: %w", err)
 	}
