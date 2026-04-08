@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -230,3 +231,107 @@ func (h *Handlers) HandleListAudit(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"entries": entries})
 }
+
+// HandleHostUpgrade SSHes directly to a hypervisor host and runs apt update + apt upgrade -y,
+// streaming progress as Server-Sent Events.
+// POST /api/v1/fleet/hosts/{name}/upgrade
+func (h *Handlers) HandleHostUpgrade(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		http.Error(w, "name required", http.StatusBadRequest)
+		return
+	}
+
+	cfg := h.svc.Config()
+	if cfg == nil {
+		http.Error(w, "no config", http.StatusInternalServerError)
+		return
+	}
+
+	var targetHost *struct {
+		Name       string
+		LanIP      string
+		Port       int
+		User       string
+		SSHKeyPath string
+	}
+	for _, hst := range cfg.Hosts {
+		if hst.Name == name {
+			targetHost = &struct {
+				Name       string
+				LanIP      string
+				Port       int
+				User       string
+				SSHKeyPath string
+			}{hst.Name, hst.LanIP, hst.Port, hst.User, hst.SSHKeyPath}
+			break
+		}
+	}
+	if targetHost == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "host not found: " + name})
+		return
+	}
+
+	var req upgradeRequest
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&req)
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		return
+	}
+
+	sendEvent := func(step, msg string) {
+		b, _ := json.Marshal(map[string]string{"step": step, "msg": msg})
+		fmt.Fprintf(w, "data: %s\n\n", b)
+		flusher.Flush()
+	}
+
+	runSudo := func(client *fleetssh.Client, aptArgs string) (string, error) {
+		if req.SudoPassword != "" {
+			return client.RunInput("sudo -S "+aptArgs, req.SudoPassword+"\n")
+		}
+		return client.Run("sudo -n " + aptArgs)
+	}
+
+	dialAddr := targetHost.LanIP
+	if dialAddr == "" {
+		dialAddr = targetHost.Name
+	}
+	port := targetHost.Port
+	if port == 0 {
+		port = 22
+	}
+
+	client, err := fleetssh.Dial(dialAddr, port, targetHost.User, targetHost.SSHKeyPath, "")
+	if err != nil {
+		sendEvent("error", fmt.Sprintf("ssh connect failed: %v", err))
+		return
+	}
+	defer client.Close()
+	sendEvent("connected", fmt.Sprintf("Connected to host %s (%s)", targetHost.Name, dialAddr))
+
+	sendEvent("update:start", "Running apt update…")
+	updateOut, err := runSudo(client, "apt update -q 2>&1")
+	if err != nil {
+		sendEvent("update:error", fmt.Sprintf("apt update failed: %v\n%s", err, strings.TrimSpace(updateOut)))
+		return
+	}
+	sendEvent("update:done", strings.TrimSpace(updateOut))
+
+	sendEvent("upgrade:start", "Running apt upgrade -y…")
+	upgradeOut, err := runSudo(client, "DEBIAN_FRONTEND=noninteractive apt upgrade -y 2>&1")
+	if err != nil {
+		sendEvent("upgrade:error", fmt.Sprintf("apt upgrade failed: %v\n%s", err, strings.TrimSpace(upgradeOut)))
+		return
+	}
+	sendEvent("upgrade:done", strings.TrimSpace(upgradeOut))
+	sendEvent("complete", "Upgrade complete on host "+targetHost.Name)
+}
+

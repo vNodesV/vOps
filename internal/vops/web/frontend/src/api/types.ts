@@ -114,6 +114,24 @@ export interface VMStatus {
   polled_at: string;
 }
 
+/** Hypervisor host from DB inventory or config snapshot. */
+export interface HostInventory {
+  name: string;
+  host_name?: string;
+  lan_ip?: string;
+  public_ip?: string;
+  vrack_ip?: string;
+  datacenter?: string;
+  os?: string;
+  kernel?: string;
+  uptime_sec?: number;
+  disk_pct?: number;
+  load_avg?: string;
+  apt_pending: number;
+  last_seen?: string;
+  status: string;
+}
+
 /** VM discovered via `virsh list --all` on the hypervisor host. */
 export interface VirshVM {
   name: string;

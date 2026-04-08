@@ -261,6 +261,8 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 			s.requireSession(http.HandlerFunc(s.fleet.HandleHostScan)))
 		mux.Handle("GET /api/v1/fleet/hosts",
 			s.requireSession(http.HandlerFunc(s.fleet.HandleListHosts)))
+		mux.Handle("POST /api/v1/fleet/hosts/{name}/upgrade",
+			s.requireSession(http.HandlerFunc(s.fleet.HandleHostUpgrade)))
 		mux.Handle("GET /api/v1/audit",
 			s.requireSession(http.HandlerFunc(s.fleet.HandleListAudit)))
 	}

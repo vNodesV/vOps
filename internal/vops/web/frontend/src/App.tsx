@@ -18,6 +18,7 @@ import FleetPage from './pages/Fleet';
 import ChainsPage from './pages/Chains';
 import VMsPage from './pages/VMs';
 import ServicesPage from './pages/Services';
+import PatchesPage from './pages/Patches';
 import DebugPanel from './components/DebugPanel';
 import { logout, getDebugMode, setDebugMode } from './api';
 import { BASE } from './api/client';
@@ -207,6 +208,13 @@ function Shell({ children }: { children: React.ReactNode }) {
             </svg>
             VM Manager
           </SideLink>
+          <SideLink to="/patches">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z" />
+              <path d="M9 12l2 2 4-4" />
+            </svg>
+            Patches
+          </SideLink>
           <SideLink to="/settings">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
               <circle cx="12" cy="12" r="3" />
@@ -306,6 +314,7 @@ export default function App() {
             <Route path="/services" element={<ServicesPage />} />
             <Route path="/fleet" element={<FleetPage />} />
             <Route path="/vms" element={<VMsPage />} />
+            <Route path="/patches" element={<PatchesPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

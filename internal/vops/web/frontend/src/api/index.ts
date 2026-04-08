@@ -91,6 +91,18 @@ export const registerDiscoveredVM = (name: string, lan_ip: string, datacenter: s
 export const vmUpgradeURL = (name: string) =>
   `${BASE}api/v1/fleet/vms/${encodeURIComponent(name)}/upgrade`;
 
+/** Returns stored host inventory from DB or config snapshot. */
+export const getHosts = () =>
+  apiFetch<{ hosts: import('./types').HostInventory[] }>('/api/v1/fleet/hosts');
+
+/** Triggers a fresh SSH scan of all hypervisor hosts. */
+export const scanHosts = () =>
+  apiPost<{ hosts: import('./types').HostInventory[]; scanned_at: string }>('/api/v1/fleet/hosts/scan', {});
+
+/** Returns the SSE URL for streaming apt upgrade on a named host. */
+export const hostUpgradeURL = (name: string) =>
+  `${BASE}api/v1/fleet/hosts/${encodeURIComponent(name)}/upgrade`;
+
 export const getDeployments = (chain?: string) =>
   apiFetch<{ deployments: Deployment[] }>(
     `/api/v1/fleet/deployments${chain ? `?chain=${chain}` : ''}`,
