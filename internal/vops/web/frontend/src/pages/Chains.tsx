@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getFleetChains, getServices, registerChain, unregisterChain } from '../api';
-import type { ChainStatus, Service, ServiceType } from '../api/types';
+import { getFleetChains, getServices, getRegisteredChains, registerChain, unregisterChain } from '../api';
+import type { ChainStatus, RegisteredChain, Service, ServiceType } from '../api/types';
 import Badge from '../components/Badge';
 import Spinner from '../components/Spinner';
 
@@ -109,7 +109,7 @@ function UpgradePlanModal({ chain, onClose }: { chain: ChainStatus; onClose: () 
 }
 
 /* ── Chains table row ─────────────────────────────────────────── */
-function ChainRow({ chain, onRemove, onEdit }: { chain: ChainStatus; onRemove: () => void; onEdit: () => void }) {
+function ChainRow({ chain, isRegistered, onRemove, onEdit }: { chain: ChainStatus; isRegistered: boolean; onRemove: () => void; onEdit: () => void }) {
   const [showUpgrade, setShowUpgrade] = useState(false);
   const syncStatus = chain.error ? 'error' : chain.catching_up ? 'syncing' : 'synced';
   const hasUpgrade = chain.upgrade_pending && chain.upgrade_name;
@@ -218,28 +218,30 @@ function ChainRow({ chain, onRemove, onEdit }: { chain: ChainStatus; onRemove: (
       <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
         <button
           onClick={onEdit}
-          title="Edit chain"
+          title={isRegistered ? 'Edit registered chain' : 'Register this chain for external monitoring'}
           style={{
             padding: '0.2rem 0.55rem', fontSize: '0.72rem', borderRadius: 'var(--vn-radius)',
             border: '1px solid var(--vn-border)', background: 'var(--vn-surface-2)',
             color: 'var(--vn-text)', cursor: 'pointer', marginRight: '0.35rem',
           }}
         >
-          ✏ Edit
+          {isRegistered ? '✏ Edit' : '＋ Register'}
         </button>
-        <button
-          onClick={() => {
-            if (window.confirm(`Remove chain "${chain.chain_name ?? chain.chain}"?`)) onRemove();
-          }}
-          title="Remove chain"
-          style={{
-            padding: '0.2rem 0.55rem', fontSize: '0.72rem', borderRadius: 'var(--vn-radius)',
-            border: '1px solid var(--vn-danger)', background: 'rgba(239,68,68,0.08)',
-            color: 'var(--vn-danger)', cursor: 'pointer',
-          }}
-        >
-          ✕ Remove
-        </button>
+        {isRegistered && (
+          <button
+            onClick={() => {
+              if (window.confirm(`Remove chain "${chain.chain_name ?? chain.chain}" from registered list?`)) onRemove();
+            }}
+            title="Remove registered chain"
+            style={{
+              padding: '0.2rem 0.55rem', fontSize: '0.72rem', borderRadius: 'var(--vn-radius)',
+              border: '1px solid var(--vn-danger)', background: 'rgba(239,68,68,0.08)',
+              color: 'var(--vn-danger)', cursor: 'pointer',
+            }}
+          >
+            ✕ Remove
+          </button>
+        )}
       </td>
     </tr>
   );
@@ -292,14 +294,17 @@ function ServiceItem({ svc, onClick }: { svc: Service; onClick: () => void }) {
 /* ── Edit Chain Modal ────────────────────────────────────────── */
 function EditChainModal({
   chain,
+  initialRpcUrl,
   onClose,
   onSave,
 }: {
   chain: ChainStatus;
+  initialRpcUrl: string;
   onClose: () => void;
   onSave: (rpcUrl: string) => void;
 }) {
-  const [rpcUrl, setRpcUrl] = useState(chain.rpc_url ?? '');
+  const [rpcUrl, setRpcUrl] = useState(initialRpcUrl);
+  const [err, setErr] = useState('');
 
   return (
     <div
@@ -332,15 +337,16 @@ function EditChainModal({
           </label>
           <input
             value={rpcUrl}
-            onChange={e => setRpcUrl(e.target.value)}
+            onChange={e => { setRpcUrl(e.target.value); setErr(''); }}
             placeholder="https://rpc.example.com"
             style={{
               width: '100%', boxSizing: 'border-box',
-              background: 'var(--vn-surface-2)', border: '1px solid var(--vn-border)',
+              background: 'var(--vn-surface-2)', border: `1px solid ${err ? 'var(--vn-error, #e53e3e)' : 'var(--vn-border)'}`,
               borderRadius: 'var(--vn-radius)', padding: '0.4rem 0.6rem',
               color: 'var(--vn-text)', fontSize: '0.85rem',
             }}
           />
+          {err && <div style={{ color: 'var(--vn-error, #e53e3e)', fontSize: '0.75rem', marginTop: '0.25rem' }}>{err}</div>}
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
           <button
@@ -354,7 +360,10 @@ function EditChainModal({
             Cancel
           </button>
           <button
-            onClick={() => onSave(rpcUrl)}
+            onClick={() => {
+              if (!rpcUrl.trim()) { setErr('RPC URL is required'); return; }
+              onSave(rpcUrl.trim());
+            }}
             style={{
               padding: '0.4rem 1rem', fontSize: '0.82rem', borderRadius: 'var(--vn-radius)',
               background: 'var(--vn-primary)', border: 'none',
@@ -381,6 +390,12 @@ export default function ChainsPage() {
     refetchInterval: 30_000,
   });
 
+  const registeredQ = useQuery({
+    queryKey: ['registered-chains'],
+    queryFn: getRegisteredChains,
+    refetchInterval: 60_000,
+  });
+
   const servicesQ = useQuery({
     queryKey: ['services'],
     queryFn: getServices,
@@ -389,7 +404,10 @@ export default function ChainsPage() {
 
   const removeMutation = useMutation({
     mutationFn: (chain: string) => unregisterChain(chain),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['fleet-chains'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['fleet-chains'] });
+      queryClient.invalidateQueries({ queryKey: ['registered-chains'] });
+    },
   });
 
   const editMutation = useMutation({
@@ -397,12 +415,16 @@ export default function ChainsPage() {
       registerChain({ chain, rpc_url }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['fleet-chains'] });
+      queryClient.invalidateQueries({ queryKey: ['registered-chains'] });
       setEditChain(null);
     },
   });
 
   const chains = chainsQ.data?.chains ?? [];
   const services = servicesQ.data?.services ?? [];
+  const registeredMap = new Map<string, RegisteredChain>(
+    (registeredQ.data?.registered_chains ?? []).map((r: RegisteredChain) => [r.chain, r])
+  );
 
   const synced = chains.filter(c => !c.catching_up && !c.error).length;
   const catching = chains.filter(c => c.catching_up).length;
@@ -414,6 +436,18 @@ export default function ChainsPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+
+      {/* ── Mutation error banner ───────────────────────────────── */}
+      {(removeMutation.isError || editMutation.isError) && (
+        <div style={{
+          background: 'rgba(239,68,68,0.1)', border: '1px solid var(--vn-danger)',
+          borderRadius: 'var(--vn-radius)', padding: '0.6rem 1rem',
+          color: 'var(--vn-danger)', fontSize: '0.82rem',
+        }}>
+          {removeMutation.isError && `Remove failed: ${(removeMutation.error as Error)?.message ?? 'unknown error'}`}
+          {editMutation.isError && `Save failed: ${(editMutation.error as Error)?.message ?? 'unknown error'}`}
+        </div>
+      )}
 
       {/* ── Page header ─────────────────────────────────────────── */}
       <header>
@@ -484,6 +518,7 @@ export default function ChainsPage() {
                     <ChainRow
                       key={`${c.chain}-${c.type}`}
                       chain={c}
+                      isRegistered={registeredMap.has(c.chain)}
                       onRemove={() => removeMutation.mutate(c.chain)}
                       onEdit={() => setEditChain(c)}
                     />
@@ -569,6 +604,7 @@ export default function ChainsPage() {
       {editChain && (
         <EditChainModal
           chain={editChain}
+          initialRpcUrl={registeredMap.get(editChain.chain)?.rpc_url ?? editChain.rpc_url ?? ''}
           onClose={() => setEditChain(null)}
           onSave={(rpcUrl) => editMutation.mutate({ chain: editChain.chain, rpc_url: rpcUrl })}
         />

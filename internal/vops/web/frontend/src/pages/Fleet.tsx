@@ -335,7 +335,7 @@ function RegisteredChainsSection() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['fleet-chains'] }),
   });
 
-  const chains: RegisteredChain[] = data?.chains ?? [];
+  const chains: RegisteredChain[] = data?.registered_chains ?? [];
 
   return (
     <div style={card}>
@@ -524,7 +524,7 @@ function DeployWizardModal({ onClose }: { onClose: () => void }) {
   const chainsQ = useQuery({ queryKey: ['registered-chains'], queryFn: getRegisteredChains, staleTime: 60_000 });
 
   const vms: VMView[] = vmsQ.data?.vms ?? [];
-  const chains: RegisteredChain[] = chainsQ.data?.chains ?? [];
+  const chains: RegisteredChain[] = chainsQ.data?.registered_chains ?? [];
 
   const [vm, setVm] = useState('');
   const [chain, setChain] = useState('');

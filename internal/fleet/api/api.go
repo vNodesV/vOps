@@ -22,6 +22,7 @@ import (
 	"github.com/vNodesV/vProx/internal/fleet"
 	"github.com/vNodesV/vProx/internal/fleet/config"
 	fleetssh "github.com/vNodesV/vProx/internal/fleet/ssh"
+	"github.com/vNodesV/vProx/internal/fleet/state"
 	"github.com/vNodesV/vProx/internal/fleet/status"
 	opsdb "github.com/vNodesV/vProx/internal/vops/db"
 )
@@ -752,6 +753,10 @@ func (h *Handlers) HandleRegisteredChainDelete(w http.ResponseWriter, r *http.Re
 		return
 	}
 	if err := h.svc.DB().RemoveRegisteredChain(chain); err != nil {
+		if errors.Is(err, state.ErrNotFound) {
+			http.Error(w, "chain not registered", http.StatusNotFound)
+			return
+		}
 		log.Printf("[fleet/api] remove registered chain: %v", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return

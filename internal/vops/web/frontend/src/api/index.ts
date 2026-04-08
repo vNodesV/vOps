@@ -112,7 +112,7 @@ export const getDeployments = (chain?: string) =>
   );
 
 export const getRegisteredChains = () =>
-  apiFetch<{ chains: RegisteredChain[] }>('/api/v1/fleet/chains/registered');
+  apiFetch<{ registered_chains: RegisteredChain[] }>('/api/v1/fleet/chains/registered');
 
 export const registerChain = (
   data: Omit<RegisteredChain, 'note'> & { note?: string },
