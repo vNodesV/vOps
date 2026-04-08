@@ -40,16 +40,35 @@ func InsertAuditLog(db *sql.DB, e AuditEntry) error {
 	return err
 }
 
-// ListAuditLog returns the latest limit entries from audit_log, newest-first.
-func ListAuditLog(db *sql.DB, limit, offset int) ([]AuditEntry, error) {
+// AuditFilter holds optional server-side filter criteria for ListAuditLog.
+// Empty strings are ignored (no filtering on that dimension).
+type AuditFilter struct {
+	Actor  string // LIKE %actor%
+	Action string // LIKE %action%
+}
+
+// ListAuditLog returns entries from audit_log, newest-first.
+// Optional f.Actor / f.Action apply SQL LIKE filters (case-insensitive via LOWER()).
+func ListAuditLog(db *sql.DB, limit, offset int, f AuditFilter) ([]AuditEntry, error) {
 	if limit <= 0 {
 		limit = 100
 	}
-	rows, err := db.Query(`
+	query := `
 		SELECT id, ts, actor, action, target_type, target_name, params, result, error
 		FROM audit_log
-		ORDER BY ts DESC
-		LIMIT ? OFFSET ?`, limit, offset)
+		WHERE 1=1`
+	args := []any{}
+	if f.Actor != "" {
+		query += ` AND LOWER(actor) LIKE LOWER(?)`
+		args = append(args, "%"+f.Actor+"%")
+	}
+	if f.Action != "" {
+		query += ` AND LOWER(action) LIKE LOWER(?)`
+		args = append(args, "%"+f.Action+"%")
+	}
+	query += ` ORDER BY ts DESC LIMIT ? OFFSET ?`
+	args = append(args, limit, offset)
+	rows, err := db.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}

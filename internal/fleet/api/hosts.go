@@ -221,7 +221,11 @@ func (h *Handlers) HandleListAudit(w http.ResponseWriter, r *http.Request) {
 			offset = n
 		}
 	}
-	entries, err := opsdb.ListAuditLog(h.db, limit, offset)
+	f := opsdb.AuditFilter{
+		Actor:  r.URL.Query().Get("actor"),
+		Action: r.URL.Query().Get("action"),
+	}
+	entries, err := opsdb.ListAuditLog(h.db, limit, offset, f)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return

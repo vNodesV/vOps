@@ -539,15 +539,15 @@ function DeployWizardModal({ onClose }: { onClose: () => void }) {
           <>
             <div style={fld}>
               <label style={lbl}>Target VM *</label>
-              <select style={inp} value={vm} onChange={e => setVm(e.target.value)}>
-                <option value="">Select VM…</option>
+              <select style={inp} value={vm} onChange={e => setVm(e.target.value)} disabled={vmsQ.isLoading}>
+                <option value="">{vmsQ.isLoading ? 'Loading VMs…' : vms.length === 0 ? 'No VMs available' : 'Select VM…'}</option>
                 {vms.map(v => <option key={v.name} value={v.name}>{v.name}{v.datacenter ? ` (${v.datacenter})` : ''}</option>)}
               </select>
             </div>
             <div style={fld}>
               <label style={lbl}>Chain *</label>
-              <select style={inp} value={chain} onChange={e => setChain(e.target.value)}>
-                <option value="">Select chain…</option>
+              <select style={inp} value={chain} onChange={e => setChain(e.target.value)} disabled={chainsQ.isLoading}>
+                <option value="">{chainsQ.isLoading ? 'Loading chains…' : chains.length === 0 ? 'No chains registered' : 'Select chain…'}</option>
                 {chains.map(c => <option key={c.chain} value={c.chain}>{c.chain}</option>)}
               </select>
             </div>

@@ -318,5 +318,9 @@ export const deployFleet = (body: { vm: string; chain: string; component: string
   apiPost<{ deployment_id: number; status: string }>('/api/v1/fleet/deploy', body);
 
 // Audit log
-export const getAuditLog = (limit = 100, offset = 0) =>
-  apiFetch<{ entries: Array<{ id: number; ts: string; actor: string; action: string; target_type: string; target_name: string; params?: string; result?: string; error?: string }> }>(`/api/v1/audit?limit=${limit}&offset=${offset}`);
+export const getAuditLog = (limit = 100, offset = 0, actor = '', action = '') => {
+  const p = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (actor) p.set('actor', actor);
+  if (action) p.set('action', action);
+  return apiFetch<{ entries: Array<{ id: number; ts: string; actor: string; action: string; target_type: string; target_name: string; params?: string; result?: string; error?: string }> }>(`/api/v1/audit?${p}`);
+};

@@ -124,7 +124,7 @@ function AddUnitModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', fontSize: 18 }}>✕</button>
         </div>
         <div style={{ flex: 1, overflowY: 'auto', padding: 18 }}>
-          {err && <div style={{ background: '#450a0a', color: '#fca5a5', padding: '8px 12px', borderRadius: 6, marginBottom: 12, fontSize: 13 }}>{err}</div>}
+          {err && <div style={{ background: 'color-mix(in srgb, var(--vn-danger) 15%, transparent)', color: 'var(--vn-danger)', padding: '8px 12px', borderRadius: 6, marginBottom: 12, fontSize: 13 }}>{err}</div>}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
             {field('Name *', 'name', 'text', 'unique identifier')}
             {field('Chain Name', 'chain_name', 'text', 'e.g. cheqd')}
@@ -215,8 +215,8 @@ function StatusHistoryModal({ unit, onClose }: { unit: CosmosUnitWithStatus; onC
                     <td style={{ padding: '6px 10px', fontFamily: 'monospace' }}>{fmtHeight(st.voting_power)}</td>
                     <td style={{ padding: '6px 10px' }}>{st.gov_pending > 0 ? <span style={{ color: '#fbbf24' }}>{st.gov_pending}</span> : '—'}</td>
                     <td style={{ padding: '6px 10px' }}>{st.syncing ? <span style={{ color: '#fbbf24' }}>⟳</span> : <span style={{ color: '#4ade80' }}>✓</span>}</td>
-                    <td style={{ padding: '6px 10px' }}>{st.service_active ? <span style={{ color: '#4ade80' }}>●</span> : <span style={{ color: '#f87171' }}>●</span>}</td>
-                    <td style={{ padding: '6px 10px', color: '#f87171', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }}>{st.error || '—'}</td>
+                    <td style={{ padding: '6px 10px' }}>{st.service_active ? <span style={{ color: '#4ade80' }}>●</span> : <span style={{ color: 'var(--vn-danger)' }}>●</span>}</td>
+                    <td style={{ padding: '6px 10px', color: 'var(--vn-danger)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }}>{st.error || '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -273,7 +273,7 @@ function LogModal({ unit, onClose }: { unit: CosmosUnitWithStatus; onClose: () =
           <strong style={{ color: '#e2e8f0' }}>📋 Logs — {unit.name}</strong>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {connected && <span style={{ color: '#4ade80', fontSize: 12 }}>● live</span>}
-            {error && <span style={{ color: '#f87171', fontSize: 12 }}>{error}</span>}
+            {error && <span style={{ color: 'var(--vn-danger)', fontSize: 12 }}>{error}</span>}
             <button style={{ background: '#1f2937', color: '#9ca3af', border: '1px solid #374151', borderRadius: 5, padding: '3px 8px', cursor: 'pointer', fontSize: 12 }} onClick={onClose}>✕</button>
           </div>
         </div>
@@ -458,7 +458,7 @@ function EditUnitModal({ unit, onClose, onSaved }: { unit: CosmosUnitWithStatus;
           </div>
         </div>
 
-        {err && <p style={{ color: '#f87171', fontSize: '0.82rem', margin: '0.5rem 0' }}>{err}</p>}
+        {err && <p style={{ color: 'var(--vn-danger)', fontSize: '0.82rem', margin: '0.5rem 0' }}>{err}</p>}
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: '1rem' }}>
           <button onClick={onClose} style={{ padding: '0.4rem 1rem', fontSize: '0.85rem', borderRadius: 6, border: '1px solid #374151', background: '#111827', color: '#9ca3af', cursor: 'pointer' }}>Cancel</button>
@@ -578,7 +578,7 @@ function UnitCard({
           <button
             onClick={() => onDelete(unit.name)}
             title="Delete unit"
-            style={{ background: '#1f2937', color: '#f87171', border: '1px solid #374151', borderRadius: 5, padding: '3px 8px', cursor: 'pointer', fontSize: 12 }}
+            style={{ background: '#1f2937', color: 'var(--vn-danger)', border: '1px solid #374151', borderRadius: 5, padding: '3px 8px', cursor: 'pointer', fontSize: 12 }}
           >
             🗑
           </button>

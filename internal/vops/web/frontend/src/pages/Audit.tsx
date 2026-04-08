@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getAuditLog } from '../api';
 import Spinner from '../components/Spinner';
@@ -31,18 +31,28 @@ export default function AuditPage() {
   const [actorFilter, setActorFilter] = useState('');
   const [actionFilter, setActionFilter] = useState('');
 
+  // Debounced filter values sent to the API (500ms delay to avoid per-keystroke fetches).
+  const [debouncedActor, setDebouncedActor] = useState('');
+  const [debouncedAction, setDebouncedAction] = useState('');
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setDebouncedActor(actorFilter);
+      setDebouncedAction(actionFilter);
+      setPage(0); // reset to first page whenever filters change
+    }, 500);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [actorFilter, actionFilter]);
+
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['audit-log', page],
-    queryFn: () => getAuditLog(PAGE_SIZE, page * PAGE_SIZE),
+    queryKey: ['audit-log', page, debouncedActor, debouncedAction],
+    queryFn: () => getAuditLog(PAGE_SIZE, page * PAGE_SIZE, debouncedActor, debouncedAction),
     staleTime: 30_000,
   });
 
-  const allEntries = data?.entries ?? [];
-  const entries = allEntries.filter(e => {
-    if (actorFilter && !e.actor.toLowerCase().includes(actorFilter.toLowerCase())) return false;
-    if (actionFilter && !e.action.toLowerCase().includes(actionFilter.toLowerCase())) return false;
-    return true;
-  });
+  const entries = data?.entries ?? [];
 
   return (
     <div>
@@ -165,7 +175,7 @@ export default function AuditPage() {
       )}
 
       {/* Pagination */}
-      {!isLoading && !isError && allEntries.length === PAGE_SIZE && (
+      {!isLoading && !isError && entries.length === PAGE_SIZE && (
         <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', justifyContent: 'flex-end' }}>
           <button
             onClick={() => setPage(p => Math.max(0, p - 1))}
