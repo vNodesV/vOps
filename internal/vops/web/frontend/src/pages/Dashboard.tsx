@@ -190,18 +190,31 @@ function SummaryBoxes() {
   const services = svcsData?.services ?? [];
   const vms: VMStatus[] = vmsData?.vms ?? [];
 
-  const chainsSynced = chains.filter(c => !c.catching_up).length;
+  const chainsSynced = chains.filter(c => !c.catching_up && c.node_status !== 'down').length;
   const chainsCatching = chains.filter(c => c.catching_up).length;
   const chainsProposals = chains.reduce((a, c) => a + (c.active_proposals ?? 0), 0);
+  const chainsStalled = chains.filter(c => {
+    if (!c.latest_block_time) return false;
+    return Date.now() - new Date(c.latest_block_time).getTime() > 120_000;
+  }).length;
 
   const svcsOnline = services.filter(s => s.state === 'online').length;
   const svcsDown = services.filter(s => s.state === 'down').length;
-  const svcsUnknown = services.length - svcsOnline - svcsDown;
+  // Count by type for breakdown (top 3 most common)
+  const svcTypeCount = services.reduce((acc, s) => {
+    acc[s.service_type] = (acc[s.service_type] ?? 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  const topTypes = Object.entries(svcTypeCount)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3);
 
-  const vmsRunning = vms.filter(v => v.online).length;
-  const avgMem = vms.length > 0
-    ? Math.round(vms.reduce((a, v) => a + (v.mem_pct ?? 0), 0) / vms.length)
-    : 0;
+  const vmsOnline = vms.filter(v => v.online);
+  const vmsRunning = vmsOnline.length;
+  const totalPatches = vms.reduce((a, v) => a + (v.apt_count ?? 0), 0);
+  const busiestVM = vmsOnline.length > 0
+    ? vmsOnline.reduce((max, v) => (v.mem_pct ?? 0) > (max.mem_pct ?? 0) ? v : max)
+    : null;
 
   const boxStyle: React.CSSProperties = {
     background: 'var(--vn-surface)',
@@ -253,14 +266,22 @@ function SummaryBoxes() {
           <span style={{ color: 'var(--vn-text-muted)' }}>Synced</span>
           <span style={{ color: 'var(--vn-success)', fontWeight: 600 }}>{chainsSynced}</span>
         </div>
-        <div style={metricRow}>
-          <span style={{ color: 'var(--vn-text-muted)' }}>Catching up</span>
-          <span style={{ color: 'var(--vn-warning)', fontWeight: 600 }}>{chainsCatching}</span>
-        </div>
+        {chainsCatching > 0 && (
+          <div style={metricRow}>
+            <span style={{ color: 'var(--vn-text-muted)' }}>Catching up</span>
+            <span style={{ color: 'var(--vn-warning)', fontWeight: 600 }}>{chainsCatching}</span>
+          </div>
+        )}
+        {chainsStalled > 0 && (
+          <div style={metricRow}>
+            <span style={{ color: 'var(--vn-danger)' }}>⚠ Stalled</span>
+            <span style={{ color: 'var(--vn-danger)', fontWeight: 600 }}>{chainsStalled}</span>
+          </div>
+        )}
         {chainsProposals > 0 && (
           <div style={metricRow}>
-            <span style={{ color: 'var(--vn-text-muted)' }}>Proposals ⚠️</span>
-            <span style={{ color: 'var(--vn-danger)', fontWeight: 600 }}>{chainsProposals}</span>
+            <span style={{ color: 'var(--vn-warning)' }}>📋 Proposals</span>
+            <span style={{ color: 'var(--vn-warning)', fontWeight: 600 }}>{chainsProposals}</span>
           </div>
         )}
       </div>
@@ -277,16 +298,18 @@ function SummaryBoxes() {
           <span style={{ color: 'var(--vn-text-muted)' }}>Online</span>
           <span style={{ color: 'var(--vn-success)', fontWeight: 600 }}>{svcsOnline}</span>
         </div>
-        <div style={metricRow}>
-          <span style={{ color: 'var(--vn-text-muted)' }}>Down</span>
-          <span style={{ color: svcsDown > 0 ? 'var(--vn-danger)' : 'var(--vn-text-muted)', fontWeight: 600 }}>{svcsDown}</span>
-        </div>
-        {svcsUnknown > 0 && (
+        {svcsDown > 0 && (
           <div style={metricRow}>
-            <span style={{ color: 'var(--vn-text-muted)' }}>Unknown</span>
-            <span style={{ fontWeight: 600 }}>{svcsUnknown}</span>
+            <span style={{ color: 'var(--vn-danger)' }}>⚠ Down</span>
+            <span style={{ color: 'var(--vn-danger)', fontWeight: 600 }}>{svcsDown}</span>
           </div>
         )}
+        {topTypes.map(([type, count]) => (
+          <div key={type} style={metricRow}>
+            <span style={{ color: 'var(--vn-text-muted)', fontSize: '0.75rem' }}>{type}</span>
+            <span style={{ fontWeight: 600, fontSize: '0.75rem' }}>{count}</span>
+          </div>
+        ))}
       </div>
 
       {/* VMs box */}
@@ -297,14 +320,26 @@ function SummaryBoxes() {
         <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--vn-success)', marginBottom: '0.5rem' }}>
           {vmsRunning}<span style={{ fontSize: '1rem', color: 'var(--vn-text-muted)', fontWeight: 400 }}>/{vms.length}</span>
         </div>
-        <div style={metricRow}>
-          <span style={{ color: 'var(--vn-text-muted)' }}>Running</span>
-          <span style={{ color: 'var(--vn-success)', fontWeight: 600 }}>{vmsRunning}</span>
-        </div>
-        {vms.length > 0 && (
+        {busiestVM && (
           <div style={metricRow}>
-            <span style={{ color: 'var(--vn-text-muted)' }}>Avg Mem</span>
-            <span style={{ fontWeight: 600 }}>{avgMem}%</span>
+            <span style={{ color: 'var(--vn-text-muted)', fontSize: '0.75rem' }} title="Highest mem VM">
+              {busiestVM.name}
+            </span>
+            <span style={{ fontWeight: 600, fontSize: '0.75rem',
+              color: (busiestVM.mem_pct ?? 0) > 85 ? 'var(--vn-danger)' : 'var(--vn-text)' }}>
+              {Math.round(busiestVM.mem_pct ?? 0)}% mem
+            </span>
+          </div>
+        )}
+        {totalPatches > 0 && (
+          <div style={metricRow}>
+            <span style={{ color: 'var(--vn-warning)' }}>📦 Patches</span>
+            <span style={{ color: 'var(--vn-warning)', fontWeight: 600 }}>{totalPatches}</span>
+          </div>
+        )}
+        {vms.length === 0 && (
+          <div style={{ fontSize: '0.75rem', color: 'var(--vn-text-muted)', marginTop: '0.25rem' }}>
+            No VMs polled yet
           </div>
         )}
       </div>

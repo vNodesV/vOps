@@ -114,7 +114,7 @@ function stateStatus(s: Service): 'online' | 'error' | 'inactive' | 'unknown' {
   return 'inactive';
 }
 
-/* ── ETA badge ────────────────────────────────────────────────── */
+/* ── ETA badge with progress bar ──────────────────────────────── */
 function ETABadge({ svcId }: { svcId: number }) {
   const [eta, setEta] = useState<ServiceETA | null>(null);
   const [loading, setLoading] = useState(false);
@@ -128,56 +128,97 @@ function ETABadge({ svcId }: { svcId: number }) {
   if (eta) {
     if (eta.error) return <span style={{ fontSize: '0.75rem', color: 'var(--vn-danger)' }} title={eta.error}>⚠ err</span>;
     if (!eta.catching_up) return <span style={{ fontSize: '0.75rem', color: 'var(--vn-success)' }}>✓ synced</span>;
+    const pct = eta.ext_height > 0 ? Math.round((eta.local_height / eta.ext_height) * 100) : 0;
     return (
-      <span style={{ fontSize: '0.75rem', color: 'var(--vn-warning)' }} title={`${eta.blocks_behind} blocks behind | avg ${eta.avg_block_sec.toFixed(1)}s`}>
-        ⏳ {eta.eta_human}
-      </span>
+      <div style={{ minWidth: 90 }}>
+        <div style={{ fontSize: '0.72rem', color: 'var(--vn-warning)', marginBottom: '0.2rem' }}
+          title={`${eta.blocks_behind.toLocaleString()} blocks behind · avg ${eta.avg_block_sec.toFixed(1)}s`}>
+          ⏳ {eta.eta_human}
+        </div>
+        <div style={{ height: 4, background: 'var(--vn-border)', borderRadius: 2, overflow: 'hidden' }}>
+          <div style={{ width: `${pct}%`, height: '100%', background: 'var(--vn-warning)', borderRadius: 2, transition: 'width 0.3s' }} />
+        </div>
+        <div style={{ fontSize: '0.68rem', color: 'var(--vn-text-muted)', marginTop: '0.15rem' }}>{pct}%</div>
+      </div>
     );
   }
-  return <button style={{ ...btn, padding: '0.2rem 0.5rem', fontSize: '0.7rem' }} onClick={check}>ETA</button>;
+  return <button style={{ ...btn, padding: '0.2rem 0.5rem', fontSize: '0.7rem' }} onClick={check}>Check ETA</button>;
 }
 
-/* ── Service row ──────────────────────────────────────────────── */
+/* ── Service row (with expandable detail) ─────────────────────── */
 function ServiceRow({ svc, onDelete }: { svc: Service; onDelete: () => void }) {
+  const [expanded, setExpanded] = useState(false);
   const status = stateStatus(svc);
-  const cfg = svc.config ?? {};
-  const moniker = (cfg as Record<string, string>).moniker;
+  const cfg = (svc.config ?? {}) as Record<string, string>;
+  const moniker = cfg.moniker;
   const showETA = ETA_TYPES.has(svc.service_type);
+  const fields = TYPE_FIELDS[svc.service_type] ?? [];
+  const colSpan = 8;
 
   return (
-    <tr style={{ borderBottom: '1px solid var(--vn-border)' }}>
-      <td style={{ padding: '0.75rem 1rem', fontWeight: 600, color: 'var(--vn-text)' }}>
-        {svc.name}
-        {moniker && moniker !== svc.name && (
-          <span style={{ fontWeight: 400, color: 'var(--vn-text-muted)', marginLeft: '0.4rem', fontSize: '0.8rem' }}>
-            ({moniker})
-          </span>
-        )}
-      </td>
-      <td style={{ padding: '0.75rem 1rem', color: 'var(--vn-text-muted)', fontSize: '0.8rem' }}>
-        {typeLabel[svc.service_type] ?? svc.service_type}
-      </td>
-      <td style={{ padding: '0.75rem 1rem', color: 'var(--vn-text-muted)', fontSize: '0.8rem' }}>
-        {svc.vm_name || '—'}
-      </td>
-      <td style={{ padding: '0.75rem 1rem', color: 'var(--vn-text-muted)', fontSize: '0.8rem' }}>
-        {svc.chain_id || '—'}
-      </td>
-      <td style={{ padding: '0.75rem 1rem' }}>
-        <Badge status={status} />
-      </td>
-      <td style={{ padding: '0.75rem 1rem' }}>
-        {showETA ? <ETABadge svcId={svc.id} /> : <span style={{ color: 'var(--vn-text-muted)', fontSize: '0.75rem' }}>—</span>}
-      </td>
-      <td style={{ padding: '0.75rem 1rem', fontSize: '0.75rem', color: 'var(--vn-text-muted)' }}>
-        {svc.updated_at ? new Date(svc.updated_at).toLocaleDateString() : '—'}
-      </td>
-      <td style={{ padding: '0.75rem 1rem' }}>
-        <button style={dangerBtn} onClick={onDelete} aria-label={`Delete service ${svc.name}`}>
-          Remove
-        </button>
-      </td>
-    </tr>
+    <>
+      <tr
+        style={{ borderBottom: expanded ? 'none' : '1px solid var(--vn-border)', cursor: 'pointer' }}
+        onClick={() => setExpanded(v => !v)}
+        aria-expanded={expanded}
+      >
+        <td style={{ padding: '0.75rem 1rem', fontWeight: 600, color: 'var(--vn-text)', userSelect: 'none' }}>
+          <span style={{ fontSize: '0.7rem', color: 'var(--vn-text-muted)', marginRight: '0.35rem' }}>{expanded ? '▾' : '▸'}</span>
+          {svc.name}
+          {moniker && moniker !== svc.name && (
+            <span style={{ fontWeight: 400, color: 'var(--vn-text-muted)', marginLeft: '0.4rem', fontSize: '0.8rem' }}>
+              ({moniker})
+            </span>
+          )}
+        </td>
+        <td style={{ padding: '0.75rem 1rem', color: 'var(--vn-text-muted)', fontSize: '0.8rem' }}>
+          {typeLabel[svc.service_type] ?? svc.service_type}
+        </td>
+        <td style={{ padding: '0.75rem 1rem', color: 'var(--vn-text-muted)', fontSize: '0.8rem' }}>
+          {svc.vm_name || '—'}
+        </td>
+        <td style={{ padding: '0.75rem 1rem', color: 'var(--vn-text-muted)', fontSize: '0.8rem' }}>
+          {svc.chain_id || '—'}
+        </td>
+        <td style={{ padding: '0.75rem 1rem' }} onClick={e => e.stopPropagation()}>
+          <Badge status={status} />
+        </td>
+        <td style={{ padding: '0.75rem 1rem' }} onClick={e => e.stopPropagation()}>
+          {showETA ? <ETABadge svcId={svc.id} /> : <span style={{ color: 'var(--vn-text-muted)', fontSize: '0.75rem' }}>—</span>}
+        </td>
+        <td style={{ padding: '0.75rem 1rem', fontSize: '0.75rem', color: 'var(--vn-text-muted)' }}>
+          {svc.updated_at ? new Date(svc.updated_at).toLocaleDateString() : '—'}
+        </td>
+        <td style={{ padding: '0.75rem 1rem' }} onClick={e => e.stopPropagation()}>
+          <button style={dangerBtn} onClick={onDelete} aria-label={`Delete service ${svc.name}`}>
+            Remove
+          </button>
+        </td>
+      </tr>
+      {expanded && (
+        <tr style={{ borderBottom: '1px solid var(--vn-border)', background: 'var(--vn-surface-2)' }}>
+          <td colSpan={colSpan} style={{ padding: '0.75rem 1.5rem 1rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '0.5rem 1.5rem' }}>
+              {fields.map(f => {
+                const val = cfg[f.key];
+                if (!val) return null;
+                return (
+                  <div key={f.key} style={{ fontSize: '0.78rem' }}>
+                    <span style={{ color: 'var(--vn-text-muted)', fontWeight: 500 }}>{f.label}: </span>
+                    <span style={{ color: 'var(--vn-text)', fontFamily: f.key.includes('url') ? 'monospace' : undefined }}>
+                      {val}
+                    </span>
+                  </div>
+                );
+              })}
+              {fields.every(f => !cfg[f.key]) && (
+                <span style={{ fontSize: '0.78rem', color: 'var(--vn-text-muted)' }}>No config fields set.</span>
+              )}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 
