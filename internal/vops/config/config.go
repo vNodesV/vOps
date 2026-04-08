@@ -136,15 +136,26 @@ type FleetConfig struct {
 	PollIntervalSec int `toml:"poll_interval_sec"`
 }
 
-// AuthConfig holds dashboard login credentials.
-// If PasswordHash is empty, the dashboard is accessible without login.
+// AuthConfig holds dashboard authentication settings.
+// vOps uses PAM-via-SSH by default: it dials localhost:SSHPort with the
+// supplied credentials; success + group membership grants a session.
+// Legacy bcrypt (PasswordHash) is accepted as a fallback for deployments
+// that have not yet migrated.
 type AuthConfig struct {
-	// Username is the login username (default: "admin").
+	// AllowedGroups is the list of Linux group names whose members may log in.
+	// At least one group should be listed (e.g. ["vops"]).
+	// If empty and PasswordHash is also empty, the dashboard requires no login.
+	AllowedGroups []string `toml:"allowed_groups"`
+
+	// SSHPort is the local sshd port used for PAM credential validation.
+	// Defaults to 22 when unset.
+	SSHPort int `toml:"ssh_port"`
+
+	// Username is the legacy single-user login name (deprecated — use PAM).
 	Username string `toml:"username"`
 
-	// PasswordHash is a bcrypt hash of the password.
-	// Generate with: htpasswd -nbBC 12 admin yourpassword | cut -d: -f2
-	// Or: vops setup (wizard, coming in v1.3.0)
+	// PasswordHash is a legacy bcrypt hash used when AllowedGroups is empty.
+	// Deprecated: configure allowed_groups for PAM-based multi-user auth.
 	PasswordHash string `toml:"password_hash"`
 }
 

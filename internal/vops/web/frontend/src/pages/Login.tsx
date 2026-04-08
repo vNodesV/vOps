@@ -97,6 +97,9 @@ export default function LoginPage() {
           <p className="text-sm mt-1" style={{ color: 'var(--vn-text-muted)' }}>
             Proxy &amp; Access Intelligence
           </p>
+          <p className="text-xs mt-2" style={{ color: 'var(--vn-text-muted)', opacity: 0.7 }}>
+            Use your Linux system credentials
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} noValidate>

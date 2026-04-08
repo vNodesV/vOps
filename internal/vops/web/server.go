@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
+	gossh "golang.org/x/crypto/ssh"
 
 	"github.com/vNodesV/vProx/internal/fleet"
 	"github.com/vNodesV/vProx/internal/fleet/api"
@@ -411,10 +412,10 @@ func (s *Server) Start() error {
 }
 
 // requireSession redirects to /login if no valid session cookie is present.
-// If auth is not configured (PasswordHash empty), this is a no-op pass-through.
+// Auth is skipped when neither PAM groups nor a legacy password hash is configured.
 func (s *Server) requireSession(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.cfg.VOps.Auth.PasswordHash == "" {
+		if !s.authEnabled() {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -467,17 +468,78 @@ func (s *Server) deleteSession(token string) {
 	s.sessionMu.Unlock()
 }
 
-// authEnabled reports whether dashboard login is configured.
+// authEnabled reports whether dashboard login is required.
 func (s *Server) authEnabled() bool {
-	return s.cfg.VOps.Auth.PasswordHash != ""
+	return len(s.cfg.VOps.Auth.AllowedGroups) > 0 || s.cfg.VOps.Auth.PasswordHash != ""
 }
 
-// checkCredentials validates username + password against the stored config.
+// checkCredentials authenticates username + password.
+//
+// Primary path (PAM via SSH): dials localhost sshd, which evaluates the
+// credentials through the system PAM stack.  On success the user's group
+// membership is verified against AuthConfig.AllowedGroups.
+//
+// Fallback (legacy bcrypt): used only when AllowedGroups is empty and a
+// PasswordHash is present in the config (backward-compatible with existing
+// single-user deployments).
 func (s *Server) checkCredentials(username, password string) bool {
-	if username != s.cfg.VOps.Auth.Username {
+	auth := s.cfg.VOps.Auth
+
+	if len(auth.AllowedGroups) > 0 {
+		return s.pamCheckCredentials(username, password, auth.AllowedGroups, auth.SSHPort)
+	}
+
+	// Legacy bcrypt fallback for deployments that haven't migrated to PAM.
+	if auth.PasswordHash != "" {
+		if username != auth.Username {
+			return false
+		}
+		return bcrypt.CompareHashAndPassword([]byte(auth.PasswordHash), []byte(password)) == nil
+	}
+	return false
+}
+
+// pamCheckCredentials dials localhost sshd with password auth (which invokes
+// the system PAM stack), then checks the authenticated user's groups.
+// It is safe to call from a hot path — it opens and immediately closes a
+// short-lived SSH connection with a 5 s timeout.
+func (s *Server) pamCheckCredentials(username, password string, allowedGroups []string, sshPort int) bool {
+	if sshPort == 0 {
+		sshPort = 22
+	}
+	sshCfg := &gossh.ClientConfig{
+		User:            username,
+		Auth:            []gossh.AuthMethod{gossh.Password(password)},
+		HostKeyCallback: gossh.InsecureIgnoreHostKey(), //nolint:gosec // localhost-only dial
+		Timeout:         5 * time.Second,
+	}
+	client, err := gossh.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", sshPort), sshCfg)
+	if err != nil {
+		// Authentication failure or sshd unavailable.
 		return false
 	}
-	return bcrypt.CompareHashAndPassword([]byte(s.cfg.VOps.Auth.PasswordHash), []byte(password)) == nil
+	defer client.Close()
+
+	sess, err := client.NewSession()
+	if err != nil {
+		return false
+	}
+	defer sess.Close()
+
+	out, err := sess.Output("id -Gn")
+	if err != nil {
+		return false
+	}
+
+	userGroups := strings.Fields(string(out))
+	for _, allowed := range allowedGroups {
+		for _, g := range userGroups {
+			if g == allowed {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // checkLoginLock returns (true, retryAfterSeconds) when clientIP is locked out,
