@@ -278,3 +278,7 @@ export const getUnitStatusHistory = (name: string) =>
     `/api/v1/units/${encodeURIComponent(name)}/status/history`,
   );
 
+export const getUnitStatus = (name: string) =>
+  apiFetch<{ status: import('./types').UnitStatus | null }>(
+    `/api/v1/units/${encodeURIComponent(name)}/status`,
+  );

@@ -60,8 +60,9 @@ type Server struct {
 	fleet    *api.Handlers    // nil when fleet module is not configured
 	fleetSvc *fleet.Service
 	vmMgr    *vm.Handlers     // nil when no hypervisor hosts are configured
-	svcMgr   *services.Handlers
-	unitsMgr *units.Handlers
+	svcMgr      *services.Handlers
+	unitsMgr    *units.Handlers
+	unitsPoller *units.Poller
 	debug    *DebugRing       // SSH command debug recorder
 
 	// Session state for dashboard login.
@@ -133,6 +134,19 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 
 	s.svcMgr = services.NewHandlers(d.DB)
 	s.unitsMgr = units.NewHandlers(d.DB)
+
+	// Build the units poller — uses fleetSvc to resolve VM LAN IPs.
+	lanIPFunc := func(vmName string) string {
+		if fleetSvc == nil {
+			return ""
+		}
+		vm := fleetSvc.FindVM(vmName)
+		if vm == nil {
+			return ""
+		}
+		return vm.DisplayLanIP()
+	}
+	s.unitsPoller = units.NewPoller(d.DB, lanIPFunc, 30*time.Second)
 
 	mux := http.NewServeMux()
 
@@ -338,6 +352,8 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		s.requireSession(http.HandlerFunc(s.unitsMgr.HandleDelete)))
 	mux.Handle("POST /api/v1/units/{name}/status",
 		s.requireSession(http.HandlerFunc(s.unitsMgr.HandlePushStatus)))
+	mux.Handle("GET /api/v1/units/{name}/status",
+		s.requireSession(http.HandlerFunc(s.unitsMgr.HandleCurrentStatus)))
 	mux.Handle("GET /api/v1/units/{name}/status/history",
 		s.requireSession(http.HandlerFunc(s.unitsMgr.HandleStatusHistory)))
 
@@ -357,6 +373,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 // Start begins listening on the configured port. It blocks until the
 // server is shut down or encounters a fatal error.
 func (s *Server) Start() error {
+	s.unitsPoller.Start()
 	return s.httpSrv.ListenAndServe()
 }
 
@@ -529,8 +546,9 @@ func securityHeaders(next http.Handler) http.Handler {
 }
 
 // Shutdown performs a graceful shutdown, waiting for in-flight requests
-// to complete or the context to expire.
+// to complete or the context to expire. Also stops background pollers.
 func (s *Server) Shutdown(ctx context.Context) error {
+	s.unitsPoller.Stop()
 	return s.httpSrv.Shutdown(ctx)
 }
 

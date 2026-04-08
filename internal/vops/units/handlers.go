@@ -315,6 +315,17 @@ func (h *Handlers) HandleStatusHistory(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"history": hist})
 }
 
+// HandleCurrentStatus returns the most recent status poll for a unit.
+func (h *Handlers) HandleCurrentStatus(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	st := latestStatus(h.db, name)
+	if st == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"status": nil})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": st})
+}
+
 // ── internal: latest status helper ───────────────────────────────────────────
 
 func latestStatus(db *sql.DB, unitName string) *UnitStatus {

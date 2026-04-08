@@ -363,7 +363,12 @@ export default function UnitsPage() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    // Auto-refresh every 30s to pick up new poller results.
+    const t = setInterval(load, 30_000);
+    return () => clearInterval(t);
+  }, []);
 
   const handleDelete = async (name: string) => {
     if (!confirm(`Delete unit "${name}"? This cannot be undone.`)) return;
