@@ -66,21 +66,32 @@ func (p *Poller) run() {
 	}
 }
 
+type unitEntry struct {
+	name, vmName, serviceName string
+	rpcPort, apiPort          int
+}
+
 func (p *Poller) poll() {
+	// Materialize units into a slice before closing the rows cursor.
+	// With MaxOpenConns=1, keeping rows open while calling db.Exec (saveStatus)
+	// inside the loop would deadlock — both compete for the single connection.
 	rows, err := p.db.Query(
 		`SELECT name, vm_name, rpc_port, api_port, service_name FROM units`)
 	if err != nil {
 		return
 	}
-	defer rows.Close()
-
+	var entries []unitEntry
 	for rows.Next() {
-		var name, vmName, serviceName string
-		var rpcPort, apiPort int
-		if scanErr := rows.Scan(&name, &vmName, &rpcPort, &apiPort, &serviceName); scanErr != nil {
+		var e unitEntry
+		if scanErr := rows.Scan(&e.name, &e.vmName, &e.rpcPort, &e.apiPort, &e.serviceName); scanErr != nil {
 			continue
 		}
-		st := p.pollUnit(name, vmName, rpcPort, apiPort)
+		entries = append(entries, e)
+	}
+	rows.Close() // release the connection before any writes
+
+	for _, e := range entries {
+		st := p.pollUnit(e.name, e.vmName, e.rpcPort, e.apiPort)
 		p.saveStatus(st)
 	}
 
