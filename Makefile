@@ -64,7 +64,7 @@ EFFECTIVE_GOROOT  := $(if $(_TOOLCHAIN_GOROOT),$(_TOOLCHAIN_GOROOT),$(GOROOT))
 
 .PHONY: all install clean ufw help \
         validate-go dirs geo config config-vops config-vprox config-modules \
-        build-vprox build-vops systemd service-vops system-user-vops samples-fleet \
+        build-vprox build-vops release-vops systemd service-vops system-user-vops samples-fleet \
         bump-patch bump-minor bump-major
 
 all: help
@@ -78,6 +78,7 @@ help:
 	@echo "  make install          Build + install vProx & vOps: bins, config, aliases, systemd"
 	@echo "  make build-vprox      Build vProx binary → .build/vProx"
 	@echo "  make build-vops       Build vOps binary → .build/vOps (rebuilds frontend if Node available)"
+	@echo "  make release-vops     Cross-compile linux/amd64 → vops-linux-amd64, commit + push"
 	@echo "  make clean            Remove local build artifacts"
 	@echo "  make ufw              Passwordless UFW + apt sudoers for vOps"
 	@echo ""
@@ -449,6 +450,24 @@ build-vops: frontend
 	@echo "  Copied → $(GOPATH_BIN)/$(VOPS_NAME)"
 	@echo "Restarting $(VOPS_NAME) service..."
 	@sudo systemctl start "$(VOPS_NAME)" 2>/dev/null && echo "  ✓ $(VOPS_NAME) started" || echo "  ○ Could not start $(VOPS_NAME) — start manually: sudo service $(VOPS_NAME) start"
+
+## Cross-compile vOps for linux/amd64, commit the binary, and push.
+## Run this on macOS (or any dev machine) to deploy via git pull on the server.
+## Usage: make release-vops  (optionally: make release-vops VOPS_VERSION=0.2.0)
+
+release-vops: frontend
+	@echo "Cross-compiling vOps $(VOPS_VERSION) for linux/amd64..."
+	mkdir -p "$(BUILD_DIR)"
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOROOT="$(EFFECTIVE_GOROOT)" \
+		go build -ldflags "-s -w $(VOPS_LDFLAGS)" -o vops-linux-amd64 "$(VOPS_SRC)"
+	@echo "✓ vops-linux-amd64 built (v$(VOPS_VERSION))"
+	@echo "Committing and pushing..."
+	git add vops-linux-amd64 cmd/vops/VERSION
+	git diff --cached --quiet || git commit -m "release(vops): v$(VOPS_VERSION) linux/amd64 binary" \
+		-m "" \
+		-m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
+	git push
+	@echo "✓ Pushed — pull on server: git pull && sudo mv vops-linux-amd64 /usr/local/bin/vops && sudo systemctl restart vops"
 
 ## Install .samples/vops/vops.sample → ~/.vProx/config/vops/vops.toml (only if absent)
 
