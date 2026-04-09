@@ -376,6 +376,11 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		s.requireSession(http.HandlerFunc(s.handleUnitLogStream)))
 	mux.Handle("GET /api/v1/units/{name}/deploy",
 		s.requireSession(http.HandlerFunc(s.handleUnitDeploy)))
+	// DB reset endpoints — clear status history or wipe all units (fresh start).
+	mux.Handle("POST /api/v1/units/reset-status",
+		s.requireSession(http.HandlerFunc(s.unitsMgr.HandleResetStatus)))
+	mux.Handle("POST /api/v1/units/reset-all",
+		s.requireSession(http.HandlerFunc(s.unitsMgr.HandleResetAll)))
 
 	// Multi-vProx instance management routes.
 	mux.Handle("GET /api/v1/multiprox",

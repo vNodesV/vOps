@@ -3,6 +3,7 @@ package ingest
 import (
 	"fmt"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -16,6 +17,7 @@ type Watcher struct {
 	ingester *Ingester
 	interval time.Duration
 	done     chan struct{}
+	wg       sync.WaitGroup
 }
 
 // NewWatcher returns a Watcher that polls every intervalSec seconds.
@@ -33,13 +35,18 @@ func NewWatcher(ing *Ingester, intervalSec int) *Watcher {
 // Start begins polling archivesDir on a background goroutine.
 // It is non-blocking.
 func (w *Watcher) Start() {
-	go w.loop()
+	w.wg.Add(1)
+	go func() {
+		defer w.wg.Done()
+		w.loop()
+	}()
 }
 
-// Stop signals the watcher goroutine to exit. It returns immediately;
-// in-flight IngestAll calls complete asynchronously.
+// Stop signals the watcher goroutine to exit and blocks until it has fully
+// stopped. This ensures the DB is not used after the caller closes it.
 func (w *Watcher) Stop() {
 	close(w.done)
+	w.wg.Wait()
 }
 
 func (w *Watcher) loop() {

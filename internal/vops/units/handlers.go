@@ -105,18 +105,52 @@ func (h *Handlers) HandleList(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	defer rows.Close()
-
-	units := make([]UnitWithStatus, 0)
+	// Materialize before closing rows. With MaxOpenConns=1, calling latestStatus
+	// (db.QueryRow) while rows is still open would deadlock on the single connection.
+	var all []Unit
 	for rows.Next() {
 		u, err := scanUnit(rows)
 		if err != nil {
 			continue
 		}
-		st := latestStatus(h.db, u.Name)
-		units = append(units, UnitWithStatus{Unit: u, Status: st})
+		all = append(all, u)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"units": units})
+	rows.Close()
+
+	result := make([]UnitWithStatus, 0, len(all))
+	for _, u := range all {
+		st := latestStatus(h.db, u.Name)
+		result = append(result, UnitWithStatus{Unit: u, Status: st})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"units": result})
+}
+
+// HandleResetStatus deletes all rows from unit_status, giving a clean history slate.
+// POST /api/v1/units/reset-status
+func (h *Handlers) HandleResetStatus(w http.ResponseWriter, _ *http.Request) {
+	res, err := h.db.Exec(`DELETE FROM unit_status`)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	n, _ := res.RowsAffected()
+	writeJSON(w, http.StatusOK, map[string]any{"ok": "status history cleared", "deleted": n})
+}
+
+// HandleResetAll deletes all units AND their status history.
+// POST /api/v1/units/reset-all
+func (h *Handlers) HandleResetAll(w http.ResponseWriter, _ *http.Request) {
+	if _, err := h.db.Exec(`DELETE FROM unit_status`); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "clear status: " + err.Error()})
+		return
+	}
+	res, err := h.db.Exec(`DELETE FROM units`)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "clear units: " + err.Error()})
+		return
+	}
+	n, _ := res.RowsAffected()
+	writeJSON(w, http.StatusOK, map[string]any{"ok": "all units and history cleared", "units_deleted": n})
 }
 
 // ── GET /api/v1/units/{name} ──────────────────────────────────────────────────
