@@ -14,12 +14,8 @@ import AccountsPage from './pages/Accounts';
 import AccountDetail from './pages/AccountDetail';
 import LoginPage from './pages/Login';
 import SettingsPage from './pages/Settings';
-import FleetPage from './pages/Fleet';
-import ChainsPage from './pages/Chains';
 import VMsPage from './pages/VMs';
 import ServicesPage from './pages/Services';
-import PatchesPage from './pages/Patches';
-import UnitsPage from './pages/Units';
 import TopologyPage from './pages/Topology';
 import MultiProxPage from './pages/MultiProx';
 import AuditPage from './pages/Audit';
@@ -183,27 +179,6 @@ function Shell({ children }: { children: React.ReactNode }) {
             </svg>
             IP Accounts
           </SideLink>
-          <SideLink to="/chains">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-            </svg>
-            Chains &amp; Services
-          </SideLink>
-          <SideLink to="/services">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
-            </svg>
-            Svc Manager
-          </SideLink>
-          <SideLink to="/fleet">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-              <path d="M8 21h8m-4-4v4" />
-            </svg>
-            Fleet
-          </SideLink>
           <SideLink to="/vms">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
               <rect x="3" y="11" width="18" height="11" rx="1" />
@@ -212,19 +187,12 @@ function Shell({ children }: { children: React.ReactNode }) {
             </svg>
             VM Manager
           </SideLink>
-          <SideLink to="/patches">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z" />
-              <path d="M9 12l2 2 4-4" />
-            </svg>
-            Patches
-          </SideLink>
-          <SideLink to="/units">
+          <SideLink to="/services">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
               <circle cx="12" cy="12" r="3" />
               <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
             </svg>
-            Units
+            Services
           </SideLink>
           <SideLink to="/topology">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
@@ -341,12 +309,8 @@ export default function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/accounts" element={<AccountsPage />} />
             <Route path="/accounts/:ip" element={<AccountDetail />} />
-            <Route path="/chains" element={<ChainsPage />} />
-            <Route path="/services" element={<ServicesPage />} />
-            <Route path="/fleet" element={<FleetPage />} />
             <Route path="/vms" element={<VMsPage />} />
-            <Route path="/patches" element={<PatchesPage />} />
-            <Route path="/units" element={<UnitsPage />} />
+            <Route path="/services" element={<ServicesPage />} />
             <Route path="/topology" element={<TopologyPage />} />
             <Route path="/multiprox" element={<MultiProxPage />} />
             <Route path="/audit" element={<AuditPage />} />

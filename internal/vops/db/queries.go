@@ -176,16 +176,16 @@ func (d *DB) GetIPAccount(ip string) (*IPAccount, error) {
 	return a, nil
 }
 
-// ListIPAccounts returns up to limit accounts starting at offset,
-// ordered by last_seen descending.
-func (d *DB) ListIPAccounts(limit, offset int) ([]*IPAccount, error) {
-	const q = `SELECT
+// ListIPAccounts returns up to limit accounts starting at offset.
+// sortCol and sortDir must be safe values validated by the caller.
+func (d *DB) ListIPAccounts(sortCol, sortDir string, limit, offset int) ([]*IPAccount, error) {
+	q := fmt.Sprintf(`SELECT
 		ip, first_seen, last_seen, total_requests, ratelimit_events,
 		country, asn, org, hostnames, open_ports, services,
 		vt_malicious, vt_data, abuse_score, abuse_data, shodan_data,
 		threat_score, threat_flags, intel_updated_at,
 		notes, tags, status
-	FROM ip_accounts ORDER BY last_seen DESC LIMIT ? OFFSET ?`
+	FROM ip_accounts ORDER BY %s %s LIMIT ? OFFSET ?`, sortCol, sortDir)
 
 	rows, err := d.Query(q, limit, offset)
 	if err != nil {
@@ -211,10 +211,10 @@ func (d *DB) ListIPAccounts(limit, offset int) ([]*IPAccount, error) {
 }
 
 // SearchIPAccounts returns accounts whose ip or country match the query string
-// (case-insensitive LIKE), ordered by last_seen DESC.
-func (d *DB) SearchIPAccounts(query string, limit, offset int) ([]*IPAccount, error) {
+// (case-insensitive LIKE). sortCol and sortDir must be safe values validated by the caller.
+func (d *DB) SearchIPAccounts(query, sortCol, sortDir string, limit, offset int) ([]*IPAccount, error) {
 	pat := "%" + escapeSQLLike(query) + "%"
-	const q = `SELECT
+	q := fmt.Sprintf(`SELECT
 		ip, first_seen, last_seen, total_requests, ratelimit_events,
 		country, asn, org, hostnames, open_ports, services,
 		vt_malicious, vt_data, abuse_score, abuse_data, shodan_data,
@@ -222,7 +222,7 @@ func (d *DB) SearchIPAccounts(query string, limit, offset int) ([]*IPAccount, er
 		notes, tags, status
 	FROM ip_accounts
 	WHERE ip LIKE ? ESCAPE '\' OR country LIKE ? ESCAPE '\' OR CAST(rowid AS TEXT) LIKE ? ESCAPE '\'
-	ORDER BY last_seen DESC LIMIT ? OFFSET ?`
+	ORDER BY %s %s LIMIT ? OFFSET ?`, sortCol, sortDir)
 
 	rows, err := d.Query(q, pat, pat, pat, limit, offset)
 	if err != nil {

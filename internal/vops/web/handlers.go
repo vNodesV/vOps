@@ -88,11 +88,41 @@ func (s *Server) handleAPIBackupAndIngest(w http.ResponseWriter, r *http.Request
 	})
 }
 
+// accountSortCols maps safe frontend column names to DB column names.
+var accountSortCols = map[string]string{
+	"IP":               "ip",
+	"Country":          "country",
+	"Org":              "org",
+	"TotalRequests":    "total_requests",
+	"RatelimitEvents":  "ratelimit_events",
+	"ThreatScore":      "threat_score",
+	"Status":           "status",
+	"LastSeen":         "last_seen",
+}
+
 func (s *Server) handleAPIAccountList(w http.ResponseWriter, r *http.Request) {
 	limit := queryInt(r, "limit", 50)
 	offset := queryInt(r, "offset", 0)
+	search := r.URL.Query().Get("search")
 
-	accounts, err := s.db.ListIPAccounts(limit, offset)
+	sortCol := "last_seen"
+	if col, ok := accountSortCols[r.URL.Query().Get("sort")]; ok {
+		sortCol = col
+	}
+	sortDir := "DESC"
+	if r.URL.Query().Get("dir") == "asc" {
+		sortDir = "ASC"
+	}
+
+	var (
+		accounts []*db.IPAccount
+		err      error
+	)
+	if search != "" {
+		accounts, err = s.db.SearchIPAccounts(search, sortCol, sortDir, limit, offset)
+	} else {
+		accounts, err = s.db.ListIPAccounts(sortCol, sortDir, limit, offset)
+	}
 	if err != nil {
 		log.Printf("[web] internal error: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})

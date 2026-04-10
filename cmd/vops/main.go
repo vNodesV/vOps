@@ -587,7 +587,7 @@ func cmdListAccounts(f flags) int {
 	}
 	defer database.Close()
 
-	accounts, err := database.ListIPAccounts(50, 0)
+	accounts, err := database.ListIPAccounts("last_seen", "DESC", 50, 0)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "vops: list accounts: %v\n", err)
 		return 1

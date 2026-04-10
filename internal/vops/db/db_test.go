@@ -214,7 +214,7 @@ func TestListIPAccounts(t *testing.T) {
 		})
 	}
 
-	accs, err := d.ListIPAccounts(10, 0)
+	accs, err := d.ListIPAccounts("last_seen", "DESC", 10, 0)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -284,7 +284,7 @@ func TestSearchIPAccounts(t *testing.T) {
 	}
 
 	// Search by IP prefix
-	results, err := d.SearchIPAccounts("10.0.0", 10, 0)
+	results, err := d.SearchIPAccounts("10.0.0", "last_seen", "DESC", 10, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,7 +302,7 @@ func TestSearchIPAccounts(t *testing.T) {
 	}
 
 	// Search by country
-	results, err = d.SearchIPAccounts("US", 10, 0)
+	results, err = d.SearchIPAccounts("US", "last_seen", "DESC", 10, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -311,7 +311,7 @@ func TestSearchIPAccounts(t *testing.T) {
 	}
 
 	// Search no match
-	results, err = d.SearchIPAccounts("99.99.99", 10, 0)
+	results, err = d.SearchIPAccounts("99.99.99", "last_seen", "DESC", 10, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
