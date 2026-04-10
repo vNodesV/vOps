@@ -24,39 +24,7 @@ import UpgradeModal from '../components/UpgradeModal';
    Shared styles
    ═══════════════════════════════════════════════════════════════ */
 
-const card: React.CSSProperties = {
-  background: 'var(--vn-surface)',
-  border: '1px solid var(--vn-border)',
-  borderRadius: 'var(--vn-radius)',
-  padding: '1.25rem 1.5rem',
-  boxShadow: 'var(--vn-shadow)',
-};
 
-const btn: React.CSSProperties = {
-  cursor: 'pointer',
-  border: '1px solid var(--vn-border)',
-  borderRadius: 'var(--vn-radius)',
-  padding: '0.3rem 0.75rem',
-  fontSize: '0.8rem',
-  fontWeight: 500,
-  background: 'var(--vn-surface)',
-  color: 'var(--vn-text)',
-  transition: 'background 0.12s',
-};
-
-const primaryBtn: React.CSSProperties = {
-  ...btn,
-  background: 'var(--vn-primary)',
-  color: 'var(--vn-on-primary)',
-  border: 'none',
-};
-
-const dangerBtn: React.CSSProperties = {
-  ...btn,
-  background: 'var(--vn-danger)',
-  color: '#fff',
-  border: 'none',
-};
 
 /* ── Fleet-specific styles ────────────────────────────────────── */
 
@@ -330,7 +298,7 @@ function SnapshotPanel({ host, domain }: { host: string; domain: string }) {
           }}
           onKeyDown={e => e.key === 'Enter' && doCreate()}
         />
-        <button style={primaryBtn} onClick={doCreate} disabled={busy === 'create' || !newSnapName.trim()} type="button">
+        <button className="btn btn-primary btn-sm" onClick={doCreate} disabled={busy === 'create' || !newSnapName.trim()} type="button">
           {busy === 'create' ? '\u2026' : '+ Create'}
         </button>
       </div>
@@ -352,17 +320,17 @@ function SnapshotPanel({ host, domain }: { host: string; domain: string }) {
                 <td style={{ padding: '0.3rem 0', textAlign: 'right' }}>
                   {confirmDelete === s.name ? (
                     <span style={{ display: 'inline-flex', gap: '0.3rem' }}>
-                      <button style={dangerBtn} onClick={() => doDelete(s.name)} disabled={busy === `delete-${s.name}`} type="button">
+                      <button className="btn btn-danger btn-sm" onClick={() => doDelete(s.name)} disabled={busy === `delete-${s.name}`} type="button">
                         {busy === `delete-${s.name}` ? '\u2026' : 'Confirm Delete'}
                       </button>
-                      <button style={btn} onClick={() => setConfirmDelete(null)} type="button">Cancel</button>
+                      <button className="btn btn-secondary btn-sm" onClick={() => setConfirmDelete(null)} type="button">Cancel</button>
                     </span>
                   ) : (
                     <span style={{ display: 'inline-flex', gap: '0.3rem' }}>
-                      <button style={btn} onClick={() => doRevert(s.name)} disabled={!!busy} type="button">
+                      <button className="btn btn-secondary btn-sm" onClick={() => doRevert(s.name)} disabled={!!busy} type="button">
                         {busy === `revert-${s.name}` ? '\u2026' : 'Revert'}
                       </button>
-                      <button style={{ ...btn, color: 'var(--vn-danger)' }} onClick={() => setConfirmDelete(s.name)} type="button">\u2715</button>
+                      <button className="btn btn-ghost btn-sm" style={{ color: 'var(--vn-danger)' }} onClick={() => setConfirmDelete(s.name)} type="button">\u2715</button>
                     </span>
                   )}
                 </td>
@@ -427,36 +395,36 @@ function DomainCard({ host, domain }: { host: string; domain: LibvirtDomain }) {
 
       <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
         {!isRunning && !isPaused && (
-          <button style={primaryBtn} onClick={() => doAction('start')} disabled={!!actionBusy} type="button">
+          <button className="btn btn-primary btn-sm" onClick={() => doAction('start')} disabled={!!actionBusy} type="button">
             {actionBusy === 'start' ? '\u2026' : '\u25b6 Start'}
           </button>
         )}
         {isRunning && (
           <>
-            <button style={btn} onClick={() => doAction('shutdown')} disabled={!!actionBusy} type="button">
+            <button className="btn btn-secondary btn-sm" onClick={() => doAction('shutdown')} disabled={!!actionBusy} type="button">
               {actionBusy === 'shutdown' ? '\u2026' : '\u23f9 Shutdown'}
             </button>
-            <button style={btn} onClick={() => doAction('reboot')} disabled={!!actionBusy} type="button">
+            <button className="btn btn-secondary btn-sm" onClick={() => doAction('reboot')} disabled={!!actionBusy} type="button">
               {actionBusy === 'reboot' ? '\u2026' : '\u21ba Reboot'}
             </button>
-            <button style={btn} onClick={() => doAction('suspend')} disabled={!!actionBusy} type="button">
+            <button className="btn btn-secondary btn-sm" onClick={() => doAction('suspend')} disabled={!!actionBusy} type="button">
               {actionBusy === 'suspend' ? '\u2026' : '\u23f8 Suspend'}
             </button>
           </>
         )}
         {isPaused && (
-          <button style={primaryBtn} onClick={() => doAction('resume')} disabled={!!actionBusy} type="button">
+          <button className="btn btn-primary btn-sm" onClick={() => doAction('resume')} disabled={!!actionBusy} type="button">
             {actionBusy === 'resume' ? '\u2026' : '\u25b6 Resume'}
           </button>
         )}
         {(isRunning || isPaused) && (
-          <button style={dangerBtn} onClick={() => doAction('destroy')} disabled={!!actionBusy} type="button"
+          <button className="btn btn-danger btn-sm" onClick={() => doAction('destroy')} disabled={!!actionBusy} type="button"
             title="Force power-off (may corrupt disk)">
             {actionBusy === 'destroy' ? '\u2026' : '\u26a1 Force Off'}
           </button>
         )}
         <button
-          style={{ ...btn, fontSize: '0.75rem' }}
+          className="btn btn-secondary btn-sm"
           onClick={() => setShowSnaps(v => !v)}
           type="button"
         >
@@ -491,7 +459,7 @@ function HostPanel({ host, search }: { host: HypervisorHost; search?: string }) 
   const total = allDomains.length;
 
   return (
-    <div style={{ ...card, marginBottom: '1.25rem' }}>
+    <div className="card" style={{ marginBottom: '1.25rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>
@@ -504,7 +472,7 @@ function HostPanel({ host, search }: { host: HypervisorHost; search?: string }) 
           </div>
         </div>
         <button
-          style={btn}
+          className="btn btn-secondary btn-sm"
           onClick={() => refetch()}
           disabled={isFetching}
           type="button"
@@ -604,12 +572,12 @@ function CreateVMModal({ hosts, onClose }: { hosts: HypervisorHost[]; onClose: (
       <div style={modal}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
           <strong style={{ fontSize: '1rem' }}>Create / Clone VM</strong>
-          <button style={btn} onClick={onClose}>\u2715</button>
+          <button className="btn btn-secondary btn-sm" onClick={onClose}>\u2715</button>
         </div>
 
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
           {(['clone', 'create'] as const).map(m => (
-            <button key={m} style={{ ...btn, ...(mode === m ? { background: 'var(--vn-primary)', color: 'var(--vn-on-primary)', border: 'none' } : {}) }}
+            <button key={m} className={`btn btn-sm ${mode === m ? 'btn-primary' : 'btn-secondary'}`}
               onClick={() => setMode(m)}>{m === 'clone' ? '\ud83d\udccb Clone' : '\u2795 Create'}</button>
           ))}
         </div>
@@ -674,8 +642,8 @@ function CreateVMModal({ hosts, onClose }: { hosts: HypervisorHost[]; onClose: (
             <p style={{ fontSize: '0.8rem', color: result.startsWith('\u2713') ? 'var(--vn-success)' : 'var(--vn-danger)', margin: '0.5rem 0' }}>{result}</p>
           )}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '1rem' }}>
-            <button type="button" style={btn} onClick={onClose}>Cancel</button>
-            <button type="submit" style={primaryBtn} disabled={busy}>{busy ? '\u2026' : mode === 'clone' ? 'Clone VM' : 'Create VM'}</button>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>Cancel</button>
+            <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>{busy ? '\u2026' : mode === 'clone' ? 'Clone VM' : 'Create VM'}</button>
           </div>
         </form>
       </div>
@@ -708,7 +676,7 @@ function VMsTabContent() {
           </p>
         </div>
         {hosts.length > 0 && (
-          <button style={primaryBtn} onClick={() => setShowCreate(true)}>+ Create VM</button>
+          <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(true)}>+ Create VM</button>
         )}
       </div>
 
@@ -755,11 +723,11 @@ function VMsTabContent() {
       )}
 
       {isLoading ? <Spinner /> : isError ? (
-        <div style={card}>
+        <div className="card">
           <p style={{ color: 'var(--vn-danger)', margin: 0 }}>Failed to load hypervisor hosts.</p>
         </div>
       ) : hosts.length === 0 ? (
-        <div style={card}>
+        <div className="card">
           <h3 style={{ margin: '0 0 0.5rem', fontSize: '1rem' }}>No hypervisor hosts configured</h3>
           <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--vn-text-muted)' }}>
             Add a <code>[host]</code> entry to your <code>config/infra/*.toml</code> file with a <code>lan_ip</code> and{' '}
@@ -1097,7 +1065,7 @@ function ETABadge({ svcId }: { svcId: number }) {
       </div>
     );
   }
-  return <button style={{ ...btn, padding: '0.2rem 0.5rem', fontSize: '0.7rem' }} onClick={check}>Check ETA</button>;
+  return <button className="btn btn-secondary btn-xs" onClick={check}>Check ETA</button>;
 }
 
 /* ── Edit Service Modal ───────────────────────────────────────── */
@@ -1215,11 +1183,11 @@ function EditServiceModal({ svc, onClose }: { svc: Service; onClose: () => void 
         {err && <p style={{ color: 'var(--vn-danger)', fontSize: '0.82rem', margin: '0.5rem 0' }}>{err}</p>}
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.25rem' }}>
-          <button onClick={onClose} style={{ ...btn, background: 'var(--vn-surface-2)' }}>Cancel</button>
+          <button onClick={onClose} className="btn btn-secondary btn-sm">Cancel</button>
           <button
             onClick={() => mut.mutate()}
             disabled={mut.isPending}
-            style={{ ...btn, background: 'var(--vn-primary)', color: '#fff' }}
+            className="btn btn-primary btn-sm"
           >
             {mut.isPending ? 'Saving…' : 'Save Changes'}
           </button>
@@ -1278,13 +1246,13 @@ function ServiceRow({ svc, onDelete }: { svc: Service; onDelete: () => void }) {
         <td style={{ padding: '0.75rem 1rem' }} onClick={e => e.stopPropagation()}>
           <div style={{ display: 'flex', gap: '0.35rem' }}>
             <button
-              style={{ ...btn, padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}
+              className="btn btn-secondary btn-xs"
               onClick={() => setShowEdit(true)}
               aria-label={`Edit service ${svc.name}`}
             >
               ✏ Edit
             </button>
-            <button style={dangerBtn} onClick={onDelete} aria-label={`Delete service ${svc.name}`}>
+            <button className="btn btn-danger btn-sm" onClick={onDelete} aria-label={`Delete service ${svc.name}`}>
               Remove
             </button>
           </div>
@@ -1459,8 +1427,8 @@ function AddServiceModal({ onClose }: { onClose: () => void }) {
         {err && <p style={{ color: 'var(--vn-danger)', fontSize: '0.8rem', margin: '0 0 1rem' }}>{err}</p>}
 
         <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
-          <button style={btn} onClick={onClose}>Cancel</button>
-          <button style={primaryBtn} disabled={!name || mut.isPending}
+          <button className="btn btn-secondary btn-sm" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary btn-sm" disabled={!name || mut.isPending}
             onClick={() => { setErr(''); mut.mutate(); }}>
             {mut.isPending ? 'Saving…' : 'Add Service'}
           </button>
@@ -1500,7 +1468,7 @@ function ServicesInlineContent() {
             Registered services across your infrastructure
           </p>
         </div>
-        <button style={primaryBtn} onClick={() => setShowAdd(true)}>+ Add Service</button>
+        <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>+ Add Service</button>
       </header>
 
       {/* Summary pills */}
@@ -1510,7 +1478,7 @@ function ServicesInlineContent() {
           { label: 'Online', value: online, color: 'var(--vn-success)' },
           { label: 'Down', value: down, color: 'var(--vn-danger)' },
         ].map(({ label, value, color }) => (
-          <div key={label} style={{ ...card, padding: '0.75rem 1.25rem', minWidth: 90 }}>
+          <div key={label} className="card card-sm" style={{ minWidth: 90 }}>
             <span style={{ fontSize: '1.4rem', fontWeight: 700, color }}>{value}</span>
             <div style={{ fontSize: '0.75rem', color: 'var(--vn-text-muted)' }}>{label}</div>
           </div>
@@ -1526,14 +1494,14 @@ function ServicesInlineContent() {
       )}
 
       {!isLoading && services.length === 0 && !error && (
-        <div style={{ ...card, textAlign: 'center', padding: '3rem', color: 'var(--vn-text-muted)' }}>
+        <div className="card" style={{ textAlign: 'center', padding: '3rem', color: 'var(--vn-text-muted)' }}>
           <p style={{ margin: '0 0 1rem' }}>No services registered yet.</p>
-          <button style={primaryBtn} onClick={() => setShowAdd(true)}>Register your first service</button>
+          <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>Register your first service</button>
         </div>
       )}
 
       {services.length > 0 && (
-        <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
               <thead>
@@ -1660,9 +1628,7 @@ function ChainsTabContent() {
           { label: 'Svc Online', value: svcOnline, color: 'var(--vn-success)' },
           { label: 'Svc Down', value: svcDown, color: svcDown > 0 ? 'var(--vn-danger)' : 'var(--vn-text-muted)' },
         ].map(({ label, value, color }) => (
-          <div key={label} style={{
-            ...card,
-            padding: '0.6rem 1rem',
+          <div key={label} className="card card-sm" style={{
             display: 'flex',
             flexDirection: 'column',
             minWidth: 80,
@@ -1686,13 +1652,13 @@ function ChainsTabContent() {
         )}
 
         {!chainsQ.isLoading && chains.length === 0 && !chainsQ.error && (
-          <div style={{ ...card, textAlign: 'center', padding: '2rem', color: 'var(--vn-text-muted)' }}>
+          <div className="card" style={{ textAlign: 'center', padding: '2rem', color: 'var(--vn-text-muted)' }}>
             No chains detected. Register nodes in the Fleet section to see chain status.
           </div>
         )}
 
         {chains.length > 0 && (
-          <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
+          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
                 <thead>
@@ -1817,7 +1783,7 @@ function ServersLiveSection() {
   const vms: VMStatus[] = data?.vms ?? [];
 
   return (
-    <div style={{ ...card, marginBottom: '1.25rem' }}>
+    <div className="card" style={{ marginBottom: '1.25rem' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>Live Server Metrics</h2>
@@ -2006,7 +1972,7 @@ function RegisteredChainsSection() {
   const chains: RegisteredChain[] = data?.registered_chains ?? [];
 
   return (
-    <div style={{ ...card, marginBottom: '1.25rem' }}>
+    <div className="card" style={{ marginBottom: '1.25rem' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
         <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>Registered Chains</h2>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -2105,7 +2071,7 @@ function VMsSection() {
   const vms: VMView[] = data?.vms ?? [];
 
   return (
-    <div style={{ ...card, marginBottom: '1.25rem' }}>
+    <div className="card" style={{ marginBottom: '1.25rem' }}>
       <h2 style={{ margin: '0 0 1rem', fontSize: '1rem', fontWeight: 600 }}>Fleet VMs</h2>
       {isLoading ? <Spinner /> : vms.length === 0 ? (
         <p style={{ color: 'var(--vn-text-muted)', fontSize: '0.875rem' }}>
@@ -2152,7 +2118,7 @@ function DeploymentsSection() {
   }
 
   return (
-    <div style={{ ...card, marginBottom: '1.25rem' }}>
+    <div className="card" style={{ marginBottom: '1.25rem' }}>
       <h2 style={{ margin: '0 0 1rem', fontSize: '1rem', fontWeight: 600 }}>Recent Deployments</h2>
       {isLoading ? <Spinner /> : deployments.length === 0 ? (
         <p style={{ color: 'var(--vn-text-muted)', fontSize: '0.875rem' }}>No deployments yet.</p>
@@ -2702,7 +2668,7 @@ function OverviewTab() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1rem' }}>
         {/* Chains card */}
-        <div style={{ ...card }}>
+        <div className="card">
           <div style={{ fontSize: '0.75rem', color: 'var(--vn-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.75rem' }}>\ud83d\udd17 Chains</div>
           <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
             <OverviewStat label="Total" value={chains.length} />
@@ -2713,7 +2679,7 @@ function OverviewTab() {
           </div>
         </div>
         {/* Fleet/VMs card */}
-        <div style={{ ...card }}>
+        <div className="card">
           <div style={{ fontSize: '0.75rem', color: 'var(--vn-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.75rem' }}>\ud83d\udda5 Fleet / VMs</div>
           <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
             <OverviewStat label="Total VMs" value={vms.length} />
@@ -2724,7 +2690,7 @@ function OverviewTab() {
           </div>
         </div>
         {/* Patches card */}
-        <div style={{ ...card }}>
+        <div className="card">
           <div style={{ fontSize: '0.75rem', color: 'var(--vn-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.75rem' }}>\ud83e\ude79 Patches</div>
           <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
             <OverviewStat label="Pending updates" value={totalPending} color={totalPending > 0 ? 'var(--vn-warning)' : 'var(--vn-success)'} />
@@ -2733,7 +2699,7 @@ function OverviewTab() {
         </div>
       </div>
       {/* Recent activity */}
-      <div style={{ ...card }}>
+      <div className="card">
         <div style={{ fontSize: '0.75rem', color: 'var(--vn-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.75rem' }}>\ud83d\udccb Recent Activity</div>
         <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--vn-text-muted)' }}>No recent activity. Navigate to Audit Log for full history.</p>
       </div>
