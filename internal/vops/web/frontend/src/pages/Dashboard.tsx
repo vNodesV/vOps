@@ -714,9 +714,6 @@ export default function DashboardPage() {
         Dashboard
       </h2>
 
-      {/* Infrastructure summary boxes — Chains · Services · VMs */}
-      <SummaryBoxes />
-
       {/* Stat Cards */}
       {isLoading ? (
         <Spinner label="Loading stats" />
@@ -731,7 +728,7 @@ export default function DashboardPage() {
         </div>
       ) : null}
 
-      {/* Charts */}
+      {/* Charts — two-column layout matching vLog v1.4.0 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card">
           <ChartPanel title="Requests over Time (30d)" queryKey="chart-requests" chartType="requests_over_time" />
@@ -741,7 +738,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Fleet */}
+      {/* Chain Status */}
       <div>
         <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--vn-text-muted)' }}>
           Chain Status
@@ -749,16 +746,24 @@ export default function DashboardPage() {
         <FleetTable />
       </div>
 
-      {/* Servers / Fleet */}
+      {/* Ingest */}
+      <IngestSection />
+
+      {/* Infrastructure Overview — quick-nav to Chains / Services / VMs */}
+      <div>
+        <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--vn-text-muted)' }}>
+          Infrastructure Overview
+        </h3>
+        <SummaryBoxes />
+      </div>
+
+      {/* Servers */}
       <div>
         <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--vn-text-muted)' }}>
           Servers
         </h3>
         <ServersPanel />
       </div>
-
-      {/* Ingest */}
-      <IngestSection />
     </div>
   );
 }
