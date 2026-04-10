@@ -371,7 +371,11 @@ func (h *Handlers) HandleDeleteDomain(w http.ResponseWriter, r *http.Request) {
 	opts := UndefineOpts{DeleteStorage: req.DeleteStorage, Pool: req.Pool}
 	opErr := UndefineVM(client, domainName, opts)
 
-	h.audit(hostName, "vm.delete", "domain", domainName, opErr)
+	actor, _ := r.Context().Value("vops-actor").(string)
+	if actor == "" {
+		actor = hostName
+	}
+	h.audit(actor, "vm.delete", "domain", domainName, opErr)
 	if opErr != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": opErr.Error()})
 		return
@@ -420,7 +424,11 @@ func (h *Handlers) HandleResizeDomain(w http.ResponseWriter, r *http.Request) {
 		opErr = SetVCPUs(client, domainName, req.VCPUs, req.Live)
 	}
 
-	h.audit(hostName, "vm.resize", "domain", domainName, opErr)
+	actor, _ := r.Context().Value("vops-actor").(string)
+	if actor == "" {
+		actor = hostName
+	}
+	h.audit(actor, "vm.resize", "domain", domainName, opErr)
 	if opErr != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": opErr.Error()})
 		return
@@ -515,7 +523,11 @@ func (h *Handlers) HandleCreateDomain(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	h.audit(hostName, "vm.create."+req.Mode, "domain", req.Name, opErr)
+	actor, _ := r.Context().Value("vops-actor").(string)
+	if actor == "" {
+		actor = hostName
+	}
+	h.audit(actor, "vm.create."+req.Mode, "domain", req.Name, opErr)
 	if opErr != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": opErr.Error()})
 		return
@@ -526,13 +538,15 @@ func (h *Handlers) HandleCreateDomain(w http.ResponseWriter, r *http.Request) {
 // ── audit helper ──────────────────────────────────────────────────────────────
 
 // audit records a management action in the audit_log table when a DB is wired.
+// actor is the authenticated operator identity from the request context
+// (falls back to hostName when the context carries no actor).
 // opErr is nil on success; when non-nil the result is "error".
-func (h *Handlers) audit(hostName, action, targetType, targetName string, opErr error) {
+func (h *Handlers) audit(actor, action, targetType, targetName string, opErr error) {
 	if h.db == nil {
 		return
 	}
 	entry := opsdb.AuditEntry{
-		Actor:      hostName,
+		Actor:      actor,
 		Action:     action,
 		TargetType: targetType,
 		TargetName: targetName,

@@ -148,6 +148,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 CREATE INDEX IF NOT EXISTS idx_audit_log_ts ON audit_log(ts);
 CREATE INDEX IF NOT EXISTS idx_audit_log_target ON audit_log(target_type, target_name);
+CREATE INDEX IF NOT EXISTS idx_audit_log_actor ON audit_log(actor);
 
 CREATE TABLE IF NOT EXISTS units (
 	id                 INTEGER PRIMARY KEY AUTOINCREMENT,

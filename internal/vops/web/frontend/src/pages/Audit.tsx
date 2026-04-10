@@ -48,11 +48,13 @@ export default function AuditPage() {
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['audit-log', page, debouncedActor, debouncedAction],
-    queryFn: () => getAuditLog(PAGE_SIZE, page * PAGE_SIZE, debouncedActor, debouncedAction),
+    queryFn: () => getAuditLog(PAGE_SIZE + 1, page * PAGE_SIZE, debouncedActor, debouncedAction),
     staleTime: 30_000,
   });
 
-  const entries = data?.entries ?? [];
+  const allEntries = data?.entries ?? [];
+  const hasMore = allEntries.length > PAGE_SIZE;
+  const entries = allEntries.slice(0, PAGE_SIZE);
 
   return (
     <div>
@@ -165,7 +167,7 @@ export default function AuditPage() {
       )}
 
       {/* Pagination */}
-      {!isLoading && !isError && entries.length === PAGE_SIZE && (
+      {!isLoading && !isError && (page > 0 || hasMore) && (
         <div className="flex gap-2 mt-4 justify-end">
           <button
             onClick={() => setPage(p => Math.max(0, p - 1))}
@@ -179,6 +181,7 @@ export default function AuditPage() {
           </span>
           <button
             onClick={() => setPage(p => p + 1)}
+            disabled={!hasMore}
             className="btn btn-secondary btn-sm"
           >
             Next →

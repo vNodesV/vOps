@@ -847,6 +847,17 @@ func (s *Server) handleAPIBlock(w http.ResponseWriter, r *http.Request) {
 		"ufw":     ufwOK,
 		"reason":  reason,
 	})
+
+	actor, _ := r.Context().Value("vops-actor").(string)
+	params, _ := json.Marshal(map[string]string{"reason": reason})
+	_ = db.InsertAuditLog(s.db.DB, db.AuditEntry{
+		Actor:      actor,
+		Action:     "ip.block",
+		TargetType: "ip",
+		TargetName: ip,
+		Params:     string(params),
+		Result:     "ok",
+	})
 }
 
 func (s *Server) handleAPIUnblock(w http.ResponseWriter, r *http.Request) {
@@ -873,10 +884,16 @@ func (s *Server) handleAPIUnblock(w http.ResponseWriter, r *http.Request) {
 		"blocked": false,
 		"ufw":     ufwOK,
 	})
-}
 
-// ---------------------------------------------------------------------------
-// UFW sync
+	actor, _ := r.Context().Value("vops-actor").(string)
+	_ = db.InsertAuditLog(s.db.DB, db.AuditEntry{
+		Actor:      actor,
+		Action:     "ip.unblock",
+		TargetType: "ip",
+		TargetName: ip,
+		Result:     "ok",
+	})
+}
 // ---------------------------------------------------------------------------
 
 // handleAPIUFWSync reads current UFW DENY rules and imports any unknown IPs
