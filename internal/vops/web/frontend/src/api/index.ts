@@ -1,4 +1,4 @@
-import { apiFetch, apiPost, BASE } from './client';
+import { apiFetch, apiPost, apiPut, BASE } from './client';
 import type {
   Stats,
   IPAccount,
@@ -302,6 +302,9 @@ export const pingMultiProxInstance = (name: string) =>
 
 export const pingAllMultiProxInstances = () =>
   apiPost<{ instances: Array<{ name: string; status: string; last_seen: string }>; summary: string }>('/api/v1/multiprox/ping-all', {});
+
+export const updateMultiProx = (name: string, body: { url?: string; api_key?: string; datacenter?: string }) =>
+  apiPut<{ ok: string }>(`/api/v1/multiprox/${encodeURIComponent(name)}`, body);
 
 // Fleet chain traffic — removed (host_traffic table unpopulated)
 // export const getFleetChainTraffic = () => ...

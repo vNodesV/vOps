@@ -6,6 +6,7 @@ import {
   deleteMultiProxInstance,
   pingMultiProxInstance,
   pingAllMultiProxInstances,
+  updateMultiProx,
 } from '../api';
 import type { VProxInstance } from '../api/types';
 import Spinner from '../components/Spinner';
@@ -14,6 +15,60 @@ function statusColor(s: string): string {
   if (s === 'online') return 'var(--vn-success)';
   if (s === 'offline') return 'var(--vn-danger)';
   return 'var(--vn-text-muted)';
+}
+
+/* ── Edit modal ───────────────────────────────────────────────── */
+function EditModal({ inst, onClose, onSave }: { inst: VProxInstance; onClose: () => void; onSave: () => void }) {
+  const [url, setUrl] = useState(inst.url);
+  const [apiKey, setApiKey] = useState('');
+  const [dc, setDc] = useState(inst.datacenter ?? '');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setErr('');
+    try {
+      await updateMultiProx(inst.name, { url, api_key: apiKey, datacenter: dc });
+      onSave();
+      onClose();
+    } catch (e: unknown) {
+      setErr(String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <div className="modal-header">
+          <strong>Edit vProx Instance — {inst.name}</strong>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={submit} className="space-y-3 p-4">
+          <label className="block">
+            <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>URL</span>
+            <input className="vn-input mt-1" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://vprox.example.com" required />
+          </label>
+          <label className="block">
+            <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>API Key</span>
+            <input className="vn-input mt-1" type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="leave blank to keep current" />
+          </label>
+          <label className="block">
+            <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>Datacenter</span>
+            <input className="vn-input mt-1" value={dc} onChange={e => setDc(e.target.value)} placeholder="QC" />
+          </label>
+          {err && <p className="alert alert-danger">{err}</p>}
+          <div className="modal-footer">
+            <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? '…' : 'Save'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
 }
 
 /* ── Add modal ────────────────────────────────────────────────── */
@@ -76,7 +131,7 @@ function AddModal({ onClose, onSave }: { onClose: () => void; onSave: () => void
 }
 
 /* ── Instance row ─────────────────────────────────────────────── */
-function InstanceRow({ inst, onRefresh }: { inst: VProxInstance; onRefresh: () => void }) {
+function InstanceRow({ inst, onRefresh, onEdit }: { inst: VProxInstance; onRefresh: () => void; onEdit: () => void }) {
   const [pinging, setPinging] = useState(false);
 
   async function handlePing() {
@@ -123,6 +178,7 @@ function InstanceRow({ inst, onRefresh }: { inst: VProxInstance; onRefresh: () =
             🔗 Dashboard
           </a>
           <button className="btn btn-secondary" onClick={handlePing} disabled={pinging} title="Ping health check">{pinging ? '…' : '⟳ Ping'}</button>
+          <button className="btn btn-secondary" onClick={onEdit} title="Edit instance">✎</button>
           <button className="btn btn-danger" onClick={handleDelete} title="Remove instance">✕</button>
         </div>
       </td>
@@ -134,6 +190,7 @@ function InstanceRow({ inst, onRefresh }: { inst: VProxInstance; onRefresh: () =
 export default function MultiProxPage() {
   const qc = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
+  const [editInst, setEditInst] = useState<VProxInstance | null>(null);
   const [pingingAll, setPingingAll] = useState(false);
 
   const { data, isLoading, isError } = useQuery({
@@ -162,6 +219,13 @@ export default function MultiProxPage() {
   return (
     <div>
       {showAdd && <AddModal onClose={() => setShowAdd(false)} onSave={refresh} />}
+      {editInst && (
+        <EditModal
+          inst={editInst}
+          onClose={() => setEditInst(null)}
+          onSave={refresh}
+        />
+      )}
 
       <div className="flex justify-between items-center mb-5">
         <div>
@@ -208,7 +272,7 @@ export default function MultiProxPage() {
             </thead>
             <tbody>
               {instances.map(inst => (
-                <InstanceRow key={inst.name} inst={inst} onRefresh={refresh} />
+                <InstanceRow key={inst.name} inst={inst} onRefresh={refresh} onEdit={() => setEditInst(inst)} />
               ))}
             </tbody>
           </table>

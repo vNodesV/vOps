@@ -395,6 +395,10 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		s.requireSession(http.HandlerFunc(s.multiproxMgr.HandlePing)))
 	mux.Handle("POST /api/v1/multiprox/ping-all",
 		s.requireSession(http.HandlerFunc(s.multiproxMgr.HandlePingAll)))
+	mux.Handle("PUT /api/v1/multiprox/{name}",
+		s.requireSession(http.HandlerFunc(s.multiproxMgr.HandleUpdate)))
+	mux.Handle("POST /api/v1/multiprox/{name}/update",
+		s.requireSession(http.HandlerFunc(s.multiproxMgr.HandleUpdate)))
 
 	readTimeout := time.Duration(cfg.VOps.Server.ReadTimeoutSec) * time.Second
 	writeTimeout := time.Duration(cfg.VOps.Server.WriteTimeoutSec) * time.Second
@@ -429,7 +433,10 @@ func (s *Server) requireSession(next http.Handler) http.Handler {
 			http.Redirect(w, r, s.cfg.VOps.BasePath+"/login", http.StatusFound)
 			return
 		}
-		next.ServeHTTP(w, r)
+		// Inject the session token as the audit actor so downstream handlers
+		// and vm operations can attribute actions to the authenticated operator.
+		ctx := context.WithValue(r.Context(), "vops-actor", cookie.Value)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 

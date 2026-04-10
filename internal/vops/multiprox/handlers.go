@@ -7,7 +7,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -60,6 +62,7 @@ func (h *Handlers) HandleList(w http.ResponseWriter, r *http.Request) {
 
 // HandleCreate registers a new vProx instance.
 func (h *Handlers) HandleCreate(w http.ResponseWriter, r *http.Request) {
+	// TODO(security): api_key is stored in plaintext. Consider envelope encryption before v1.0.
 	var req struct {
 		Name       string `json:"name"`
 		URL        string `json:"url"`
@@ -74,7 +77,12 @@ func (h *Handlers) HandleCreate(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name and url required"})
 		return
 	}
-	_, err := h.db.Exec(
+	u, err := url.ParseRequestURI(req.URL)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid URL: must be http or https"})
+		return
+	}
+	_, err = h.db.Exec(
 		`INSERT INTO vprox_instances (name, url, api_key, datacenter) VALUES (?,?,?,?)`,
 		req.Name, req.URL, req.APIKey, req.Datacenter)
 	if err != nil {
@@ -87,8 +95,14 @@ func (h *Handlers) HandleCreate(w http.ResponseWriter, r *http.Request) {
 // HandleDelete removes a vProx instance registration.
 func (h *Handlers) HandleDelete(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
-	if _, err := h.db.Exec(`DELETE FROM vprox_instances WHERE name = ?`, name); err != nil {
+	result, err := h.db.Exec(`DELETE FROM vprox_instances WHERE name = ?`, name)
+	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "instance not found"})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"ok": "removed"})
@@ -111,7 +125,20 @@ func (h *Handlers) HandlePing(w http.ResponseWriter, r *http.Request) {
 	if err == nil && apiKey != "" {
 		req.Header.Set("X-API-Key", apiKey)
 	}
-	if err != nil || func() bool { resp, e := client.Do(req); if e != nil { return true }; defer resp.Body.Close(); return resp.StatusCode >= 400 }() {
+	offline := false
+	if err != nil {
+		offline = true
+	} else {
+		resp, doErr := client.Do(req)
+		if doErr != nil {
+			offline = true
+		} else {
+			defer resp.Body.Close()
+			io.Copy(io.Discard, resp.Body) //nolint:errcheck
+			offline = resp.StatusCode >= 400
+		}
+	}
+	if offline {
 		status = "offline"
 	}
 
@@ -191,4 +218,51 @@ func (h *Handlers) HandlePingAll(w http.ResponseWriter, r *http.Request) {
 		"instances": results,
 		"summary":   fmt.Sprintf("%d/%d online", online, len(results)),
 	})
+}
+
+// UpdateBody holds editable fields for an existing vProx instance.
+type UpdateBody struct {
+	URL        string `json:"url"`
+	APIKey     string `json:"api_key"`
+	Datacenter string `json:"datacenter"`
+}
+
+// HandleUpdate updates URL, api_key, and/or datacenter for an existing instance.
+// Blank fields are kept as-is (COALESCE pattern).
+func (h *Handlers) HandleUpdate(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing name"})
+		return
+	}
+	var body UpdateBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		return
+	}
+	// validate URL if provided
+	if body.URL != "" {
+		u, err := url.ParseRequestURI(body.URL)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid URL"})
+			return
+		}
+	}
+	result, err := h.db.Exec(
+		`UPDATE vprox_instances SET url=COALESCE(NULLIF(?,''),(SELECT url FROM vprox_instances WHERE name=?)),
+         api_key=COALESCE(NULLIF(?,''),(SELECT api_key FROM vprox_instances WHERE name=?)),
+         datacenter=COALESCE(NULLIF(?,''),(SELECT datacenter FROM vprox_instances WHERE name=?))
+         WHERE name=?`,
+		body.URL, name, body.APIKey, name, body.Datacenter, name, name,
+	)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "instance not found"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"ok": "updated"})
 }
