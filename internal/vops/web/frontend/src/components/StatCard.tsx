@@ -27,11 +27,8 @@ export default function StatCard({
 
   return (
     <article
-      className="flex items-center gap-4 rounded-lg p-4"
+      className="card flex items-center gap-4 rounded-lg p-4"
       style={{
-        backgroundColor: 'var(--vn-surface)',
-        border: '1px solid var(--vn-border)',
-        boxShadow: 'var(--vn-shadow)',
         borderRadius: 'var(--vn-radius)',
       }}
       aria-label={`${label}: ${value}`}
@@ -52,7 +49,7 @@ export default function StatCard({
         >
           {label}
         </p>
-        <p className="text-xl font-semibold tabular-nums" style={{ color: 'var(--vn-text)' }}>
+        <p className="stat-val text-xl font-semibold tabular-nums" style={{ color: accent }}>
           {typeof value === 'number' ? value.toLocaleString() : value}
         </p>
       </div>

@@ -45,13 +45,15 @@ function SideLink({
         alignItems: 'center',
         gap: '0.5rem',
         padding: '0.5rem 0.75rem',
+        paddingLeft: isActive ? '0.65rem' : '0.75rem',
         borderRadius: 'var(--vn-radius)',
+        borderLeft: isActive ? '2px solid var(--vn-primary)' : '2px solid transparent',
         fontWeight: 500,
         fontSize: '0.875rem',
-        color: isActive ? 'var(--vn-on-primary)' : 'var(--vn-text-muted)',
-        background: isActive ? 'var(--vn-primary)' : 'transparent',
+        color: isActive ? 'var(--vn-primary)' : 'var(--vn-text-muted)',
+        background: isActive ? 'var(--vn-green-dim, rgba(0,255,0,0.08))' : 'transparent',
         textDecoration: 'none',
-        transition: 'background 0.15s, color 0.15s',
+        transition: 'background 0.15s, color 0.15s, border-left-color 0.15s',
       })}
     >
       {children}
@@ -148,6 +150,7 @@ function Shell({ children }: { children: React.ReactNode }) {
             }}
           >
             <span
+              className="sidebar-logo-text"
               style={{
                 fontSize: '1.25rem',
                 fontWeight: 700,

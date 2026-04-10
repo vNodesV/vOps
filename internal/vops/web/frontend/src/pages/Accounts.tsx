@@ -285,7 +285,7 @@ export default function AccountsPage() {
         </div>
       ) : (
         <>
-          <div className="overflow-x-auto rounded-lg" style={{ border: '1px solid var(--vn-border)' }}>
+          <div className="card card-flush overflow-x-auto rounded-lg">
             <table className="vn-table w-full text-sm">
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--vn-border)' }}>

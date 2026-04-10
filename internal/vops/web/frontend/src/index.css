@@ -23,26 +23,30 @@
   --vn-radius: 0.5rem;
 }
 
-/* ── Theme: vnodes — dark green terminal aesthetic ───────────── */
+/* ── Theme: vnodes — glass/neon green terminal aesthetic ──────── */
 :root[data-theme="vnodes"] {
-  --vn-primary: #22c55e;
-  --vn-primary-hover: #16a34a;
-  --vn-accent: #4ade80;
-  --vn-bg: #080e18;
-  --vn-surface: #0f1a2e;
-  --vn-surface-2: #1a2744;
-  --vn-border: #1e3a5f;
-  --vn-text: #e2fbe8;
-  --vn-text-muted: #86efac;
-  --vn-text-subtle: #4ade80;
-  --vn-success: #4ade80;
-  --vn-warning: #fbbf24;
-  --vn-warning-medium: #f97316;
-  --vn-danger: #f87171;
+  --vn-primary: #00ff00;
+  --vn-primary-hover: #6df36d;
+  --vn-accent: #00e5ff;
+  --vn-bg: #000000;
+  --vn-bg-card: rgba(0, 6, 0, 0.78);
+  --vn-surface: rgba(0, 6, 0, 0.85);
+  --vn-surface-2: rgba(0, 20, 0, 0.70);
+  --vn-border: rgba(0, 255, 0, 0.10);
+  --vn-green-border: rgba(0, 255, 0, 0.18);
+  --vn-green-glow: rgba(0, 255, 0, 0.18);
+  --vn-green-dim: rgba(0, 255, 0, 0.08);
+  --vn-text: #c8c8c8;
+  --vn-text-muted: #888888;
+  --vn-text-subtle: #555555;
+  --vn-success: #00ff00;
+  --vn-warning: #ffa726;
+  --vn-warning-medium: #ea580c;
+  --vn-danger: #ef5350;
   --vn-info: #38bdf8;
-  --vn-on-primary: #052e16;
-  --vn-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.4);
-  --vn-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.4);
+  --vn-on-primary: #001700;
+  --vn-shadow: 0 0 28px rgba(0, 255, 0, 0.18), inset 0 1px 0 rgba(0,255,0,0.06), 0 4px 20px rgba(0,0,0,0.6);
+  --vn-shadow-md: 0 0 20px rgba(0, 255, 0, 0.18), 0 4px 16px rgba(0,0,0,0.5);
 }
 
 /* ── Theme: dark-blue — navy with blue-teal accents ──────────── */
@@ -418,3 +422,160 @@ a:hover { text-decoration: underline; }
 .dot-online::before { content: '●'; color: var(--vn-success); margin-right: 0.3rem; }
 .dot-offline::before { content: '●'; color: var(--vn-danger); margin-right: 0.3rem; }
 .dot-warn::before { content: '●'; color: var(--vn-warning); margin-right: 0.3rem; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   VNODES THEME — Glass / Neon Green Overrides
+   Applied only when [data-theme="vnodes"] is set on :root.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Body background image + dark overlay ────────────────────── */
+[data-theme="vnodes"] body {
+  background: #000000 url('./static/content_bg.png') center center / 100% 100% no-repeat fixed;
+}
+[data-theme="vnodes"] body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.50);
+  pointer-events: none;
+  z-index: 0;
+}
+[data-theme="vnodes"] body > #root { position: relative; z-index: 1; }
+
+/* ── Glass cards ─────────────────────────────────────────────── */
+[data-theme="vnodes"] .card,
+[data-theme="vnodes"] .card-sm,
+[data-theme="vnodes"] .card-flush {
+  background: rgba(0, 6, 0, 0.78);
+  border: 1px solid rgba(0, 255, 0, 0.18);
+  border-radius: 8px;
+  box-shadow: 0 0 28px rgba(0,255,0,0.18), inset 0 1px 0 rgba(0,255,0,0.06), 0 4px 20px rgba(0,0,0,0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* ── Sidebar ─────────────────────────────────────────────────── */
+[data-theme="vnodes"] .app-sidebar {
+  background: rgba(0, 6, 0, 0.92);
+  border-right: 1px solid rgba(0, 255, 0, 0.12);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+[data-theme="vnodes"] .app-sidebar .sidebar-logo-text {
+  color: #00ff00;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────── */
+[data-theme="vnodes"] .btn-primary {
+  background: #001700;
+  border: 1px solid #00ff00;
+  color: #00ff00;
+  box-shadow: 0 0 8px rgba(0,255,0,0.15);
+}
+[data-theme="vnodes"] .btn-primary:hover:not(:disabled) {
+  background: rgba(0,255,0,0.08);
+  box-shadow: 0 0 14px rgba(0,255,0,0.30);
+}
+[data-theme="vnodes"] .btn-secondary {
+  background: transparent;
+  border: 1px solid rgba(0,255,0,0.35);
+  color: #00ff00;
+}
+[data-theme="vnodes"] .btn-secondary:hover:not(:disabled) {
+  background: rgba(0,255,0,0.06);
+}
+[data-theme="vnodes"] .btn-ghost {
+  border-color: rgba(0,255,0,0.20);
+}
+[data-theme="vnodes"] .btn-ghost:hover:not(:disabled) {
+  background: rgba(0,255,0,0.05);
+}
+
+/* ── Tables ──────────────────────────────────────────────────── */
+[data-theme="vnodes"] .vn-table thead th {
+  background: rgba(0,255,0,0.05);
+  color: #888888;
+  border-bottom: 1px solid rgba(0,255,0,0.18);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+[data-theme="vnodes"] .vn-table tbody tr { border-bottom: 1px solid rgba(0,255,0,0.08); }
+[data-theme="vnodes"] .vn-table tbody tr:hover { background: rgba(0,255,0,0.03); }
+
+/* ── Form inputs ─────────────────────────────────────────────── */
+[data-theme="vnodes"] input,
+[data-theme="vnodes"] select,
+[data-theme="vnodes"] textarea {
+  background: rgba(255,255,255,0.04);
+  border-color: rgba(0,255,0,0.20);
+  color: #c8c8c8;
+}
+[data-theme="vnodes"] input:focus,
+[data-theme="vnodes"] select:focus,
+[data-theme="vnodes"] textarea:focus {
+  border-color: #00ff00;
+  box-shadow: 0 0 0 2px rgba(0,255,0,0.20);
+  outline: none;
+}
+[data-theme="vnodes"] .vn-input {
+  background: rgba(255,255,255,0.04);
+  border-color: rgba(0,255,0,0.20);
+}
+[data-theme="vnodes"] .vn-input:focus {
+  border-color: #00ff00;
+  box-shadow: 0 0 0 2px rgba(0,255,0,0.20);
+}
+
+/* ── Stat value glow ─────────────────────────────────────────── */
+[data-theme="vnodes"] .stat-val {
+  color: #00ff00;
+  text-shadow: 0 0 10px rgba(0,255,0,0.5);
+}
+
+/* ── Tab bar ─────────────────────────────────────────────────── */
+[data-theme="vnodes"] .tab-btn.active {
+  color: #00ff00;
+  border-bottom-color: #00ff00;
+}
+[data-theme="vnodes"] .tab-btn:hover { color: #6df36d; }
+
+/* ── Modal ───────────────────────────────────────────────────── */
+[data-theme="vnodes"] .modal {
+  background: rgba(0, 6, 0, 0.95);
+  border: 1px solid rgba(0,255,0,0.25);
+  box-shadow: 0 0 40px rgba(0,255,0,0.15);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* ── Log panel ───────────────────────────────────────────────── */
+[data-theme="vnodes"] .log-panel {
+  background: rgba(0, 0, 0, 0.8);
+  border: 1px solid rgba(0,255,0,0.15);
+  color: #00ff00;
+}
+
+/* ── Summary pills ───────────────────────────────────────────── */
+[data-theme="vnodes"] .pill {
+  background: rgba(0, 6, 0, 0.78);
+  border-color: rgba(0, 255, 0, 0.18);
+  box-shadow: 0 0 12px rgba(0,255,0,0.10);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────── */
+[data-theme="vnodes"] ::-webkit-scrollbar-track { background: #000000; }
+[data-theme="vnodes"] ::-webkit-scrollbar-thumb { background: rgba(0,255,0,0.20); }
+
+/* ── Alerts — green tint for vnodes ──────────────────────────── */
+[data-theme="vnodes"] .alert-success {
+  background: rgba(0,255,0,0.08);
+  border-color: rgba(0,255,0,0.25);
+  color: #00ff00;
+}
+[data-theme="vnodes"] .alert-info {
+  background: rgba(0,229,255,0.08);
+  border-color: rgba(0,229,255,0.25);
+  color: #00e5ff;
+}

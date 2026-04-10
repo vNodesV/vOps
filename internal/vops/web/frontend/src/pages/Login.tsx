@@ -74,15 +74,12 @@ export default function LoginPage() {
     <div
       className="relative min-h-screen flex items-center justify-center p-4"
       style={{
-        background:
-          'linear-gradient(135deg, var(--vn-primary) 0%, var(--vn-accent) 100%)',
+        background: 'var(--vn-bg)',
       }}
     >
       <div
-        className="w-full max-w-sm rounded-xl p-8"
+        className="card w-full max-w-sm rounded-xl p-8"
         style={{
-          backgroundColor: 'var(--vn-surface)',
-          boxShadow: 'var(--vn-shadow-md)',
           borderRadius: 'var(--vn-radius)',
         }}
       >
