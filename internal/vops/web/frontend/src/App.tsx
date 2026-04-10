@@ -13,7 +13,7 @@ import Dashboard from './pages/Dashboard';
 import AccountsPage from './pages/Accounts';
 import AccountDetail from './pages/AccountDetail';
 import LoginPage from './pages/Login';
-import SettingsPage from './pages/Settings';
+import SettingsPage from './pages/settings';
 import VMsPage from './pages/VMs';
 import ServicesPage from './pages/Services';
 import TopologyPage from './pages/Topology';
