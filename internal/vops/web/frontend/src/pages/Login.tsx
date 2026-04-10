@@ -122,13 +122,7 @@ export default function LoginPage() {
               autoFocus
               disabled={loading}
               aria-label="Username"
-              className="w-full px-3 py-2 rounded-md text-sm outline-none
-                         focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-              style={{
-                backgroundColor: 'var(--vn-surface-2)',
-                border: '1px solid var(--vn-border)',
-                color: 'var(--vn-text)',
-              }}
+              className="vn-input w-full focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
             />
           </div>
 
@@ -150,25 +144,14 @@ export default function LoginPage() {
               autoComplete="current-password"
               disabled={loading}
               aria-label="Password"
-              className="w-full px-3 py-2 rounded-md text-sm outline-none
-                         focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-              style={{
-                backgroundColor: 'var(--vn-surface-2)',
-                border: '1px solid var(--vn-border)',
-                color: 'var(--vn-text)',
-              }}
+              className="vn-input w-full focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
             />
           </div>
 
           {/* Error */}
           {error && (
             <div
-              className="mb-4 p-3 rounded-md text-sm text-center"
-              style={{
-                backgroundColor: 'var(--vn-danger)' + '14',
-                color: 'var(--vn-danger)',
-                border: '1px solid var(--vn-danger)' + '40',
-              }}
+              className="alert alert-danger mb-4 text-sm text-center"
               role="alert"
             >
               {error}
@@ -179,13 +162,9 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading || !username || !password}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-md
-                       text-sm font-medium btn-vn-primary cursor-pointer
+            className="btn btn-primary w-full flex items-center justify-center gap-2 btn-vn-primary
                        disabled:opacity-50 disabled:cursor-not-allowed
                        focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)] focus-visible:ring-offset-2"
-            style={{
-              backgroundColor: 'var(--vn-primary)',
-            }}
           >
             {loading ? (
               <>

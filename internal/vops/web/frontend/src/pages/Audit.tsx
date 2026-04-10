@@ -56,45 +56,35 @@ export default function AuditPage() {
 
   return (
     <div>
-      <div style={{ marginBottom: '1.25rem' }}>
-        <h1 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700 }}>Audit Log</h1>
-        <p style={{ margin: '0.25rem 0 0', fontSize: '0.8rem', color: 'var(--vn-text-subtle)' }}>
+      <div className="mb-5">
+        <h1 className="text-xl font-bold m-0">Audit Log</h1>
+        <p className="text-xs mt-1" style={{ color: 'var(--vn-text-subtle)' }}>
           All management actions performed by vOps operators — who did what, when, and whether it succeeded.
         </p>
       </div>
 
       {/* Filter bar */}
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+      <div className="flex gap-2 mb-4 flex-wrap">
         <input
           type="search"
           value={actorFilter}
           onChange={e => setActorFilter(e.target.value)}
           placeholder="Filter by actor…"
-          style={{
-            padding: '0.35rem 0.6rem', fontSize: '0.8rem', borderRadius: 'var(--vn-radius)',
-            border: '1px solid var(--vn-border)', background: 'var(--vn-surface-2)',
-            color: 'var(--vn-text)', minWidth: 160,
-          }}
+          className="vn-input"
+          style={{ minWidth: 160 }}
         />
         <input
           type="search"
           value={actionFilter}
           onChange={e => setActionFilter(e.target.value)}
           placeholder="Filter by action…"
-          style={{
-            padding: '0.35rem 0.6rem', fontSize: '0.8rem', borderRadius: 'var(--vn-radius)',
-            border: '1px solid var(--vn-border)', background: 'var(--vn-surface-2)',
-            color: 'var(--vn-text)', minWidth: 160,
-          }}
+          className="vn-input"
+          style={{ minWidth: 160 }}
         />
         {(actorFilter || actionFilter) && (
           <button
             onClick={() => { setActorFilter(''); setActionFilter(''); }}
-            style={{
-              padding: '0.35rem 0.6rem', fontSize: '0.75rem', borderRadius: 'var(--vn-radius)',
-              border: '1px solid var(--vn-border)', background: 'var(--vn-surface)',
-              color: 'var(--vn-text-muted)', cursor: 'pointer',
-            }}
+            className="btn btn-ghost btn-sm"
           >
             ✕ Clear
           </button>
@@ -104,7 +94,7 @@ export default function AuditPage() {
       {isLoading ? (
         <Spinner />
       ) : isError ? (
-        <p style={{ color: 'var(--vn-danger)', fontSize: '0.875rem' }}>
+        <p className="alert alert-danger">
           Audit log unavailable. Fleet must be configured to enable audit logging.
         </p>
       ) : entries.length === 0 ? (
@@ -112,8 +102,8 @@ export default function AuditPage() {
           {actorFilter || actionFilter ? 'No entries match your filters.' : 'No audit entries yet.'}
         </p>
       ) : (
-        <div style={{ background: 'var(--vn-surface)', border: '1px solid var(--vn-border)', borderRadius: 'var(--vn-radius)', overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+        <div className="card card-flush" style={{ overflow: 'hidden' }}>
+          <table className="vn-table" style={{ fontSize: '0.82rem' }}>
             <thead>
               <tr style={{ background: 'var(--vn-surface-2)', borderBottom: '1px solid var(--vn-border)' }}>
                 {['Time', 'Actor', 'Action', 'Target', 'Result', 'Details'].map(h => (
@@ -176,16 +166,11 @@ export default function AuditPage() {
 
       {/* Pagination */}
       {!isLoading && !isError && entries.length === PAGE_SIZE && (
-        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', justifyContent: 'flex-end' }}>
+        <div className="flex gap-2 mt-4 justify-end">
           <button
             onClick={() => setPage(p => Math.max(0, p - 1))}
             disabled={page === 0}
-            style={{
-              padding: '0.35rem 0.85rem', fontSize: '0.8rem', borderRadius: 'var(--vn-radius)',
-              border: '1px solid var(--vn-border)', background: 'var(--vn-surface-2)',
-              color: page === 0 ? 'var(--vn-text-muted)' : 'var(--vn-text)',
-              cursor: page === 0 ? 'default' : 'pointer',
-            }}
+            className="btn btn-secondary btn-sm"
           >
             ← Prev
           </button>
@@ -194,11 +179,7 @@ export default function AuditPage() {
           </span>
           <button
             onClick={() => setPage(p => p + 1)}
-            style={{
-              padding: '0.35rem 0.85rem', fontSize: '0.8rem', borderRadius: 'var(--vn-radius)',
-              border: '1px solid var(--vn-border)', background: 'var(--vn-surface-2)',
-              color: 'var(--vn-text)', cursor: 'pointer',
-            }}
+            className="btn btn-secondary btn-sm"
           >
             Next →
           </button>

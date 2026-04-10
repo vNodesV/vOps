@@ -10,24 +10,6 @@ import {
 import type { VProxInstance } from '../api/types';
 import Spinner from '../components/Spinner';
 
-/* ── styles ───────────────────────────────────────────────────── */
-const card: React.CSSProperties = {
-  background: 'var(--vn-surface)', border: '1px solid var(--vn-border)',
-  borderRadius: 'var(--vn-radius)', padding: '1.25rem', marginBottom: '1rem',
-};
-const btn: React.CSSProperties = {
-  cursor: 'pointer', border: '1px solid var(--vn-border)',
-  borderRadius: 'var(--vn-radius)', padding: '0.3rem 0.75rem',
-  fontSize: '0.8rem', fontWeight: 500, background: 'var(--vn-surface)',
-  color: 'var(--vn-text)', transition: 'background 0.12s',
-};
-const primaryBtn: React.CSSProperties = {
-  ...btn, background: 'var(--vn-primary)', color: 'var(--vn-on-primary)', border: 'none',
-};
-const dangerBtn: React.CSSProperties = {
-  ...btn, background: 'var(--vn-danger)', color: '#fff', border: 'none',
-};
-
 function statusColor(s: string): string {
   if (s === 'online') return 'var(--vn-success)';
   if (s === 'offline') return 'var(--vn-danger)';
@@ -58,42 +40,34 @@ function AddModal({ onClose, onSave }: { onClose: () => void; onSave: () => void
     }
   }
 
-  const overlay: React.CSSProperties = {
-    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999,
-  };
-  const modal: React.CSSProperties = {
-    background: 'var(--vn-surface)', border: '1px solid var(--vn-border)',
-    borderRadius: 'var(--vn-radius)', padding: '1.5rem', width: '420px', maxWidth: '95vw',
-  };
-  const inp: React.CSSProperties = {
-    width: '100%', boxSizing: 'border-box', padding: '0.35rem 0.5rem',
-    background: 'var(--vn-surface-2)', border: '1px solid var(--vn-border)',
-    borderRadius: 'var(--vn-radius)', color: 'var(--vn-text)', fontSize: '0.85rem',
-    marginTop: '0.25rem', marginBottom: '0.75rem',
-  };
-  const lbl: React.CSSProperties = { fontSize: '0.8rem', color: 'var(--vn-text-muted)', display: 'block' };
-
   return (
-    <div style={overlay} onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={modal}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <div className="modal-header">
           <strong>Register vProx Instance</strong>
-          <button style={btn} onClick={onClose}>✕</button>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>✕</button>
         </div>
-        <form onSubmit={submit}>
-          <label style={lbl}>Name</label>
-          <input style={inp} value={name} onChange={e => setName(e.target.value)} placeholder="www-qc" required />
-          <label style={lbl}>URL</label>
-          <input style={inp} value={url} onChange={e => setUrl(e.target.value)} placeholder="https://vprox.example.com" required />
-          <label style={lbl}>API Key (optional)</label>
-          <input style={inp} type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="secret" />
-          <label style={lbl}>Datacenter</label>
-          <input style={inp} value={dc} onChange={e => setDc(e.target.value)} placeholder="QC" />
-          {err && <p style={{ color: 'var(--vn-danger)', fontSize: '0.8rem', margin: '0.25rem 0' }}>{err}</p>}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.5rem' }}>
-            <button type="button" style={btn} onClick={onClose}>Cancel</button>
-            <button type="submit" style={primaryBtn} disabled={busy}>{busy ? '…' : 'Register'}</button>
+        <form onSubmit={submit} className="space-y-3 p-4">
+          <label className="block">
+            <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>Name</span>
+            <input className="vn-input mt-1" value={name} onChange={e => setName(e.target.value)} placeholder="www-qc" required />
+          </label>
+          <label className="block">
+            <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>URL</span>
+            <input className="vn-input mt-1" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://vprox.example.com" required />
+          </label>
+          <label className="block">
+            <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>API Key (optional)</span>
+            <input className="vn-input mt-1" type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="secret" />
+          </label>
+          <label className="block">
+            <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>Datacenter</span>
+            <input className="vn-input mt-1" value={dc} onChange={e => setDc(e.target.value)} placeholder="QC" />
+          </label>
+          {err && <p className="alert alert-danger">{err}</p>}
+          <div className="modal-footer">
+            <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? '…' : 'Register'}</button>
           </div>
         </form>
       </div>
@@ -142,13 +116,14 @@ function InstanceRow({ inst, onRefresh }: { inst: VProxInstance; onRefresh: () =
             href={inst.url.replace(/\/$/, '') + '/vlog/'}
             target="_blank"
             rel="noreferrer"
-            style={{ ...btn, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
+            className="btn btn-secondary"
+            style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
             title="Open vProx dashboard"
           >
             🔗 Dashboard
           </a>
-          <button style={btn} onClick={handlePing} disabled={pinging} title="Ping health check">{pinging ? '…' : '⟳ Ping'}</button>
-          <button style={dangerBtn} onClick={handleDelete} title="Remove instance">✕</button>
+          <button className="btn btn-secondary" onClick={handlePing} disabled={pinging} title="Ping health check">{pinging ? '…' : '⟳ Ping'}</button>
+          <button className="btn btn-danger" onClick={handleDelete} title="Remove instance">✕</button>
         </div>
       </td>
     </tr>
@@ -188,16 +163,16 @@ export default function MultiProxPage() {
     <div>
       {showAdd && <AddModal onClose={() => setShowAdd(false)} onSave={refresh} />}
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+      <div className="flex justify-between items-center mb-5">
         <div>
-          <h1 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700 }}>Multi-vProx</h1>
-          <p style={{ margin: '0.25rem 0 0', fontSize: '0.8rem', color: 'var(--vn-text-subtle)' }}>
+          <h1 className="text-xl font-bold m-0">Multi-vProx</h1>
+          <p className="text-xs mt-1" style={{ color: 'var(--vn-text-subtle)' }}>
             Manage multiple vProx reverse-proxy instances from a single pane.
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button style={btn} onClick={pingAll} disabled={pingingAll}>{pingingAll ? '…' : '⟳ Ping All'}</button>
-          <button style={primaryBtn} onClick={() => setShowAdd(true)}>+ Register</button>
+          <button className="btn btn-secondary" onClick={pingAll} disabled={pingingAll}>{pingingAll ? '…' : '⟳ Ping All'}</button>
+          <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ Register</button>
         </div>
       </div>
 
@@ -211,17 +186,17 @@ export default function MultiProxPage() {
       )}
 
       {isLoading ? <Spinner /> : isError ? (
-        <div style={card}><p style={{ color: 'var(--vn-danger)', margin: 0 }}>Failed to load instances.</p></div>
+        <div className="card"><p style={{ color: 'var(--vn-danger)', margin: 0 }}>Failed to load instances.</p></div>
       ) : instances.length === 0 ? (
-        <div style={card}>
+        <div className="card">
           <h3 style={{ margin: '0 0 0.5rem', fontSize: '1rem' }}>No vProx instances registered</h3>
           <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--vn-text-muted)' }}>
             Click <strong>+ Register</strong> to add a vProx instance (www-qc, www-fr, etc.).
           </p>
         </div>
       ) : (
-        <div style={card}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+        <div className="card">
+          <table className="vn-table" style={{ fontSize: '0.85rem' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--vn-border)', textAlign: 'left', color: 'var(--vn-text-muted)', fontSize: '0.75rem' }}>
                 <th style={{ padding: '0.4rem 0.75rem' }}>Instance</th>

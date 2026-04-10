@@ -216,70 +216,35 @@ function SummaryBoxes() {
     ? vmsOnline.reduce((max, v) => (v.mem_pct ?? 0) > (max.mem_pct ?? 0) ? v : max)
     : null;
 
-  const boxStyle: React.CSSProperties = {
-    background: 'var(--vn-surface)',
-    border: '1px solid var(--vn-border)',
-    borderRadius: 'var(--vn-radius)',
-    padding: '1rem 1.25rem',
-    boxShadow: 'var(--vn-shadow)',
-    cursor: 'pointer',
-    transition: 'border-color 0.15s',
-    flex: '1 1 200px',
-    minWidth: 180,
-  };
-
-  const rowStyle: React.CSSProperties = {
-    display: 'flex',
-    gap: '0.5rem',
-    flexWrap: 'wrap',
-    marginBottom: '1.5rem',
-  };
-
-  const titleStyle: React.CSSProperties = {
-    fontSize: '0.75rem',
-    fontWeight: 600,
-    color: 'var(--vn-text-muted)',
-    textTransform: 'uppercase',
-    letterSpacing: '0.06em',
-    marginBottom: '0.75rem',
-  };
-
-  const metricRow: React.CSSProperties = {
-    display: 'flex',
-    justifyContent: 'space-between',
-    fontSize: '0.8rem',
-    padding: '0.15rem 0',
-    color: 'var(--vn-text)',
-  };
-
   return (
-    <div style={rowStyle}>
+    <div className="flex flex-wrap gap-2 mb-6">
       {/* Chains box */}
-      <div style={boxStyle} role="button" tabIndex={0} onClick={() => nav('/chains')}
+      <div className="card" role="button" tabIndex={0} onClick={() => nav('/chains')}
         onKeyDown={e => e.key === 'Enter' && nav('/chains')}
-        aria-label="Go to Chains page">
-        <div style={titleStyle}>🔗 Chains</div>
+        aria-label="Go to Chains page"
+        style={{ cursor: 'pointer', flex: '1 1 200px', minWidth: 180, transition: 'border-color 0.15s' }}>
+        <div className="text-xs font-semibold uppercase tracking-[0.06em] mb-3" style={{ color: 'var(--vn-text-muted)' }}>🔗 Chains</div>
         <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--vn-info)', marginBottom: '0.5rem' }}>
           {chains.length}
         </div>
-        <div style={metricRow}>
+        <div className="flex justify-between text-sm py-[0.15rem]">
           <span style={{ color: 'var(--vn-text-muted)' }}>Synced</span>
           <span style={{ color: 'var(--vn-success)', fontWeight: 600 }}>{chainsSynced}</span>
         </div>
         {chainsCatching > 0 && (
-          <div style={metricRow}>
+          <div className="flex justify-between text-sm py-[0.15rem]">
             <span style={{ color: 'var(--vn-text-muted)' }}>Catching up</span>
             <span style={{ color: 'var(--vn-warning)', fontWeight: 600 }}>{chainsCatching}</span>
           </div>
         )}
         {chainsStalled > 0 && (
-          <div style={metricRow}>
+          <div className="flex justify-between text-sm py-[0.15rem]">
             <span style={{ color: 'var(--vn-danger)' }}>⚠ Stalled</span>
             <span style={{ color: 'var(--vn-danger)', fontWeight: 600 }}>{chainsStalled}</span>
           </div>
         )}
         {chainsProposals > 0 && (
-          <div style={metricRow}>
+          <div className="flex justify-between text-sm py-[0.15rem]">
             <span style={{ color: 'var(--vn-warning)' }}>📋 Proposals</span>
             <span style={{ color: 'var(--vn-warning)', fontWeight: 600 }}>{chainsProposals}</span>
           </div>
@@ -287,25 +252,26 @@ function SummaryBoxes() {
       </div>
 
       {/* Services box */}
-      <div style={boxStyle} role="button" tabIndex={0} onClick={() => nav('/services')}
+      <div className="card" role="button" tabIndex={0} onClick={() => nav('/services')}
         onKeyDown={e => e.key === 'Enter' && nav('/services')}
-        aria-label="Go to Services page">
-        <div style={titleStyle}>⚙ Services</div>
+        aria-label="Go to Services page"
+        style={{ cursor: 'pointer', flex: '1 1 200px', minWidth: 180, transition: 'border-color 0.15s' }}>
+        <div className="text-xs font-semibold uppercase tracking-[0.06em] mb-3" style={{ color: 'var(--vn-text-muted)' }}>⚙ Services</div>
         <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--vn-primary)', marginBottom: '0.5rem' }}>
           {services.length}
         </div>
-        <div style={metricRow}>
+        <div className="flex justify-between text-sm py-[0.15rem]">
           <span style={{ color: 'var(--vn-text-muted)' }}>Online</span>
           <span style={{ color: 'var(--vn-success)', fontWeight: 600 }}>{svcsOnline}</span>
         </div>
         {svcsDown > 0 && (
-          <div style={metricRow}>
+          <div className="flex justify-between text-sm py-[0.15rem]">
             <span style={{ color: 'var(--vn-danger)' }}>⚠ Down</span>
             <span style={{ color: 'var(--vn-danger)', fontWeight: 600 }}>{svcsDown}</span>
           </div>
         )}
         {topTypes.map(([type, count]) => (
-          <div key={type} style={metricRow}>
+          <div key={type} className="flex justify-between text-sm py-[0.15rem]">
             <span style={{ color: 'var(--vn-text-muted)', fontSize: '0.75rem' }}>{type}</span>
             <span style={{ fontWeight: 600, fontSize: '0.75rem' }}>{count}</span>
           </div>
@@ -313,15 +279,16 @@ function SummaryBoxes() {
       </div>
 
       {/* VMs box */}
-      <div style={boxStyle} role="button" tabIndex={0} onClick={() => nav('/vms')}
+      <div className="card" role="button" tabIndex={0} onClick={() => nav('/vms')}
         onKeyDown={e => e.key === 'Enter' && nav('/vms')}
-        aria-label="Go to VM Manager">
-        <div style={titleStyle}>🖥 VMs</div>
+        aria-label="Go to VM Manager"
+        style={{ cursor: 'pointer', flex: '1 1 200px', minWidth: 180, transition: 'border-color 0.15s' }}>
+        <div className="text-xs font-semibold uppercase tracking-[0.06em] mb-3" style={{ color: 'var(--vn-text-muted)' }}>🖥 VMs</div>
         <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--vn-success)', marginBottom: '0.5rem' }}>
           {vmsRunning}<span style={{ fontSize: '1rem', color: 'var(--vn-text-muted)', fontWeight: 400 }}>/{vms.length}</span>
         </div>
         {busiestVM && (
-          <div style={metricRow}>
+          <div className="flex justify-between text-sm py-[0.15rem]">
             <span style={{ color: 'var(--vn-text-muted)', fontSize: '0.75rem' }} title="Highest mem VM">
               {busiestVM.name}
             </span>
@@ -332,7 +299,7 @@ function SummaryBoxes() {
           </div>
         )}
         {totalPatches > 0 && (
-          <div style={metricRow}>
+          <div className="flex justify-between text-sm py-[0.15rem]">
             <span style={{ color: 'var(--vn-warning)' }}>📦 Patches</span>
             <span style={{ color: 'var(--vn-warning)', fontWeight: 600 }}>{totalPatches}</span>
           </div>
@@ -358,10 +325,7 @@ function FleetTable() {
   if (isLoading) return <Spinner label="Loading fleet" />;
   if (isError) {
     return (
-      <div
-        className="p-6 text-center rounded-lg"
-        style={{ backgroundColor: 'var(--vn-surface)', border: '1px solid var(--vn-border)' }}
-      >
+      <div className="card text-center">
         <p className="text-sm" style={{ color: 'var(--vn-text-muted)' }}>
           Fleet not configured &mdash; add chains in Settings to enable fleet monitoring.
         </p>
@@ -372,27 +336,22 @@ function FleetTable() {
   const chains: ChainStatus[] = data?.chains ?? [];
   if (chains.length === 0) {
     return (
-      <div
-        className="p-6 text-center rounded-lg"
-        style={{ backgroundColor: 'var(--vn-surface)', border: '1px solid var(--vn-border)' }}
-      >
+      <div className="card text-center">
         <p className="text-sm" style={{ color: 'var(--vn-text-muted)' }}>No chains registered.</p>
       </div>
     );
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg" style={{ border: '1px solid var(--vn-border)' }}>
-      <table className="w-full text-sm" style={{ backgroundColor: 'var(--vn-surface)' }}>
+    <div className="card card-flush overflow-x-auto">
+      <table className="vn-table">
         <thead>
-          <tr style={{ borderBottom: '1px solid var(--vn-border)' }}>
+          <tr>
             {['Chain', 'Network', 'Status', 'Height', 'Avg Block', 'Governance', 'Upgrade', 'Validator', 'DC Ping', 'Updated'].map(
               (h) => (
                 <th
                   key={h}
                   scope="col"
-                  className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider whitespace-nowrap"
-                  style={{ color: 'var(--vn-text-muted)' }}
                 >
                   {h}
                 </th>
@@ -404,10 +363,6 @@ function FleetTable() {
           {chains.map((c) => (
             <tr
               key={c.chain}
-              className="transition-colors"
-              style={{ borderBottom: '1px solid var(--vn-border)' }}
-              onMouseOver={(e) => (e.currentTarget.style.backgroundColor = 'var(--vn-surface-2)')}
-              onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '')}
             >
               <td className="px-3 py-2 font-medium whitespace-nowrap">{c.dashboard_name || c.chain}</td>
               <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--vn-text-muted)' }}>
@@ -538,7 +493,7 @@ function ServersPanel() {
   if (isLoading) return <Spinner label="Loading server status" />;
   if (isError) {
     return (
-      <div className="p-4 text-sm rounded-lg" style={{ backgroundColor: 'var(--vn-surface)', border: '1px solid var(--vn-border)', color: 'var(--vn-text-muted)' }}>
+      <div className="card text-sm" style={{ color: 'var(--vn-text-muted)' }}>
         Fleet not configured — add VMs to <code>config/infra/*.toml</code> to enable server monitoring.
       </div>
     );
@@ -547,7 +502,7 @@ function ServersPanel() {
   const vms: VMStatus[] = data?.vms ?? [];
   if (vms.length === 0) {
     return (
-      <div className="p-4 text-sm rounded-lg" style={{ backgroundColor: 'var(--vn-surface)', border: '1px solid var(--vn-border)', color: 'var(--vn-text-muted)' }}>
+      <div className="card text-sm" style={{ color: 'var(--vn-text-muted)' }}>
         No VMs configured.
       </div>
     );
@@ -555,16 +510,14 @@ function ServersPanel() {
 
   return (
     <>
-      <div className="overflow-x-auto rounded-lg" style={{ border: '1px solid var(--vn-border)' }}>
-        <table className="w-full text-sm" style={{ backgroundColor: 'var(--vn-surface)' }}>
+      <div className="card card-flush overflow-x-auto">
+        <table className="vn-table">
           <thead>
-            <tr style={{ borderBottom: '1px solid var(--vn-border)' }}>
+            <tr>
               {['Server', 'OS', 'CPU', 'Memory', 'Disk', 'Load', 'Updates', '6h History', 'Status', ''].map((h) => (
                 <th
                   key={h}
                   scope="col"
-                  className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider whitespace-nowrap"
-                  style={{ color: 'var(--vn-text-muted)' }}
                 >
                   {h}
                 </th>
@@ -575,9 +528,6 @@ function ServersPanel() {
             {vms.map((vm) => (
               <tr
                 key={vm.name}
-                style={{ borderBottom: '1px solid var(--vn-border)' }}
-                onMouseOver={(e) => (e.currentTarget.style.backgroundColor = 'var(--vn-surface-2)')}
-                onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '')}
               >
                 <td className="px-3 py-2">
                   <div className="font-medium text-xs">{vm.name}</div>
@@ -684,14 +634,7 @@ function IngestSection() {
   const archiveStats: ArchiveStats | undefined = statsQ.data;
 
   return (
-    <div
-      className="rounded-lg p-4"
-      style={{
-        backgroundColor: 'var(--vn-surface)',
-        border: '1px solid var(--vn-border)',
-        boxShadow: 'var(--vn-shadow)',
-      }}
-    >
+    <div className="card">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-medium" style={{ color: 'var(--vn-text-muted)' }}>
           Archive Ingest
@@ -701,22 +644,14 @@ function IngestSection() {
             onClick={() => backupMut.mutate()}
             disabled={backupMut.isPending || ingestMut.isPending}
             title="Run vprox --new-backup then ingest"
-            style={{
-              cursor: 'pointer', fontSize: '0.75rem', fontWeight: 500,
-              padding: '0.3rem 0.65rem', borderRadius: 'var(--vn-radius)',
-              border: '1px solid var(--vn-border)', background: 'var(--vn-surface)',
-              color: 'var(--vn-text)', opacity: backupMut.isPending ? 0.5 : 1,
-            }}
+            className="btn btn-secondary btn-sm"
           >
             {backupMut.isPending ? 'Backing up…' : '💾 Backup & Ingest'}
           </button>
           <button
             onClick={() => ingestMut.mutate()}
             disabled={ingestMut.isPending || backupMut.isPending}
-            className="px-3 py-1.5 text-xs font-medium rounded-md btn-vn-primary
-                       disabled:opacity-50 cursor-pointer
-                       focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-            style={{ backgroundColor: 'var(--vn-primary)' }}
+            className="btn btn-primary btn-sm disabled:opacity-50"
           >
             {ingestMut.isPending ? 'Ingesting\u2026' : 'Trigger Ingest'}
           </button>
@@ -724,38 +659,22 @@ function IngestSection() {
       </div>
 
       {ingestMut.isSuccess && (
-        <div
-          className="mb-3 p-2 rounded text-xs"
-          style={{ backgroundColor: 'color-mix(in srgb, var(--vn-success) 12%, transparent)', color: 'var(--vn-success)' }}
-          role="alert"
-        >
+        <div className="alert alert-success mb-3" role="alert">
           Ingest complete &mdash; {ingestMut.data.count} events processed.
         </div>
       )}
       {backupMut.isSuccess && (
-        <div
-          className="mb-3 p-2 rounded text-xs"
-          style={{ backgroundColor: 'color-mix(in srgb, var(--vn-success) 12%, transparent)', color: 'var(--vn-success)' }}
-          role="alert"
-        >
+        <div className="alert alert-success mb-3" role="alert">
           Backup &amp; ingest complete &mdash; {backupMut.data.processed} archives processed.
         </div>
       )}
       {backupMut.isError && (
-        <div
-          className="mb-3 p-2 rounded text-xs"
-          style={{ backgroundColor: 'color-mix(in srgb, var(--vn-danger) 12%, transparent)', color: 'var(--vn-danger)' }}
-          role="alert"
-        >
+        <div className="alert alert-danger mb-3" role="alert">
           Backup failed: {(backupMut.error as Error).message}
         </div>
       )}
       {ingestMut.isError && (
-        <div
-          className="mb-3 p-2 rounded text-xs"
-          style={{ backgroundColor: 'color-mix(in srgb, var(--vn-danger) 12%, transparent)', color: 'var(--vn-danger)' }}
-          role="alert"
-        >
+        <div className="alert alert-danger mb-3" role="alert">
           Ingest failed: {(ingestMut.error as Error).message}
         </div>
       )}
@@ -814,24 +733,10 @@ export default function DashboardPage() {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div
-          className="rounded-lg p-4"
-          style={{
-            backgroundColor: 'var(--vn-surface)',
-            border: '1px solid var(--vn-border)',
-            boxShadow: 'var(--vn-shadow)',
-          }}
-        >
+        <div className="card">
           <ChartPanel title="Requests over Time (30d)" queryKey="chart-requests" chartType="requests_over_time" />
         </div>
-        <div
-          className="rounded-lg p-4"
-          style={{
-            backgroundColor: 'var(--vn-surface)',
-            border: '1px solid var(--vn-border)',
-            boxShadow: 'var(--vn-shadow)',
-          }}
-        >
+        <div className="card">
           <ChartPanel title="IPs over Time (30d)" queryKey="chart-ips" chartType="ips_over_time" />
         </div>
       </div>

@@ -28,10 +28,7 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <div
-      className="rounded-lg p-5 space-y-4"
-      style={{ backgroundColor: 'var(--vn-surface)', border: '1px solid var(--vn-border)' }}
-    >
+    <div className="card space-y-4">
       <div>
         <h3 className="text-sm font-semibold" style={{ color: 'var(--vn-text)' }}>{title}</h3>
         {subtitle && (
@@ -188,19 +185,12 @@ function SaveBar({
         <button
           onClick={onSave}
           disabled={isPending}
-          className="px-3 py-1.5 text-xs font-medium rounded-md cursor-pointer disabled:opacity-50
-                     focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-          style={{ backgroundColor: 'var(--vn-primary)', color: 'var(--vn-on-primary)' }}
+          className="btn btn-primary btn-sm disabled:opacity-50"
         >
           {isPending ? 'Saving…' : 'Save'}
         </button>
         {onCancel && (
-          <button
-            onClick={onCancel}
-            className="px-3 py-1.5 text-xs font-medium rounded-md cursor-pointer
-                       focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-            style={{ border: '1px solid var(--vn-border)', color: 'var(--vn-text-muted)' }}
-          >
+          <button onClick={onCancel} className="btn btn-secondary btn-sm">
             Cancel
           </button>
         )}
@@ -280,9 +270,7 @@ function TOMLEditor({
               setText(toDisplay(rawValue));
               setEditing(true);
             }}
-            className="mt-2 px-3 py-1.5 text-xs font-medium rounded-md cursor-pointer
-                       focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-            style={{ backgroundColor: 'var(--vn-primary)', color: 'var(--vn-on-primary)' }}
+            className="btn btn-primary btn-sm mt-2"
           >
             Edit
           </button>
@@ -297,13 +285,8 @@ function TOMLEditor({
             value={text}
             onChange={(e) => setText(e.target.value)}
             rows={18}
-            className="w-full p-3 rounded-md text-xs font-mono outline-none resize-y
+            className="vn-input w-full font-mono text-xs resize-y
                        focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-            style={{
-              backgroundColor: 'var(--vn-surface-2)',
-              border: '1px solid var(--vn-border)',
-              color: 'var(--vn-text)',
-            }}
           />
           <SaveBar
             onSave={handleSave}
@@ -474,9 +457,7 @@ function FleetScanPanel() {
         <button
           onClick={() => scanMut.mutate()}
           disabled={scanMut.isPending}
-          className="px-4 py-2 text-sm font-medium rounded-md cursor-pointer disabled:opacity-50 flex items-center gap-2
-                     focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-          style={{ backgroundColor: 'var(--vn-primary)', color: 'var(--vn-on-primary)' }}
+          className="btn btn-primary disabled:opacity-50 flex items-center gap-2"
         >
           {scanMut.isPending && (
             <span className="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
@@ -492,10 +473,10 @@ function FleetScanPanel() {
       )}
 
       {vms.length > 0 && (
-        <div className="overflow-x-auto rounded-lg" style={{ border: '1px solid var(--vn-border)' }}>
-          <table className="w-full text-xs" style={{ backgroundColor: 'var(--vn-surface)' }}>
+        <div className="card card-flush overflow-x-auto">
+          <table className="vn-table">
             <thead>
-              <tr style={{ borderBottom: '1px solid var(--vn-border)' }}>
+              <tr>
                 {[
                   'VM / Host',
                   'Type',
@@ -522,9 +503,6 @@ function FleetScanPanel() {
               {vms.map((vm) => (
                 <tr
                   key={vm.name}
-                  style={{ borderBottom: '1px solid var(--vn-border)' }}
-                  onMouseOver={(e) => (e.currentTarget.style.backgroundColor = 'var(--vn-surface-2)')}
-                  onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '')}
                 >
                   <td className="px-3 py-2">
                     <div className="font-medium">{vm.name}</div>
@@ -623,21 +601,15 @@ function FleetScanPanel() {
                 }
               }}
               disabled={registerMut.isPending}
-              className="px-3 py-1.5 rounded text-xs font-medium transition-colors"
-              style={{
-                backgroundColor: 'var(--vn-accent)',
-                color: '#fff',
-                opacity: registerMut.isPending ? 0.6 : 1,
-                cursor: registerMut.isPending ? 'default' : 'pointer',
-              }}
+              className="btn btn-secondary btn-sm"
             >
               ➕ Add All to Inventory
             </button>
           </div>
-          <div className="overflow-x-auto rounded-lg" style={{ border: '1px solid var(--vn-border)' }}>
-            <table className="w-full text-xs" style={{ backgroundColor: 'var(--vn-surface)' }}>
+          <div className="card card-flush overflow-x-auto">
+            <table className="vn-table">
               <thead>
-                <tr style={{ borderBottom: '1px solid var(--vn-border)' }}>
+                <tr>
                   {['VM Name', 'Datacenter', 'LAN IP', 'OS', 'State', 'CPU %', 'Mem %', 'Load Avg', 'Status', 'Actions'].map((h) => (
                     <th
                       key={h}
@@ -655,9 +627,6 @@ function FleetScanPanel() {
                   return (
                     <tr
                       key={`${vm.name}-${i}`}
-                      style={{ borderBottom: '1px solid var(--vn-border)' }}
-                      onMouseOver={(e) => (e.currentTarget.style.backgroundColor = 'var(--vn-surface-2)')}
-                      onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '')}
                     >
                       <td className="px-3 py-2 font-medium">{vm.name}</td>
                       <td className="px-3 py-2" style={{ color: 'var(--vn-text-subtle)' }}>{vm.datacenter || '—'}</td>
@@ -707,13 +676,7 @@ function FleetScanPanel() {
                               } catch (_) {}
                             }}
                             disabled={registerMut.isPending}
-                            className="px-2 py-0.5 rounded text-xs transition-colors"
-                            style={{
-                              backgroundColor: 'var(--vn-surface-2)',
-                              border: '1px solid var(--vn-border)',
-                              color: 'var(--vn-accent)',
-                              cursor: registerMut.isPending ? 'default' : 'pointer',
-                            }}
+                            className="btn btn-secondary btn-sm"
                           >
                             ➕ Add
                           </button>
@@ -869,12 +832,7 @@ function LabeledInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full px-2 py-1 text-xs rounded-md outline-none focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-        style={{
-          backgroundColor: 'var(--vn-surface-2)',
-          border: '1px solid var(--vn-border)',
-          color: 'var(--vn-text)',
-        }}
+        className="vn-input w-full focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
       />
     </div>
   );
@@ -947,10 +905,7 @@ function DatacenterCard({ entry, onSaved }: { entry: InfraEntry; onSaved: () => 
   const addVM = () => setVMs((rows) => [...rows, emptyVM()]);
 
   return (
-    <div
-      className="rounded-lg p-4 space-y-4"
-      style={{ border: '1px solid var(--vn-border)', backgroundColor: 'var(--vn-surface)' }}
-    >
+    <div className="card space-y-4">
       {/* Datacenter header */}
       <div className="flex items-center gap-2">
         <span className="text-xs font-semibold" style={{ color: 'var(--vn-text)' }}>
@@ -998,8 +953,7 @@ function DatacenterCard({ entry, onSaved }: { entry: InfraEntry; onSaved: () => 
           </p>
           <button
             onClick={addVM}
-            className="px-2 py-0.5 text-xs rounded cursor-pointer"
-            style={{ backgroundColor: 'var(--vn-surface-2)', border: '1px solid var(--vn-border)', color: 'var(--vn-primary)' }}
+            className="btn btn-secondary btn-sm"
           >
             + Add VM
           </button>
@@ -1023,8 +977,7 @@ function DatacenterCard({ entry, onSaved }: { entry: InfraEntry; onSaved: () => 
                   </span>
                   <button
                     onClick={() => removeVM(i)}
-                    className="text-xs cursor-pointer px-1.5 py-0.5 rounded"
-                    style={{ color: 'var(--vn-danger)', border: '1px solid var(--vn-danger)' }}
+                    className="btn btn-danger btn-sm"
                   >
                     Remove
                   </button>
@@ -1039,12 +992,7 @@ function DatacenterCard({ entry, onSaved }: { entry: InfraEntry; onSaved: () => 
                     <select
                       value={vm.type}
                       onChange={(e) => setVMField(i, 'type')(e.target.value)}
-                      className="w-full px-2 py-1 text-xs rounded-md outline-none focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-                      style={{
-                        backgroundColor: 'var(--vn-surface-2)',
-                        border: '1px solid var(--vn-border)',
-                        color: 'var(--vn-text)',
-                      }}
+                      className="vn-input w-full"
                     >
                       {VM_TYPE_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
                     </select>
@@ -1324,8 +1272,7 @@ function ProxyControlsPanel({ config }: { config: ConfigSnapshot }) {
           <select
             value={fields.aq_enabled}
             onChange={(e) => set('aq_enabled')(e.target.value)}
-            className="w-full px-2 py-1 text-xs rounded-md outline-none"
-            style={{ backgroundColor: 'var(--vn-surface-2)', border: '1px solid var(--vn-border)', color: 'var(--vn-text)' }}
+            className="vn-input w-full"
           >
             <option value="true">Enabled</option>
             <option value="false">Disabled</option>
@@ -1342,8 +1289,7 @@ function ProxyControlsPanel({ config }: { config: ConfigSnapshot }) {
           <select
             value={fields.debug_enabled}
             onChange={(e) => set('debug_enabled')(e.target.value)}
-            className="w-full px-2 py-1 text-xs rounded-md outline-none"
-            style={{ backgroundColor: 'var(--vn-surface-2)', border: '1px solid var(--vn-border)', color: 'var(--vn-text)' }}
+            className="vn-input w-full"
           >
             <option value="false">Disabled</option>
             <option value="true">Enabled</option>
@@ -1396,10 +1342,7 @@ function ChainCard({ chain, onSaved }: { chain: ChainEntry; onSaved: () => void 
   });
 
   return (
-    <div
-      className="rounded-lg p-4 space-y-3"
-      style={{ border: '1px solid var(--vn-border)', backgroundColor: 'var(--vn-surface)' }}
-    >
+    <div className="card space-y-3">
       <div className="flex items-center gap-2">
         <span className="text-xs font-semibold" style={{ color: 'var(--vn-text)' }}>{fields.chain_name || chain.name}</span>
         <span className="text-xs" style={{ color: 'var(--vn-text-subtle)' }}>{chain.file}</span>
@@ -1549,8 +1492,7 @@ function VOpsPanel({ config }: { config: ConfigSnapshot }) {
         <div>
           <label className="block text-xs mb-0.5" style={{ color: 'var(--vn-text-muted)' }}>Auto-Enrich</label>
           <select value={fields.auto_enrich} onChange={(e) => set('auto_enrich')(e.target.value)}
-            className="w-full px-2 py-1 text-xs rounded-md outline-none"
-            style={{ backgroundColor: 'var(--vn-surface-2)', border: '1px solid var(--vn-border)', color: 'var(--vn-text)' }}>
+            className="vn-input w-full">
             <option value="true">Enabled</option>
             <option value="false">Disabled</option>
           </select>
@@ -1624,8 +1566,7 @@ function BackupsPanel({ config }: { config: ConfigSnapshot }) {
         <div>
           <label className="block text-xs mb-0.5" style={{ color: 'var(--vn-text-muted)' }}>Automation</label>
           <select value={fields.automation} onChange={(e) => set('automation')(e.target.value)}
-            className="w-full px-2 py-1 text-xs rounded-md outline-none"
-            style={{ backgroundColor: 'var(--vn-surface-2)', border: '1px solid var(--vn-border)', color: 'var(--vn-text)' }}>
+            className="vn-input w-full">
             <option value="true">Enabled</option>
             <option value="false">Disabled</option>
           </select>
@@ -1637,8 +1578,7 @@ function BackupsPanel({ config }: { config: ConfigSnapshot }) {
         <div>
           <label className="block text-xs mb-0.5" style={{ color: 'var(--vn-text-muted)' }}>Compression</label>
           <select value={fields.compression} onChange={(e) => set('compression')(e.target.value)}
-            className="w-full px-2 py-1 text-xs rounded-md outline-none"
-            style={{ backgroundColor: 'var(--vn-surface-2)', border: '1px solid var(--vn-border)', color: 'var(--vn-text)' }}>
+            className="vn-input w-full">
             <option value="tar.gz">tar.gz</option>
             <option value="zip">zip</option>
           </select>
@@ -1724,9 +1664,7 @@ function SecurityPanel() {
         <button
           onClick={() => genSSHMut.mutate()}
           disabled={genSSHMut.isPending}
-          className="px-3 py-1.5 text-xs font-medium rounded-md cursor-pointer disabled:opacity-50
-                     focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-          style={{ backgroundColor: 'var(--vn-primary)', color: 'var(--vn-on-primary)' }}
+          className="btn btn-primary btn-sm disabled:opacity-50"
         >
           {genSSHMut.isPending ? 'Generating…' : sshQ.data?.public_key ? '↺ Regenerate SSH Key' : '+ Generate SSH Key'}
         </button>
@@ -1748,9 +1686,7 @@ function SecurityPanel() {
         <button
           onClick={() => apiKeyMut.mutate()}
           disabled={apiKeyMut.isPending}
-          className="px-3 py-1.5 text-xs font-medium rounded-md cursor-pointer disabled:opacity-50
-                     focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-          style={{ backgroundColor: 'var(--vn-primary)', color: 'var(--vn-on-primary)' }}
+          className="btn btn-primary btn-sm disabled:opacity-50"
         >
           {apiKeyMut.isPending ? 'Generating…' : '+ Generate API Key'}
         </button>
@@ -1789,21 +1725,13 @@ function SecurityPanel() {
             value={passwordInput}
             onChange={(e) => setPasswordInput(e.target.value)}
             placeholder="Enter new password"
-            className="flex-1 px-3 py-1.5 rounded-md text-sm outline-none
-                       focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-            style={{
-              backgroundColor: 'var(--vn-surface-2)',
-              border: '1px solid var(--vn-border)',
-              color: 'var(--vn-text)',
-            }}
+            className="vn-input flex-1"
             onKeyDown={(e) => e.key === 'Enter' && passwordInput && hashMut.mutate()}
           />
           <button
             onClick={() => hashMut.mutate()}
             disabled={hashMut.isPending || !passwordInput}
-            className="px-3 py-1.5 text-xs font-medium rounded-md cursor-pointer disabled:opacity-50
-                       focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-            style={{ backgroundColor: 'var(--vn-primary)', color: 'var(--vn-on-primary)' }}
+            className="btn btn-primary btn-sm disabled:opacity-50"
           >
             {hashMut.isPending ? 'Hashing…' : 'Hash'}
           </button>
@@ -1905,9 +1833,7 @@ function PreferencesPanel() {
         <button
           onClick={() => saveMut.mutate(theme)}
           disabled={saveMut.isPending}
-          className="px-3 py-1.5 text-xs font-medium rounded-md cursor-pointer disabled:opacity-50
-                     focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-          style={{ backgroundColor: 'var(--vn-primary)', color: 'var(--vn-on-primary)' }}
+          className="btn btn-primary btn-sm disabled:opacity-50"
         >
           {saveMut.isPending ? 'Saving…' : 'Apply & Save Theme'}
         </button>
@@ -1986,13 +1912,7 @@ export default function SettingsPage() {
         </div>
         <button
           onClick={() => { window.location.href = BASE + '/settings/wizard'; }}
-          className="px-4 py-2 text-xs font-medium rounded-md cursor-pointer flex items-center gap-2
-                     focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-          style={{
-            backgroundColor: 'var(--vn-surface)',
-            border: '1px solid var(--vn-border)',
-            color: 'var(--vn-text)',
-          }}
+          className="btn btn-secondary"
         >
           Setup Wizard
         </button>
@@ -2059,12 +1979,8 @@ export default function SettingsPage() {
             if (!grp || !sec) return null;
             return (
               <div
-                className="px-4 py-3 rounded-lg text-xs flex items-start gap-3"
-                style={{
-                  backgroundColor: 'var(--vn-surface)',
-                  border: '1px solid var(--vn-border)',
-                  color: 'var(--vn-text-muted)',
-                }}
+                className="card card-sm text-xs flex items-start gap-3"
+                style={{ color: 'var(--vn-text-muted)' }}
               >
                 <div>
                   <span className="font-semibold" style={{ color: 'var(--vn-text)' }}>
@@ -2090,9 +2006,7 @@ export default function SettingsPage() {
               </p>
               <button
                 onClick={() => { window.location.href = BASE + '/settings/wizard'; }}
-                className="px-4 py-2 text-sm font-medium rounded-md cursor-pointer
-                           focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-                style={{ backgroundColor: 'var(--vn-primary)', color: 'var(--vn-on-primary)' }}
+                className="btn btn-primary"
               >
                 Open Setup Wizard
               </button>

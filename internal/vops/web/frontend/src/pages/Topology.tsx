@@ -37,23 +37,6 @@ function dot(color: string) {
   );
 }
 
-/* ── styles ───────────────────────────────────────────────────── */
-const card: React.CSSProperties = {
-  background: 'var(--vn-surface)', border: '1px solid var(--vn-border)',
-  borderRadius: 'var(--vn-radius)', padding: '1rem', marginBottom: '1rem',
-};
-const vmCard: React.CSSProperties = {
-  background: 'var(--vn-surface-2)', border: '1px solid var(--vn-border)',
-  borderRadius: 'var(--vn-radius)', padding: '0.6rem 0.85rem', marginBottom: '0.5rem',
-};
-const unitBadge: React.CSSProperties = {
-  display: 'inline-flex', alignItems: 'center',
-  background: 'var(--vn-surface)', border: '1px solid var(--vn-border)',
-  borderRadius: '999px', padding: '0.15rem 0.5rem',
-  fontSize: '0.72rem', marginRight: '0.35rem', marginTop: '0.3rem',
-  cursor: 'default',
-};
-
 /* ── main component ───────────────────────────────────────────── */
 export default function TopologyPage() {
   const { data: hostsData, isLoading: hostsLoading } = useQuery({
@@ -107,10 +90,10 @@ export default function TopologyPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+      <div className="flex justify-between items-center mb-5">
         <div>
-          <h1 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700 }}>Topology</h1>
-          <p style={{ margin: '0.25rem 0 0', fontSize: '0.8rem', color: 'var(--vn-text-subtle)' }}>
+          <h1 className="text-xl font-bold m-0">Topology</h1>
+          <p className="text-xs mt-1" style={{ color: 'var(--vn-text-subtle)' }}>
             Multi-datacenter visual map — Hosts → VMs → Units
           </p>
         </div>
@@ -122,7 +105,7 @@ export default function TopologyPage() {
       {isLoading ? <Spinner /> : (
         <>
           {dcs.length === 0 && (
-            <div style={card}>
+            <div className="card card-sm">
               <p style={{ margin: 0, color: 'var(--vn-text-muted)' }}>
                 No topology data yet. Configure hypervisor hosts and register units to see the map.
               </p>
@@ -133,7 +116,7 @@ export default function TopologyPage() {
             const dcHosts = hostsByDC[dc];
             const dcVMs = vms.filter(v => (v.datacenter ?? 'Unknown DC') === dc && !dcHosts.find(h => h.name === (v.host_name ?? v.host)));
             return (
-              <div key={dc} style={{ ...card, borderLeft: '3px solid var(--vn-primary)' }}>
+              <div key={dc} className="card card-sm" style={{ borderLeft: '3px solid var(--vn-primary)', marginBottom: '1rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
                   <span style={{ fontSize: '1rem' }}>🏢</span>
                   <strong style={{ fontSize: '1rem' }}>{dc}</strong>
@@ -146,7 +129,7 @@ export default function TopologyPage() {
                 {dcHosts.map(h => {
                   const hVMs = vmsByHost[h.name] ?? [];
                   return (
-                    <div key={h.name} style={{
+                    <div key={h.name} className="card-sm" style={{
                       border: '1px solid var(--vn-border)', borderRadius: 'var(--vn-radius)',
                       padding: '0.75rem', marginBottom: '0.75rem',
                       background: 'var(--vn-surface-2)',
@@ -188,7 +171,7 @@ export default function TopologyPage() {
             );
             if (!unplaced.length) return null;
             return (
-              <div style={card}>
+              <div className="card card-sm" style={{ marginBottom: '1rem' }}>
                 <strong style={{ fontSize: '0.85rem', color: 'var(--vn-text-muted)' }}>Unassigned</strong>
                 {unplaced.map(vm => <VMRow key={vm.name} vm={vm} unitsByVM={unitsByVM} />)}
               </div>
@@ -207,7 +190,8 @@ function VMRow({ vm, unitsByVM }: { vm: VMView; unitsByVM: Record<string, Cosmos
   const color = statusColor(vm.state);
   return (
     <div
-      style={{ ...vmCard, cursor: 'pointer' }}
+      className="card card-sm"
+      style={{ background: 'var(--vn-surface-2)', cursor: 'pointer', marginBottom: '0.5rem' }}
       onClick={() => navigate(`/vms?filter=${encodeURIComponent(vm.name)}`)}
       title={`Open ${vm.name} in VM Manager`}
       role="button"
@@ -237,7 +221,8 @@ function VMRow({ vm, unitsByVM }: { vm: VMView; unitsByVM: Record<string, Cosmos
             return (
               <span
                 key={u.name}
-                style={{ ...unitBadge, cursor: 'pointer' }}
+                className="pill"
+                style={{ cursor: 'pointer', fontSize: '0.72rem', marginRight: '0.35rem', marginTop: '0.3rem' }}
                 title={`chain: ${u.chain_id} | height: ${u.status?.block_height ?? '?'} | peers: ${u.status?.peers ?? '?'} — click to manage`}
                 onClick={() => navigate(`/units?filter=${encodeURIComponent(u.name)}`)}
                 role="button"

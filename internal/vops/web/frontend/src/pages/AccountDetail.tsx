@@ -91,12 +91,8 @@ export default function AccountDetailPage() {
         >
           &larr; Back to Accounts
         </button>
-        <div
-          className="p-6 text-center rounded-lg"
-          style={{ backgroundColor: 'var(--vn-surface)', border: '1px solid var(--vn-border)' }}
-          role="alert"
-        >
-          <p style={{ color: 'var(--vn-danger)' }}>
+        <div className="alert alert-danger" role="alert">
+          <p>
             Failed to load account: {(error as Error).message}
           </p>
         </div>
@@ -158,21 +154,18 @@ export default function AccountDetailPage() {
         {/* Left: Details */}
         <div className="lg:col-span-2 space-y-6">
           {/* Detail table */}
-          <div
-            className="rounded-lg overflow-hidden"
-            style={{ backgroundColor: 'var(--vn-surface)', border: '1px solid var(--vn-border)' }}
-          >
-            <table className="w-full text-sm">
+          <div className="card card-flush overflow-hidden">
+            <table className="vn-table">
               <tbody>
                 {detailRows.map(({ label, value }) => (
-                  <tr key={label} style={{ borderBottom: '1px solid var(--vn-border)' }}>
+                  <tr key={label}>
                     <td
-                      className="px-4 py-2 font-medium whitespace-nowrap w-40"
+                      className="font-medium whitespace-nowrap w-40"
                       style={{ color: 'var(--vn-text-muted)' }}
                     >
                       {label}
                     </td>
-                    <td className="px-4 py-2">{value || '\u2014'}</td>
+                    <td>{value || '\u2014'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -180,10 +173,7 @@ export default function AccountDetailPage() {
           </div>
 
           {/* Port Grid */}
-          <div
-            className="rounded-lg p-4"
-            style={{ backgroundColor: 'var(--vn-surface)', border: '1px solid var(--vn-border)' }}
-          >
+          <div className="card card-sm">
             <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--vn-text-muted)' }}>
               Port Scan
             </h3>
@@ -192,10 +182,7 @@ export default function AccountDetailPage() {
 
           {/* Threat Flags */}
           {threatFlags.length > 0 && (
-            <div
-              className="rounded-lg p-4"
-              style={{ backgroundColor: 'var(--vn-surface)', border: '1px solid var(--vn-border)' }}
-            >
+            <div className="card card-sm">
               <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--vn-text-muted)' }}>
                 Threat Flags
               </h3>
@@ -219,10 +206,7 @@ export default function AccountDetailPage() {
 
           {/* Tags */}
           {tags.length > 0 && (
-            <div
-              className="rounded-lg p-4"
-              style={{ backgroundColor: 'var(--vn-surface)', border: '1px solid var(--vn-border)' }}
-            >
+            <div className="card card-sm">
               <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--vn-text-muted)' }}>
                 Tags
               </h3>
@@ -246,10 +230,7 @@ export default function AccountDetailPage() {
 
           {/* Notes */}
           {account.Notes && (
-            <div
-              className="rounded-lg p-4"
-              style={{ backgroundColor: 'var(--vn-surface)', border: '1px solid var(--vn-border)' }}
-            >
+            <div className="card card-sm">
               <h3 className="text-sm font-medium mb-2" style={{ color: 'var(--vn-text-muted)' }}>
                 Notes
               </h3>
@@ -260,10 +241,7 @@ export default function AccountDetailPage() {
 
         {/* Right: Actions */}
         <div className="space-y-4">
-          <div
-            className="rounded-lg p-4 space-y-3"
-            style={{ backgroundColor: 'var(--vn-surface)', border: '1px solid var(--vn-border)' }}
-          >
+          <div className="card card-sm space-y-3">
             <h3 className="text-sm font-medium" style={{ color: 'var(--vn-text-muted)' }}>
               Actions
             </h3>
@@ -272,12 +250,7 @@ export default function AccountDetailPage() {
             <button
               onClick={handleBlockToggle}
               disabled={blockMut.isPending || unblockMut.isPending}
-              className="w-full px-4 py-2 text-sm font-medium rounded-md btn-vn-primary
-                         disabled:opacity-50 cursor-pointer
-                         focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-              style={{
-                backgroundColor: isBlocked ? 'var(--vn-success)' : confirmBlock ? 'var(--vn-danger)' : 'var(--vn-warning)',
-              }}
+              className={`w-full btn disabled:opacity-50 ${isBlocked ? 'btn-primary' : confirmBlock ? 'btn-danger' : 'btn-secondary'}`}
             >
               {blockMut.isPending || unblockMut.isPending
                 ? 'Processing\u2026'
@@ -290,15 +263,13 @@ export default function AccountDetailPage() {
             {confirmBlock && !isBlocked && (
               <button
                 onClick={() => setConfirmBlock(false)}
-                className="w-full px-4 py-1.5 text-xs rounded-md cursor-pointer
-                           focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-                style={{ border: '1px solid var(--vn-border)', color: 'var(--vn-text-muted)' }}
+                className="btn btn-ghost btn-sm w-full"
               >
                 Cancel
               </button>
             )}
             {(blockMut.isError || unblockMut.isError) && (
-              <p className="text-xs" style={{ color: 'var(--vn-danger)' }} role="alert">
+              <p className="alert alert-danger text-xs" role="alert">
                 {((blockMut.error || unblockMut.error) as Error)?.message}
               </p>
             )}
@@ -308,13 +279,7 @@ export default function AccountDetailPage() {
             {/* Enrich */}
             <button
               onClick={() => setActiveStream(activeStream === 'enrich' ? null : 'enrich')}
-              className="w-full px-4 py-2 text-sm font-medium rounded-md cursor-pointer
-                         focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-              style={{
-                backgroundColor: activeStream === 'enrich' ? 'var(--vn-primary)' : 'var(--vn-surface-2)',
-                color: activeStream === 'enrich' ? 'var(--vn-on-primary)' : 'var(--vn-text)',
-                border: '1px solid var(--vn-border)',
-              }}
+              className={`w-full btn ${activeStream === 'enrich' ? 'btn-primary' : 'btn-secondary'}`}
             >
               Run Enrichment
             </button>
@@ -322,13 +287,7 @@ export default function AccountDetailPage() {
             {/* OSINT */}
             <button
               onClick={() => setActiveStream(activeStream === 'osint' ? null : 'osint')}
-              className="w-full px-4 py-2 text-sm font-medium rounded-md cursor-pointer
-                         focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-              style={{
-                backgroundColor: activeStream === 'osint' ? 'var(--vn-primary)' : 'var(--vn-surface-2)',
-                color: activeStream === 'osint' ? 'var(--vn-on-primary)' : 'var(--vn-text)',
-                border: '1px solid var(--vn-border)',
-              }}
+              className={`w-full btn ${activeStream === 'osint' ? 'btn-primary' : 'btn-secondary'}`}
             >
               Run OSINT
             </button>
@@ -336,13 +295,7 @@ export default function AccountDetailPage() {
             {/* Full Investigation */}
             <button
               onClick={() => setActiveStream(activeStream === 'investigate' ? null : 'investigate')}
-              className="w-full px-4 py-2 text-sm font-medium rounded-md cursor-pointer
-                         focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-              style={{
-                backgroundColor: activeStream === 'investigate' ? 'var(--vn-primary)' : 'var(--vn-surface-2)',
-                color: activeStream === 'investigate' ? 'var(--vn-on-primary)' : 'var(--vn-text)',
-                border: '1px solid var(--vn-border)',
-              }}
+              className={`w-full btn ${activeStream === 'investigate' ? 'btn-primary' : 'btn-secondary'}`}
             >
               Full Investigation
             </button>

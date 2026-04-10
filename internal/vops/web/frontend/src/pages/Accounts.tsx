@@ -46,22 +46,20 @@ function UFWSyncModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ backgroundColor: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(3px)' }}
+      className="modal-overlay"
       role="dialog"
       aria-modal="true"
       aria-label="UFW Sync"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div
-        className="w-full max-w-sm rounded-xl overflow-hidden"
-        style={{ backgroundColor: 'var(--vn-surface)', border: '1px solid var(--vn-border)', boxShadow: 'var(--vn-shadow-md)' }}
-      >
-        <div className="px-5 py-4" style={{ borderBottom: '1px solid var(--vn-border)' }}>
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--vn-text)' }}>Sync UFW Rules</h2>
-          <p className="text-xs mt-1" style={{ color: 'var(--vn-text-muted)' }}>
-            Synchronises blocked IPs from the database into UFW firewall rules.
-          </p>
+      <div className="modal">
+        <div className="modal-header">
+          <div>
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--vn-text)' }}>Sync UFW Rules</h2>
+            <p className="text-xs mt-1" style={{ color: 'var(--vn-text-muted)' }}>
+              Synchronises blocked IPs from the database into UFW firewall rules.
+            </p>
+          </div>
         </div>
         <div className="px-5 py-4 space-y-3">
           <label className="block">
@@ -75,33 +73,16 @@ function UFWSyncModal({
               onChange={(e) => setPass(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') onConfirm(pass); }}
               placeholder="password"
-              className="mt-1.5 w-full px-3 py-2 rounded-md text-sm outline-none
-                         focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-              style={{
-                backgroundColor: 'var(--vn-surface-2)',
-                border: '1px solid var(--vn-border)',
-                color: 'var(--vn-text)',
-              }}
+              className="vn-input mt-1.5"
             />
           </label>
         </div>
-        <div
-          className="flex justify-end gap-2 px-5 py-3"
-          style={{ borderTop: '1px solid var(--vn-border)' }}
-        >
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 text-sm rounded-md cursor-pointer"
-            style={{ border: '1px solid var(--vn-border)', color: 'var(--vn-text-muted)' }}
-          >
-            Cancel
-          </button>
+        <div className="modal-footer">
+          <button onClick={onClose} className="btn btn-secondary">Cancel</button>
           <button
             onClick={() => onConfirm(pass)}
             disabled={isPending}
-            className="px-4 py-1.5 text-sm font-medium rounded-md cursor-pointer
-                       disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-            style={{ backgroundColor: 'var(--vn-primary)', color: 'var(--vn-on-primary)' }}
+            className="btn btn-primary disabled:opacity-50"
           >
             {isPending ? 'Syncing\u2026' : 'Sync UFW'}
           </button>
@@ -237,10 +218,7 @@ export default function AccountsPage() {
           <button
             onClick={() => setShowUFWModal(true)}
             disabled={ufwMut.isPending}
-            className="px-3 py-1.5 text-xs font-medium rounded-md btn-vn-primary
-                       disabled:opacity-50 cursor-pointer
-                       focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-            style={{ backgroundColor: 'var(--vn-primary)' }}
+            className="btn btn-primary disabled:opacity-50"
           >
             {ufwMut.isPending ? 'Syncing\u2026' : 'Sync UFW'}
           </button>
@@ -248,20 +226,12 @@ export default function AccountsPage() {
       </div>
 
       {ufwMut.isSuccess && (
-        <div
-          className="p-2 rounded text-xs"
-          style={{ backgroundColor: 'color-mix(in srgb, var(--vn-success) 12%, transparent)', color: 'var(--vn-success)' }}
-          role="alert"
-        >
+        <div className="alert alert-success" role="alert">
           UFW sync complete.
         </div>
       )}
       {ufwMut.isError && (
-        <div
-          className="p-2 rounded text-xs"
-          style={{ backgroundColor: 'color-mix(in srgb, var(--vn-danger) 12%, transparent)', color: 'var(--vn-danger)' }}
-          role="alert"
-        >
+        <div className="alert alert-danger" role="alert">
           UFW sync failed: {(ufwMut.error as Error).message}
         </div>
       )}
@@ -276,13 +246,7 @@ export default function AccountsPage() {
             placeholder="Search IPs, orgs, ASNs\u2026"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            className="w-full px-3 py-2 rounded-md text-sm outline-none
-                       focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-            style={{
-              backgroundColor: 'var(--vn-surface)',
-              border: '1px solid var(--vn-border)',
-              color: 'var(--vn-text)',
-            }}
+            className="vn-input w-full"
           />
         </div>
         <div className="flex items-center gap-2">
@@ -293,13 +257,7 @@ export default function AccountsPage() {
             id="page-size"
             value={limit}
             onChange={(e) => handlePageSize(Number(e.target.value))}
-            className="px-2 py-1.5 rounded-md text-sm outline-none cursor-pointer
-                       focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-            style={{
-              backgroundColor: 'var(--vn-surface)',
-              border: '1px solid var(--vn-border)',
-              color: 'var(--vn-text)',
-            }}
+            className="vn-input cursor-pointer"
           >
             {PAGE_SIZES.map((s) => (
               <option key={s} value={s}>
@@ -314,13 +272,13 @@ export default function AccountsPage() {
       {isLoading ? (
         <Spinner label="Loading accounts" />
       ) : isError ? (
-        <div className="p-6 text-center rounded-lg" style={{ backgroundColor: 'var(--vn-surface)', border: '1px solid var(--vn-border)' }}>
-          <p style={{ color: 'var(--vn-danger)' }} role="alert">
+        <div className="card text-center">
+          <p className="alert alert-danger" role="alert">
             Failed to load accounts: {(error as Error).message}
           </p>
         </div>
       ) : displayedAccounts.length === 0 ? (
-        <div className="p-8 text-center rounded-lg" style={{ backgroundColor: 'var(--vn-surface)', border: '1px solid var(--vn-border)' }}>
+        <div className="card text-center">
           <p className="text-sm" style={{ color: 'var(--vn-text-muted)' }}>
             {search ? `No accounts matching "${search}".` : 'No IP accounts recorded yet. Ingest archives to populate data.'}
           </p>
@@ -328,7 +286,7 @@ export default function AccountsPage() {
       ) : (
         <>
           <div className="overflow-x-auto rounded-lg" style={{ border: '1px solid var(--vn-border)' }}>
-            <table className="w-full text-sm" style={{ backgroundColor: 'var(--vn-surface)' }}>
+            <table className="vn-table w-full text-sm">
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--vn-border)' }}>
                   <SortableHeader label="IP" column="IP" currentSort={sort} currentDir={dir} onClick={handleSort} />
@@ -422,9 +380,7 @@ export default function AccountsPage() {
                     })
                   }
                   disabled={page <= 1}
-                  className="px-3 py-1 rounded-md text-sm disabled:opacity-40 cursor-pointer
-                             focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-                  style={{ border: '1px solid var(--vn-border)', backgroundColor: 'var(--vn-surface)' }}
+                  className="btn btn-secondary btn-sm"
                   aria-label="Previous page"
                 >
                   &laquo; Prev
@@ -441,9 +397,7 @@ export default function AccountsPage() {
                     })
                   }
                   disabled={page >= totalPages}
-                  className="px-3 py-1 rounded-md text-sm disabled:opacity-40 cursor-pointer
-                             focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-                  style={{ border: '1px solid var(--vn-border)', backgroundColor: 'var(--vn-surface)' }}
+                  className="btn btn-secondary btn-sm"
                   aria-label="Next page"
                 >
                   Next &raquo;

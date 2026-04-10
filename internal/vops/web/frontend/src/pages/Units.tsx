@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   getUnits,
@@ -91,25 +91,25 @@ function AddUnitModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
   };
 
   const field = (label: string, k: keyof CosmosUnit, type = 'text', ph = '') => (
-    <div style={{ marginBottom: 12 }}>
-      <label style={{ display: 'block', fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>{label}</label>
+    <div className="mb-3">
+      <label className="block text-xs mb-1" style={{ color: 'var(--vn-text-muted)' }}>{label}</label>
       <input
         type={type}
         value={(form[k] as string | number) ?? ''}
         placeholder={ph}
         onChange={e => set(k, type === 'number' ? Number(e.target.value) : e.target.value)}
-        style={{ width: '100%', boxSizing: 'border-box', background: '#0f172a', border: '1px solid #374151', borderRadius: 6, color: '#f9fafb', padding: '6px 10px', fontSize: 13 }}
+        className="vn-input"
       />
     </div>
   );
 
   const select = (label: string, k: keyof CosmosUnit, opts: string[]) => (
-    <div style={{ marginBottom: 12 }}>
-      <label style={{ display: 'block', fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>{label}</label>
+    <div className="mb-3">
+      <label className="block text-xs mb-1" style={{ color: 'var(--vn-text-muted)' }}>{label}</label>
       <select
         value={(form[k] as string) ?? ''}
         onChange={e => set(k, e.target.value)}
-        style={{ width: '100%', boxSizing: 'border-box', background: '#0f172a', border: '1px solid #374151', borderRadius: 6, color: '#f9fafb', padding: '6px 10px', fontSize: 13 }}
+        className="vn-input"
       >
         {opts.map(o => <option key={o} value={o}>{o}</option>)}
       </select>
@@ -117,14 +117,14 @@ function AddUnitModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
   );
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-      <div style={{ background: '#111827', border: '1px solid #374151', borderRadius: 8, width: 620, maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '14px 18px', borderBottom: '1px solid #374151', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontWeight: 700, fontSize: 15 }}>Register Unit</span>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', fontSize: 18 }}>✕</button>
+    <div className="modal-overlay">
+      <div className="modal" style={{ width: 620, maxHeight: '90vh' }}>
+        <div className="modal-header">
+          <span className="font-semibold">Register Unit</span>
+          <button onClick={onClose} className="btn btn-ghost btn-sm">✕</button>
         </div>
         <div style={{ flex: 1, overflowY: 'auto', padding: 18 }}>
-          {err && <div style={{ background: 'color-mix(in srgb, var(--vn-danger) 15%, transparent)', color: 'var(--vn-danger)', padding: '8px 12px', borderRadius: 6, marginBottom: 12, fontSize: 13 }}>{err}</div>}
+          {err && <div className="alert alert-danger mb-3">{err}</div>}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
             {field('Name *', 'name', 'text', 'unique identifier')}
             {field('Chain Name', 'chain_name', 'text', 'e.g. cheqd')}
@@ -142,8 +142,8 @@ function AddUnitModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
             {field('API Port', 'api_port', 'number')}
             {field('P2P Port', 'p2p_port', 'number')}
           </div>
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#d1d5db', cursor: 'pointer' }}>
+          <div className="mb-3">
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
               <input
                 type="checkbox"
                 checked={form.cosmovisor_enabled ?? false}
@@ -152,19 +152,20 @@ function AddUnitModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
               Cosmovisor enabled
             </label>
           </div>
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ display: 'block', fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>Notes</label>
+          <div className="mb-3">
+            <label className="block text-xs mb-1" style={{ color: 'var(--vn-text-muted)' }}>Notes</label>
             <textarea
               value={form.notes ?? ''}
               onChange={e => set('notes', e.target.value)}
               rows={2}
-              style={{ width: '100%', boxSizing: 'border-box', background: '#0f172a', border: '1px solid #374151', borderRadius: 6, color: '#f9fafb', padding: '6px 10px', fontSize: 13, resize: 'vertical' }}
+              className="vn-input"
+              style={{ resize: 'vertical' }}
             />
           </div>
         </div>
-        <div style={{ padding: '12px 18px', borderTop: '1px solid #374151', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-          <button onClick={onClose} style={{ background: '#1f2937', color: '#d1d5db', border: '1px solid #374151', borderRadius: 6, padding: '7px 18px', cursor: 'pointer' }}>Cancel</button>
-          <button onClick={handleSubmit} disabled={saving} style={{ background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 18px', cursor: saving ? 'not-allowed' : 'pointer', fontWeight: 600 }}>
+        <div className="modal-footer">
+          <button onClick={onClose} className="btn btn-secondary">Cancel</button>
+          <button onClick={handleSubmit} disabled={saving} className="btn btn-primary">
             {saving ? 'Saving…' : 'Register'}
           </button>
         </div>
@@ -186,37 +187,37 @@ function StatusHistoryModal({ unit, onClose }: { unit: CosmosUnitWithStatus; onC
   }, [unit.name]);
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-      <div style={{ background: '#111827', border: '1px solid #374151', borderRadius: 8, width: '75%', maxWidth: 860, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '14px 18px', borderBottom: '1px solid #374151', display: 'flex', justifyContent: 'space-between' }}>
+    <div className="modal-overlay">
+      <div className="modal" style={{ width: '75%', maxWidth: 860, maxHeight: '80vh', display: 'flex', flexDirection: 'column', padding: 0 }}>
+        <div className="modal-header">
           <span style={{ fontWeight: 700 }}>Status History — {unit.name}</span>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', fontSize: 18 }}>✕</button>
+          <button onClick={onClose} className="btn btn-ghost btn-sm">✕</button>
         </div>
         <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
           {loading ? (
-            <p style={{ color: '#9ca3af' }}>Loading…</p>
+            <p style={{ color: 'var(--vn-text-muted)' }}>Loading…</p>
           ) : history.length === 0 ? (
-            <p style={{ color: '#6b7280' }}>No status history yet. Push status via the API or set up a poller.</p>
+            <p style={{ color: 'var(--vn-text-subtle)' }}>No status history yet. Push status via the API or set up a poller.</p>
           ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <table className="vn-table">
               <thead>
-                <tr style={{ color: '#9ca3af', borderBottom: '1px solid #374151' }}>
+                <tr>
                   {['Polled', 'Height', 'Peers', 'Voting Power', 'Gov Pending', 'Syncing', 'Active', 'Error'].map(h => (
-                    <th key={h} style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 600 }}>{h}</th>
+                    <th key={h}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {history.map(st => (
-                  <tr key={st.id} style={{ borderBottom: '1px solid #111' }}>
-                    <td style={{ padding: '6px 10px', color: '#9ca3af' }}>{timeAgo(st.polled_at)}</td>
-                    <td style={{ padding: '6px 10px', fontFamily: 'monospace' }}>{fmtHeight(st.block_height)}</td>
-                    <td style={{ padding: '6px 10px' }}>{st.peers}</td>
-                    <td style={{ padding: '6px 10px', fontFamily: 'monospace' }}>{fmtHeight(st.voting_power)}</td>
-                    <td style={{ padding: '6px 10px' }}>{st.gov_pending > 0 ? <span style={{ color: '#fbbf24' }}>{st.gov_pending}</span> : '—'}</td>
-                    <td style={{ padding: '6px 10px' }}>{st.syncing ? <span style={{ color: '#fbbf24' }}>⟳</span> : <span style={{ color: '#4ade80' }}>✓</span>}</td>
-                    <td style={{ padding: '6px 10px' }}>{st.service_active ? <span style={{ color: '#4ade80' }}>●</span> : <span style={{ color: 'var(--vn-danger)' }}>●</span>}</td>
-                    <td style={{ padding: '6px 10px', color: 'var(--vn-danger)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }}>{st.error || '—'}</td>
+                  <tr key={st.id}>
+                    <td style={{ color: '#9ca3af' }}>{timeAgo(st.polled_at)}</td>
+                    <td style={{ fontFamily: 'monospace' }}>{fmtHeight(st.block_height)}</td>
+                    <td>{st.peers}</td>
+                    <td style={{ fontFamily: 'monospace' }}>{fmtHeight(st.voting_power)}</td>
+                    <td>{st.gov_pending > 0 ? <span style={{ color: '#fbbf24' }}>{st.gov_pending}</span> : '—'}</td>
+                    <td>{st.syncing ? <span style={{ color: '#fbbf24' }}>⟳</span> : <span style={{ color: '#4ade80' }}>✓</span>}</td>
+                    <td>{st.service_active ? <span style={{ color: '#4ade80' }}>●</span> : <span style={{ color: 'var(--vn-danger)' }}>●</span>}</td>
+                    <td style={{ color: 'var(--vn-danger)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }}>{st.error || '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -257,27 +258,18 @@ function LogModal({ unit, onClose }: { unit: CosmosUnitWithStatus; onClose: () =
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [lines]);
 
-  const overlay: React.CSSProperties = {
-    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999,
-  };
-  const modal: React.CSSProperties = {
-    background: '#0f172a', border: '1px solid #1f2937',
-    borderRadius: 8, padding: '1.25rem', width: '720px', maxWidth: '95vw',
-    display: 'flex', flexDirection: 'column', maxHeight: '80vh',
-  };
   return (
-    <div style={overlay} onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={modal}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-          <strong style={{ color: '#e2e8f0' }}>📋 Logs — {unit.name}</strong>
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ width: '720px', maxWidth: '95vw', display: 'flex', flexDirection: 'column', maxHeight: '80vh', padding: 0 }}>
+        <div className="modal-header">
+          <strong>📋 Logs — {unit.name}</strong>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {connected && <span style={{ color: '#4ade80', fontSize: 12 }}>● live</span>}
+            {connected && <span style={{ color: 'var(--vn-success)', fontSize: 12 }}>● live</span>}
             {error && <span style={{ color: 'var(--vn-danger)', fontSize: 12 }}>{error}</span>}
-            <button style={{ background: '#1f2937', color: '#9ca3af', border: '1px solid #374151', borderRadius: 5, padding: '3px 8px', cursor: 'pointer', fontSize: 12 }} onClick={onClose}>✕</button>
+            <button className="btn btn-ghost btn-sm" onClick={onClose}>✕</button>
           </div>
         </div>
-        <div style={{ flex: 1, overflowY: 'auto', fontFamily: 'monospace', fontSize: '0.72rem', background: '#020617', borderRadius: 4, padding: '0.5rem', lineHeight: 1.5, color: '#94a3b8' }}>
+        <div className="log-panel" style={{ flex: 1 }}>
           {lines.map((l, i) => <div key={i}>{l}</div>)}
           <div ref={bottomRef} />
         </div>
@@ -317,48 +309,36 @@ function DeployModal({ unit, onClose }: { unit: CosmosUnitWithStatus; onClose: (
     es.onerror = () => { setRunning(false); es.close(); setLines(prev => [...prev, '[error] Connection lost']); };
   }
 
-  const overlay: React.CSSProperties = {
-    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999,
-  };
-  const modal: React.CSSProperties = {
-    background: '#0f172a', border: '1px solid #1f2937',
-    borderRadius: 8, padding: '1.25rem', width: '620px', maxWidth: '95vw',
-    display: 'flex', flexDirection: 'column',
-  };
-  const inp: React.CSSProperties = {
-    padding: '0.35rem 0.5rem', background: '#1e293b', border: '1px solid #334155',
-    borderRadius: 4, color: '#e2e8f0', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box',
-  };
-
   return (
-    <div style={overlay} onClick={e => e.target === e.currentTarget && !running && onClose()}>
-      <div style={modal}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-          <strong style={{ color: '#e2e8f0' }}>🚀 Deploy cosmovisor — {unit.name}</strong>
-          <button style={{ background: '#1f2937', color: '#9ca3af', border: '1px solid #374151', borderRadius: 5, padding: '3px 8px', cursor: 'pointer', fontSize: 12 }} onClick={onClose} disabled={running}>✕</button>
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && !running && onClose()}>
+      <div className="modal" style={{ width: '620px', maxWidth: '95vw' }}>
+        <div className="modal-header">
+          <strong>🚀 Deploy cosmovisor — {unit.name}</strong>
+          <button className="btn btn-ghost btn-sm" onClick={onClose} disabled={running}>✕</button>
         </div>
-        {!running && !done && (
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={{ fontSize: '0.8rem', color: '#94a3b8', display: 'block', marginBottom: '0.25rem' }}>Sudo password (leave blank if NOPASSWD)</label>
-            <input type="password" style={inp} value={sudoPwd} onChange={e => setSudoPwd(e.target.value)} placeholder="optional" />
-            <p style={{ fontSize: '0.75rem', color: '#64748b', margin: '0.5rem 0 0' }}>
-              This will install cosmovisor (if missing), create directory structure, and write a systemd service on <strong style={{ color: '#94a3b8' }}>{unit.vm_name}</strong>.
-            </p>
-            <button onClick={startDeploy} style={{ marginTop: '0.75rem', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 5, padding: '0.35rem 1rem', cursor: 'pointer', fontSize: '0.85rem' }}>
-              Start Deploy
-            </button>
-          </div>
-        )}
-        {lines.length > 0 && (
-          <div style={{ maxHeight: '40vh', overflowY: 'auto', fontFamily: 'monospace', fontSize: '0.72rem', background: '#020617', borderRadius: 4, padding: '0.5rem', lineHeight: 1.6, color: '#94a3b8' }}>
-            {lines.map((l, i) => (
-              <div key={i} style={{ color: l.includes('[error]') ? '#f87171' : l.includes('[complete]') ? '#4ade80' : '#94a3b8' }}>{l}</div>
-            ))}
-            <div ref={bottomRef} />
-          </div>
-        )}
-        {done && <button onClick={onClose} style={{ marginTop: '0.75rem', alignSelf: 'flex-end', background: '#1f2937', color: '#9ca3af', border: '1px solid #374151', borderRadius: 5, padding: '0.3rem 0.75rem', cursor: 'pointer', fontSize: '0.85rem' }}>Close</button>}
+        <div className="p-4">
+          {!running && !done && (
+            <div className="space-y-2">
+              <label className="block text-xs" style={{ color: 'var(--vn-text-muted)' }}>Sudo password (leave blank if NOPASSWD)</label>
+              <input type="password" className="vn-input" value={sudoPwd} onChange={e => setSudoPwd(e.target.value)} placeholder="optional" />
+              <p className="text-xs" style={{ color: 'var(--vn-text-subtle)' }}>
+                This will install cosmovisor (if missing), create directory structure, and write a systemd service on <strong style={{ color: 'var(--vn-text-muted)' }}>{unit.vm_name}</strong>.
+              </p>
+              <button onClick={startDeploy} className="btn btn-primary mt-3">
+                Start Deploy
+              </button>
+            </div>
+          )}
+          {lines.length > 0 && (
+            <div className="log-panel mt-3">
+              {lines.map((l, i) => (
+                <div key={i} style={{ color: l.includes('[error]') ? '#f87171' : l.includes('[complete]') ? '#4ade80' : '#94a3b8' }}>{l}</div>
+              ))}
+              <div ref={bottomRef} />
+            </div>
+          )}
+          {done && <button onClick={onClose} className="btn btn-secondary mt-3">Close</button>}
+        </div>
       </div>
     </div>
   );
@@ -403,66 +383,63 @@ function EditUnitModal({ unit, onClose, onSaved }: { unit: CosmosUnitWithStatus;
     }
   };
 
-  const inp: React.CSSProperties = {
-    padding: '0.4rem 0.6rem', borderRadius: 6, border: '1px solid #374151',
-    background: '#111827', color: '#e5e7eb', fontSize: '0.85rem', width: '100%',
-  };
-  const fld: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: 4, marginBottom: '0.75rem' };
-  const lbl: React.CSSProperties = { fontSize: '0.78rem', color: '#9ca3af' };
+  const fldCls = 'flex flex-col gap-1 mb-3';
+  const lblStyle = { fontSize: '0.78rem', color: 'var(--vn-text-muted)' };
 
   return (
     <div
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      className="modal-overlay"
       onClick={onClose}
     >
       <div
-        style={{ background: '#1f2937', borderRadius: 10, padding: '1.5rem', width: 480, maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}
+        className="modal"
+        style={{ width: 480, maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto' }}
         onClick={e => e.stopPropagation()}
       >
-        <h3 style={{ margin: '0 0 1.25rem', fontSize: '1rem', color: '#f9fafb' }}>✏ Edit Unit — {unit.name}</h3>
+        <h3 style={{ margin: '0 0 1.25rem', fontSize: '1rem' }}>✏ Edit Unit — {unit.name}</h3>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 1rem' }}>
-          <div style={fld}><label style={lbl}>Chain Name</label><input style={inp} value={form.chain_name ?? ''} onChange={e => set('chain_name', e.target.value)} /></div>
-          <div style={fld}><label style={lbl}>Chain ID</label><input style={inp} value={form.chain_id ?? ''} onChange={e => set('chain_id', e.target.value)} /></div>
-          <div style={fld}><label style={lbl}>VM Name</label><input style={inp} value={form.vm_name ?? ''} onChange={e => set('vm_name', e.target.value)} /></div>
-          <div style={fld}><label style={lbl}>Datacenter</label><input style={inp} value={form.datacenter ?? ''} onChange={e => set('datacenter', e.target.value)} /></div>
-          <div style={fld}>
-            <label style={lbl}>Node Type</label>
-            <select style={inp} value={form.node_type ?? 'node'} onChange={e => set('node_type', e.target.value as NodeType)}>
+          <div className={fldCls}><label style={lblStyle}>Chain Name</label><input className="vn-input" value={form.chain_name ?? ''} onChange={e => set('chain_name', e.target.value)} /></div>
+          <div className={fldCls}><label style={lblStyle}>Chain ID</label><input className="vn-input" value={form.chain_id ?? ''} onChange={e => set('chain_id', e.target.value)} /></div>
+          <div className={fldCls}><label style={lblStyle}>VM Name</label><input className="vn-input" value={form.vm_name ?? ''} onChange={e => set('vm_name', e.target.value)} /></div>
+          <div className={fldCls}><label style={lblStyle}>Datacenter</label><input className="vn-input" value={form.datacenter ?? ''} onChange={e => set('datacenter', e.target.value)} /></div>
+          <div className={fldCls}>
+            <label style={lblStyle}>Node Type</label>
+            <select className="vn-input" value={form.node_type ?? 'node'} onChange={e => set('node_type', e.target.value as NodeType)}>
               {(['validator', 'node', 'relayer', 'other'] as NodeType[]).map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
-          <div style={fld}>
-            <label style={lbl}>Network Type</label>
-            <select style={inp} value={form.network_type ?? 'mainnet'} onChange={e => set('network_type', e.target.value as NetworkType)}>
+          <div className={fldCls}>
+            <label style={lblStyle}>Network Type</label>
+            <select className="vn-input" value={form.network_type ?? 'mainnet'} onChange={e => set('network_type', e.target.value as NetworkType)}>
               {(['mainnet', 'testnet', 'devnet'] as NetworkType[]).map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
-          <div style={fld}><label style={lbl}>Binary Path</label><input style={inp} value={form.binary_path ?? ''} onChange={e => set('binary_path', e.target.value)} placeholder="/usr/local/bin/cosmosd" /></div>
-          <div style={fld}><label style={lbl}>Cosmovisor Path</label><input style={inp} value={form.cosmovisor_path ?? ''} onChange={e => set('cosmovisor_path', e.target.value)} placeholder="/home/cosmos/.cosmovisor" /></div>
-          <div style={fld}><label style={lbl}>Config Dir</label><input style={inp} value={form.config_dir ?? ''} onChange={e => set('config_dir', e.target.value)} placeholder="/home/cosmos/.chain" /></div>
-          <div style={fld}><label style={lbl}>Valoper</label><input style={inp} value={form.valoper ?? ''} onChange={e => set('valoper', e.target.value)} /></div>
-          <div style={fld}><label style={lbl}>RPC Port</label><input style={inp} type="number" value={form.rpc_port ?? 26657} onChange={e => set('rpc_port', Number(e.target.value))} /></div>
-          <div style={fld}><label style={lbl}>API Port</label><input style={inp} type="number" value={form.api_port ?? 1317} onChange={e => set('api_port', Number(e.target.value))} /></div>
-          <div style={fld}><label style={lbl}>P2P Port</label><input style={inp} type="number" value={form.p2p_port ?? 26656} onChange={e => set('p2p_port', Number(e.target.value))} /></div>
-          <div style={{ ...fld, gridColumn: '1 / -1' }}>
-            <label style={lbl}>Cosmovisor Enabled</label>
+          <div className={fldCls}><label style={lblStyle}>Binary Path</label><input className="vn-input" value={form.binary_path ?? ''} onChange={e => set('binary_path', e.target.value)} placeholder="/usr/local/bin/cosmosd" /></div>
+          <div className={fldCls}><label style={lblStyle}>Cosmovisor Path</label><input className="vn-input" value={form.cosmovisor_path ?? ''} onChange={e => set('cosmovisor_path', e.target.value)} placeholder="/home/cosmos/.cosmovisor" /></div>
+          <div className={fldCls}><label style={lblStyle}>Config Dir</label><input className="vn-input" value={form.config_dir ?? ''} onChange={e => set('config_dir', e.target.value)} placeholder="/home/cosmos/.chain" /></div>
+          <div className={fldCls}><label style={lblStyle}>Valoper</label><input className="vn-input" value={form.valoper ?? ''} onChange={e => set('valoper', e.target.value)} /></div>
+          <div className={fldCls}><label style={lblStyle}>RPC Port</label><input className="vn-input" type="number" value={form.rpc_port ?? 26657} onChange={e => set('rpc_port', Number(e.target.value))} /></div>
+          <div className={fldCls}><label style={lblStyle}>API Port</label><input className="vn-input" type="number" value={form.api_port ?? 1317} onChange={e => set('api_port', Number(e.target.value))} /></div>
+          <div className={fldCls}><label style={lblStyle}>P2P Port</label><input className="vn-input" type="number" value={form.p2p_port ?? 26656} onChange={e => set('p2p_port', Number(e.target.value))} /></div>
+          <div style={{ gridColumn: '1 / -1' }} className={fldCls}>
+            <label style={lblStyle}>Cosmovisor Enabled</label>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
               <input type="checkbox" checked={form.cosmovisor_enabled ?? false} onChange={e => set('cosmovisor_enabled', e.target.checked)} />
-              <span style={{ fontSize: '0.85rem', color: '#e5e7eb' }}>Enable cosmovisor for upgrades</span>
+              <span style={{ fontSize: '0.85rem' }}>Enable cosmovisor for upgrades</span>
             </label>
           </div>
-          <div style={{ ...fld, gridColumn: '1 / -1' }}>
-            <label style={lbl}>Notes</label>
-            <textarea style={{ ...inp, minHeight: 60, resize: 'vertical' }} value={form.notes ?? ''} onChange={e => set('notes', e.target.value)} />
+          <div style={{ gridColumn: '1 / -1' }} className={fldCls}>
+            <label style={lblStyle}>Notes</label>
+            <textarea className="vn-input" style={{ minHeight: 60, resize: 'vertical' }} value={form.notes ?? ''} onChange={e => set('notes', e.target.value)} />
           </div>
         </div>
 
-        {err && <p style={{ color: 'var(--vn-danger)', fontSize: '0.82rem', margin: '0.5rem 0' }}>{err}</p>}
+        {err && <p className="alert alert-danger" style={{ margin: '0.5rem 0' }}>{err}</p>}
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: '1rem' }}>
-          <button onClick={onClose} style={{ padding: '0.4rem 1rem', fontSize: '0.85rem', borderRadius: 6, border: '1px solid #374151', background: '#111827', color: '#9ca3af', cursor: 'pointer' }}>Cancel</button>
-          <button onClick={save} disabled={saving} style={{ padding: '0.4rem 1rem', fontSize: '0.85rem', borderRadius: 6, border: 'none', background: '#3b82f6', color: '#fff', cursor: 'pointer', fontWeight: 600 }}>
+        <div className="modal-footer">
+          <button onClick={onClose} className="btn btn-secondary">Cancel</button>
+          <button onClick={save} disabled={saving} className="btn btn-primary">
             {saving ? 'Saving…' : 'Save Changes'}
           </button>
         </div>
@@ -547,41 +524,11 @@ function UnitCard({
           <span style={{ fontSize: 12, color: STATE_COLORS[unit.state] ?? '#9ca3af', fontWeight: 600 }}>
             {unit.state}
           </span>
-          <button
-            onClick={() => onHistory(unit)}
-            title="Status history"
-            style={{ background: '#1f2937', color: '#9ca3af', border: '1px solid #374151', borderRadius: 5, padding: '3px 8px', cursor: 'pointer', fontSize: 12 }}
-          >
-            📊
-          </button>
-          <button
-            onClick={() => onLogs(unit)}
-            title="Stream logs"
-            style={{ background: '#1f2937', color: '#60a5fa', border: '1px solid #374151', borderRadius: 5, padding: '3px 8px', cursor: 'pointer', fontSize: 12 }}
-          >
-            📋
-          </button>
-          <button
-            onClick={() => onDeploy(unit)}
-            title="Deploy cosmovisor"
-            style={{ background: '#1f2937', color: '#4ade80', border: '1px solid #374151', borderRadius: 5, padding: '3px 8px', cursor: 'pointer', fontSize: 12 }}
-          >
-            🚀
-          </button>
-          <button
-            onClick={() => onEdit(unit)}
-            title="Edit unit"
-            style={{ background: '#1f2937', color: '#fbbf24', border: '1px solid #374151', borderRadius: 5, padding: '3px 8px', cursor: 'pointer', fontSize: 12 }}
-          >
-            ✏
-          </button>
-          <button
-            onClick={() => onDelete(unit.name)}
-            title="Delete unit"
-            style={{ background: '#1f2937', color: 'var(--vn-danger)', border: '1px solid #374151', borderRadius: 5, padding: '3px 8px', cursor: 'pointer', fontSize: 12 }}
-          >
-            🗑
-          </button>
+          <button onClick={() => onHistory(unit)} title="Status history" className="btn btn-secondary btn-sm">📊</button>
+          <button onClick={() => onLogs(unit)} title="Stream logs" className="btn btn-secondary btn-sm" style={{ color: '#60a5fa' }}>📋</button>
+          <button onClick={() => onDeploy(unit)} title="Deploy cosmovisor" className="btn btn-secondary btn-sm" style={{ color: '#4ade80' }}>🚀</button>
+          <button onClick={() => onEdit(unit)} title="Edit unit" className="btn btn-secondary btn-sm" style={{ color: '#fbbf24' }}>✏</button>
+          <button onClick={() => onDelete(unit.name)} title="Delete unit" className="btn btn-danger btn-sm">🗑</button>
         </div>
       </div>
 
@@ -692,17 +639,10 @@ export default function UnitsPage() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20, flexWrap: 'wrap' }}>
         <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>⚛ Units</h1>
-        <button
-          onClick={() => setShowAdd(true)}
-          style={{ background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 16px', cursor: 'pointer', fontWeight: 600 }}
-        >
+        <button onClick={() => setShowAdd(true)} className="btn btn-primary">
           + Register Unit
         </button>
-        <button
-          onClick={load}
-          disabled={loading}
-          style={{ background: '#1f2937', color: '#e5e7eb', border: '1px solid #374151', borderRadius: 6, padding: '6px 14px', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1 }}
-        >
+        <button onClick={load} disabled={loading} className="btn btn-secondary">
           {loading ? '⟳ Loading…' : '⟳ Refresh'}
         </button>
       </div>
@@ -716,9 +656,9 @@ export default function UnitsPage() {
           { label: 'Gov Proposals', value: totalGov, color: totalGov > 0 ? '#fb923c' : '#4ade80' },
           { label: 'Chains', value: Object.keys(grouped).length, color: '#c084fc' },
         ].map(({ label, value, color }) => (
-          <div key={label} style={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 8, padding: '10px 18px', minWidth: 110 }}>
+          <div key={label} className="card card-sm" style={{ minWidth: 110 }}>
             <div style={{ fontSize: 22, fontWeight: 800, color }}>{value}</div>
-            <div style={{ fontSize: 12, color: '#9ca3af' }}>{label}</div>
+            <div style={{ fontSize: 12, color: 'var(--vn-text-muted)' }}>{label}</div>
           </div>
         ))}
       </div>
@@ -730,12 +670,13 @@ export default function UnitsPage() {
           placeholder="Search units, chains, VMs…"
           value={filter}
           onChange={e => setFilter(e.target.value)}
-          style={{ flex: 1, minWidth: 200, background: '#1f2937', border: '1px solid #374151', borderRadius: 6, color: '#f9fafb', padding: '6px 12px', fontSize: 13 }}
+          className="vn-input"
+          style={{ flex: 1, minWidth: 200 }}
         />
         <select
           value={filterType}
           onChange={e => setFilterType(e.target.value as NodeType | 'all')}
-          style={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 6, color: '#f9fafb', padding: '6px 10px', fontSize: 13 }}
+          className="vn-input"
         >
           <option value="all">All types</option>
           {NODE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
@@ -743,7 +684,7 @@ export default function UnitsPage() {
         <select
           value={filterNet}
           onChange={e => setFilterNet(e.target.value as NetworkType | 'all')}
-          style={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 6, color: '#f9fafb', padding: '6px 10px', fontSize: 13 }}
+          className="vn-input"
         >
           <option value="all">All networks</option>
           {NETWORK_TYPES.map(n => <option key={n} value={n}>{n}</option>)}
@@ -752,28 +693,25 @@ export default function UnitsPage() {
 
       {/* Content */}
       {units.length === 0 && !loading ? (
-        <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 8, padding: 40, textAlign: 'center' }}>
+        <div className="card" style={{ padding: 40, textAlign: 'center' }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>⚛</div>
           <div style={{ fontWeight: 700, marginBottom: 8 }}>No units registered</div>
-          <div style={{ color: '#6b7280', marginBottom: 20, fontSize: 14 }}>
+          <div style={{ color: 'var(--vn-text-subtle)', marginBottom: 20, fontSize: 14 }}>
             Register your Cosmos validators, nodes, relayers, and API endpoints.
           </div>
-          <button
-            onClick={() => setShowAdd(true)}
-            style={{ background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 20px', cursor: 'pointer', fontWeight: 600 }}
-          >
+          <button onClick={() => setShowAdd(true)} className="btn btn-primary">
             + Register First Unit
           </button>
         </div>
       ) : filtered.length === 0 ? (
-        <div style={{ color: '#6b7280', padding: '20px 0', textAlign: 'center' }}>No units match the current filters.</div>
+        <div style={{ color: 'var(--vn-text-subtle)', padding: '20px 0', textAlign: 'center' }}>No units match the current filters.</div>
       ) : (
         Object.entries(grouped).map(([chain, chainUnits]) => (
           <div key={chain} style={{ marginBottom: 24 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
               <span style={{ fontWeight: 700, fontSize: 14, color: '#c084fc' }}>⛓ {chain}</span>
-              <span style={{ fontSize: 12, color: '#6b7280' }}>{chainUnits.length} unit{chainUnits.length !== 1 ? 's' : ''}</span>
-              <div style={{ flex: 1, height: 1, background: '#1f2937' }} />
+              <span style={{ fontSize: 12, color: 'var(--vn-text-subtle)' }}>{chainUnits.length} unit{chainUnits.length !== 1 ? 's' : ''}</span>
+              <div style={{ flex: 1, height: 1, background: 'var(--vn-border)' }} />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {chainUnits.map(u => (
