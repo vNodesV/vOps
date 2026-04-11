@@ -44,7 +44,7 @@ var webFS embed.FS
 // releaseVersion is the vOps major release label shown in the UI (e.g. login page).
 // Increment this with make bump-major; the build number (cmd/vops/VERSION) tracks
 // incremental patch delivery within a release.
-const releaseVersion = "1.0.0"
+const releaseVersion = "1.1.0"
 
 // Server is the vOps HTTP server. It owns the ServeMux and references
 // to the database and enrichment subsystems.
@@ -646,7 +646,7 @@ func securityHeaders(next http.Handler) http.Handler {
 				" script-src 'self';"+
 				" style-src 'self' 'unsafe-inline';"+
 				" img-src 'self' data:;"+
-				" connect-src 'self';"+
+				" connect-src 'self' https://cosmos.directory;"+
 				" font-src 'self';")
 		next.ServeHTTP(w, r)
 	})

@@ -212,7 +212,7 @@ function StateBadge({ state }: { state: string }) {
 }
 
 function fmtMem(kib: number) {
-  if (kib === 0) return '\u2014';
+  if (kib === 0) return '—';
   const gib = kib / 1024 / 1024;
   if (gib >= 1) return `${gib.toFixed(1)} GiB`;
   return `${(kib / 1024).toFixed(0)} MiB`;
@@ -299,7 +299,7 @@ function SnapshotPanel({ host, domain }: { host: string; domain: string }) {
           onKeyDown={e => e.key === 'Enter' && doCreate()}
         />
         <button className="btn btn-primary btn-sm" onClick={doCreate} disabled={busy === 'create' || !newSnapName.trim()} type="button">
-          {busy === 'create' ? '\u2026' : '+ Create'}
+          {busy === 'create' ? '…' : '+ Create'}
         </button>
       </div>
 
@@ -321,16 +321,16 @@ function SnapshotPanel({ host, domain }: { host: string; domain: string }) {
                   {confirmDelete === s.name ? (
                     <span style={{ display: 'inline-flex', gap: '0.3rem' }}>
                       <button className="btn btn-danger btn-sm" onClick={() => doDelete(s.name)} disabled={busy === `delete-${s.name}`} type="button">
-                        {busy === `delete-${s.name}` ? '\u2026' : 'Confirm Delete'}
+                        {busy === `delete-${s.name}` ? '…' : 'Confirm Delete'}
                       </button>
                       <button className="btn btn-secondary btn-sm" onClick={() => setConfirmDelete(null)} type="button">Cancel</button>
                     </span>
                   ) : (
                     <span style={{ display: 'inline-flex', gap: '0.3rem' }}>
                       <button className="btn btn-secondary btn-sm" onClick={() => doRevert(s.name)} disabled={!!busy} type="button">
-                        {busy === `revert-${s.name}` ? '\u2026' : 'Revert'}
+                        {busy === `revert-${s.name}` ? '…' : 'Revert'}
                       </button>
-                      <button className="btn btn-ghost btn-sm" style={{ color: 'var(--vn-danger)' }} onClick={() => setConfirmDelete(s.name)} type="button">\u2715</button>
+                      <button className="btn btn-ghost btn-sm" style={{ color: 'var(--vn-danger)' }} onClick={() => setConfirmDelete(s.name)} type="button">✕</button>
                     </span>
                   )}
                 </td>
@@ -387,40 +387,40 @@ function DomainCard({ host, domain }: { host: string; domain: LibvirtDomain }) {
       </div>
 
       <div style={{ display: 'flex', gap: '1rem', fontSize: '0.75rem', color: 'var(--vn-text-muted)', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
-        <span><span style={{ color: 'var(--vn-text-subtle)' }}>vCPU </span>{domain.cpus || '\u2014'}</span>
+        <span><span style={{ color: 'var(--vn-text-subtle)' }}>vCPU </span>{domain.cpus || '—'}</span>
         <span><span style={{ color: 'var(--vn-text-subtle)' }}>Max </span>{fmtMem(domain.max_mem_kib)}</span>
         <span><span style={{ color: 'var(--vn-text-subtle)' }}>Used </span>{fmtMem(domain.used_mem_kib)}</span>
-        {domain.autostart && <span style={{ color: 'var(--vn-success)' }}>\u27f3 autostart</span>}
+        {domain.autostart && <span style={{ color: 'var(--vn-success)' }}>⟳ autostart</span>}
       </div>
 
       <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
         {!isRunning && !isPaused && (
           <button className="btn btn-primary btn-sm" onClick={() => doAction('start')} disabled={!!actionBusy} type="button">
-            {actionBusy === 'start' ? '\u2026' : '\u25b6 Start'}
+            {actionBusy === 'start' ? '…' : '▶ Start'}
           </button>
         )}
         {isRunning && (
           <>
             <button className="btn btn-secondary btn-sm" onClick={() => doAction('shutdown')} disabled={!!actionBusy} type="button">
-              {actionBusy === 'shutdown' ? '\u2026' : '\u23f9 Shutdown'}
+              {actionBusy === 'shutdown' ? '…' : '⏹ Shutdown'}
             </button>
             <button className="btn btn-secondary btn-sm" onClick={() => doAction('reboot')} disabled={!!actionBusy} type="button">
-              {actionBusy === 'reboot' ? '\u2026' : '\u21ba Reboot'}
+              {actionBusy === 'reboot' ? '…' : '↺ Reboot'}
             </button>
             <button className="btn btn-secondary btn-sm" onClick={() => doAction('suspend')} disabled={!!actionBusy} type="button">
-              {actionBusy === 'suspend' ? '\u2026' : '\u23f8 Suspend'}
+              {actionBusy === 'suspend' ? '…' : '⏸ Suspend'}
             </button>
           </>
         )}
         {isPaused && (
           <button className="btn btn-primary btn-sm" onClick={() => doAction('resume')} disabled={!!actionBusy} type="button">
-            {actionBusy === 'resume' ? '\u2026' : '\u25b6 Resume'}
+            {actionBusy === 'resume' ? '…' : '▶ Resume'}
           </button>
         )}
         {(isRunning || isPaused) && (
           <button className="btn btn-danger btn-sm" onClick={() => doAction('destroy')} disabled={!!actionBusy} type="button"
             title="Force power-off (may corrupt disk)">
-            {actionBusy === 'destroy' ? '\u2026' : '\u26a1 Force Off'}
+            {actionBusy === 'destroy' ? '…' : '⚡ Force Off'}
           </button>
         )}
         <button
@@ -463,11 +463,11 @@ function HostPanel({ host, search }: { host: HypervisorHost; search?: string }) 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>
-            \ud83d\udda5 {host.name}
+            🖥 {host.name}
           </h2>
           <div style={{ fontSize: '0.72rem', color: 'var(--vn-text-subtle)', marginTop: '0.15rem' }}>
-            {host.lan_ip && <><code>{host.lan_ip}</code> \u00b7 </>}
-            {host.datacenter && <>{host.datacenter} \u00b7 </>}
+            {host.lan_ip && <><code>{host.lan_ip}</code> · </>}
+            {host.datacenter && <>{host.datacenter} · </>}
             {!isLoading && !isError && <>{running}/{total} running</>}
           </div>
         </div>
@@ -478,21 +478,21 @@ function HostPanel({ host, search }: { host: HypervisorHost; search?: string }) 
           type="button"
           title="Refresh domain list"
         >
-          {isFetching ? '\u2026' : '\u27f3 Refresh'}
+          {isFetching ? '…' : '⟳ Refresh'}
         </button>
       </div>
 
       {isLoading ? <Spinner /> : isError ? (
         <p style={{ color: 'var(--vn-danger)', fontSize: '0.875rem' }}>
-          SSH connection failed \u2014 check fleet config and SSH key for this host.
+          SSH connection failed — check fleet config and SSH key for this host.
         </p>
       ) : domains.length === 0 && search ? (
-        <p style={{ color: 'var(--vn-text-muted)', fontSize: '0.875rem' }}>No VMs match \u201c{search}\u201d.</p>
+        <p style={{ color: 'var(--vn-text-muted)', fontSize: '0.875rem' }}>No VMs match "{search}".</p>
       ) : domains.length === 0 ? (
         <div style={{ color: 'var(--vn-text-muted)', fontSize: '0.875rem' }}>
           <p style={{ margin: '0 0 0.5rem' }}>No VMs found on this hypervisor.</p>
           <p style={{ margin: 0, fontSize: '0.8rem' }}>
-            This can mean: (a) no VMs are defined yet \u2014 use <strong>+ Create VM</strong> to deploy one,
+            This can mean: (a) no VMs are defined yet — use <strong>+ Create VM</strong> to deploy one,
             or (b) the SSH connection to libvirtd failed. Verify with:{' '}
             <code style={{ background: 'var(--vn-surface-2)', padding: '0.1rem 0.3rem', borderRadius: 3 }}>ssh user@host virsh list --all</code>
           </p>
@@ -572,13 +572,13 @@ function CreateVMModal({ hosts, onClose }: { hosts: HypervisorHost[]; onClose: (
       <div style={modal}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
           <strong style={{ fontSize: '1rem' }}>Create / Clone VM</strong>
-          <button className="btn btn-secondary btn-sm" onClick={onClose}>\u2715</button>
+          <button className="btn btn-secondary btn-sm" onClick={onClose}>✕</button>
         </div>
 
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
           {(['clone', 'create'] as const).map(m => (
             <button key={m} className={`btn btn-sm ${mode === m ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => setMode(m)}>{m === 'clone' ? '\ud83d\udccb Clone' : '\u2795 Create'}</button>
+              onClick={() => setMode(m)}>{m === 'clone' ? '📋 Clone' : '➕ Create'}</button>
           ))}
         </div>
 
@@ -643,7 +643,7 @@ function CreateVMModal({ hosts, onClose }: { hosts: HypervisorHost[]; onClose: (
           )}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '1rem' }}>
             <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>Cancel</button>
-            <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>{busy ? '\u2026' : mode === 'clone' ? 'Clone VM' : 'Create VM'}</button>
+            <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>{busy ? '…' : mode === 'clone' ? 'Clone VM' : 'Create VM'}</button>
           </div>
         </form>
       </div>
@@ -672,7 +672,7 @@ function VMsTabContent() {
         <div>
           <h1 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700 }}>VM Manager</h1>
           <p style={{ margin: '0.25rem 0 0', fontSize: '0.8rem', color: 'var(--vn-text-subtle)' }}>
-            Manage libvirt/KVM domains on hypervisor hosts via SSH \u2014 virsh commands, snapshots, lifecycle actions.
+            Manage libvirt/KVM domains on hypervisor hosts via SSH — virsh commands, snapshots, lifecycle actions.
           </p>
         </div>
         {hosts.length > 0 && (
@@ -699,7 +699,7 @@ function VMsTabContent() {
             type="search"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search VM name\u2026"
+            placeholder="Search VM name…"
             style={{
               padding: '0.35rem 0.6rem', fontSize: '0.8rem', borderRadius: 'var(--vn-radius)',
               border: '1px solid var(--vn-border)', background: 'var(--vn-surface-2)',
@@ -716,7 +716,7 @@ function VMsTabContent() {
                 color: 'var(--vn-text-muted)', cursor: 'pointer',
               }}
             >
-              \u2715 Clear
+              ✕ Clear
             </button>
           )}
         </div>
@@ -749,9 +749,9 @@ datacenter = "QC"`}</pre>
   );
 }
 
-/* \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+/* ═══════════════════════════════════════════════════════════════
    Chains Tab Components
-   \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550 */
+   ═══════════════════════════════════════════════════════════════ */
 
 function fmtBlockSpeed(sec?: number): string {
   if (!sec || sec <= 0) return '—';
@@ -1034,9 +1034,9 @@ function EditChainModal({
   );
 }
 
-/* \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+/* ═══════════════════════════════════════════════════════════════
    Services Components
-   \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550 */
+   ═══════════════════════════════════════════════════════════════ */
 
 function ETABadge({ svcId }: { svcId: number }) {
   const [eta, setEta] = useState<ServiceETA | null>(null);
@@ -1532,9 +1532,9 @@ function ServicesInlineContent() {
   );
 }
 
-/* \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+/* ═══════════════════════════════════════════════════════════════
    Chains Tab Content (merged Chains + Services)
-   \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550 */
+   ═══════════════════════════════════════════════════════════════ */
 
 function ChainsTabContent() {
   const queryClient = useQueryClient();
@@ -1702,9 +1702,9 @@ function ChainsTabContent() {
   );
 }
 
-/* \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+/* ═══════════════════════════════════════════════════════════════
    Fleet Tab Components
-   \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550 */
+   ═══════════════════════════════════════════════════════════════ */
 
 /* ── Mini metric bar ─────────────────────────────────────────── */
 
@@ -2287,9 +2287,9 @@ function FleetTabContent() {
   );
 }
 
-/* \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+/* ═══════════════════════════════════════════════════════════════
    Patches Tab Components
-   \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550 */
+   ═══════════════════════════════════════════════════════════════ */
 
 interface PatchRow {
   kind: 'host' | 'vm';
@@ -2467,8 +2467,9 @@ function PatchesTabContent() {
         } catch { /* ignore */ }
       },
       () => { /* onDone */ },
-      () => {
-        setLog(prev => prev ? { ...prev, lines: [...prev.lines, { step: 'error', msg: 'SSE connection lost' }], done: true } : prev);
+      (err) => {
+        const msg = err?.message ? `SSE error: ${err.message}` : 'SSE connection lost';
+        setLog(prev => prev ? { ...prev, lines: [...prev.lines, { step: 'error', msg }], done: true } : prev);
       },
       {},
     );
@@ -2628,9 +2629,9 @@ function PatchesTabContent() {
   );
 }
 
-/* \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+/* ═══════════════════════════════════════════════════════════════
    Overview Tab
-   \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550 */
+   ═══════════════════════════════════════════════════════════════ */
 
 function OverviewStat({ label, value, color }: { label: string; value: number; color?: string }) {
   return (
@@ -2669,18 +2670,18 @@ function OverviewTab() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1rem' }}>
         {/* Chains card */}
         <div className="card">
-          <div style={{ fontSize: '0.75rem', color: 'var(--vn-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.75rem' }}>\ud83d\udd17 Chains</div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--vn-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.75rem' }}>🔗 Chains</div>
           <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
             <OverviewStat label="Total" value={chains.length} />
             <OverviewStat label="Synced" value={chainsSynced} color="var(--vn-success)" />
             <OverviewStat label="Syncing" value={chainsSyncing} color="var(--vn-warning)" />
-            {chainsUpgrades > 0 && <OverviewStat label="Upgrades \u26a1" value={chainsUpgrades} color="var(--vn-warning)" />}
+            {chainsUpgrades > 0 && <OverviewStat label="Upgrades ⚡" value={chainsUpgrades} color="var(--vn-warning)" />}
             {chainsProposals > 0 && <OverviewStat label="Proposals" value={chainsProposals} color="var(--vn-accent)" />}
           </div>
         </div>
         {/* Fleet/VMs card */}
         <div className="card">
-          <div style={{ fontSize: '0.75rem', color: 'var(--vn-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.75rem' }}>\ud83d\udda5 Fleet / VMs</div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--vn-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.75rem' }}>🖥 Fleet / VMs</div>
           <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
             <OverviewStat label="Total VMs" value={vms.length} />
             <OverviewStat label="Online" value={vmsOnline} color="var(--vn-success)" />
@@ -2691,7 +2692,7 @@ function OverviewTab() {
         </div>
         {/* Patches card */}
         <div className="card">
-          <div style={{ fontSize: '0.75rem', color: 'var(--vn-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.75rem' }}>\ud83e\ude79 Patches</div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--vn-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.75rem' }}>🩹 Patches</div>
           <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
             <OverviewStat label="Pending updates" value={totalPending} color={totalPending > 0 ? 'var(--vn-warning)' : 'var(--vn-success)'} />
             <OverviewStat label="Tracked" value={vms.length + hosts.length} />
@@ -2700,16 +2701,16 @@ function OverviewTab() {
       </div>
       {/* Recent activity */}
       <div className="card">
-        <div style={{ fontSize: '0.75rem', color: 'var(--vn-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.75rem' }}>\ud83d\udccb Recent Activity</div>
+        <div style={{ fontSize: '0.75rem', color: 'var(--vn-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.75rem' }}>📋 Recent Activity</div>
         <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--vn-text-muted)' }}>No recent activity. Navigate to Audit Log for full history.</p>
       </div>
     </div>
   );
 }
 
-/* \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
-   Main Export \u2014 Tabbed Mega-Module
-   \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550 */
+/* ═══════════════════════════════════════════════════════════════
+   Main Export — Tabbed Mega-Module
+   ═══════════════════════════════════════════════════════════════ */
 
 const TABS = ['Overview', 'Chains', 'Fleet', 'Patches', 'VMs'] as const;
 type Tab = typeof TABS[number];

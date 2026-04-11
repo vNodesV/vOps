@@ -73,7 +73,7 @@ type VOpsSection struct {
 // UIConfig holds dashboard appearance preferences.
 type UIConfig struct {
 	// Theme is the active dashboard theme.
-	// Valid values: "vnodes" (default Matrix green), "dark-blue", "light-blue".
+	// Valid values: "vthemedgr" (default), "vthemedbl", "vthemedlite".
 	Theme string `toml:"theme"`
 }
 
@@ -261,7 +261,7 @@ func Load(path string) (Config, error) {
 		cfg.VOps.Push.DBPath = filepath.Join(home, "data", "push.db")
 	}
 	if !isValidTheme(cfg.VOps.UI.Theme) {
-		cfg.VOps.UI.Theme = "vnodes"
+		cfg.VOps.UI.Theme = "vthemedgr"
 	}
 
 	return cfg, nil
@@ -283,7 +283,7 @@ func (c *Config) Validate() error {
 
 // isValidTheme reports whether the given theme name is recognized.
 func isValidTheme(t string) bool {
-	return t == "vnodes" || t == "dark-blue" || t == "light-blue"
+	return t == "vthemedgr" || t == "vthemedbl" || t == "vthemedlite"
 }
 
 // FindHome returns the vProx home directory.

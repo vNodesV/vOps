@@ -31,6 +31,11 @@ export default defineConfig({
       '/settings/api': 'http://localhost:8889',
       '/login': { target: 'http://localhost:8889', changeOrigin: true },
       '/logout': { target: 'http://localhost:8889', changeOrigin: true },
+      '/vlog/static': {
+        target: 'http://localhost:8889',
+        changeOrigin: true,
+        rewrite: (path: string) => path.replace('/vlog', ''),
+      },
     },
   },
 })

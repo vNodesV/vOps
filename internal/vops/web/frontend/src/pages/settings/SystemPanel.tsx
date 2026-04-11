@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { saveConfig } from '../../api';
+import { applyTheme, THEMES } from '../../lib/theme';
 import type { ConfigSnapshot } from '../../api/types';
 import {
   SectionCard,
@@ -185,36 +186,32 @@ export function BackupsPanel({ config }: { config: ConfigSnapshot }) {
 export function PreferencesPanel() {
   const queryClient = useQueryClient();
   const [theme, setTheme] = useState(() => {
-    return document.documentElement.getAttribute('data-theme') ?? 'vnodes';
+    return document.documentElement.getAttribute('data-theme') ?? 'vthemedgr';
   });
   const [saved, setSaved] = useState(false);
 
   const pickTheme = (id: string) => {
     setTheme(id);
-    document.documentElement.setAttribute('data-theme', id);
+    applyTheme(id);
   };
 
   const saveMut = useMutation({
     mutationFn: (t: string) => saveConfig('preferences', { theme: t }),
     onSuccess: (_, t) => {
-      document.documentElement.setAttribute('data-theme', t);
+      applyTheme(t);
       queryClient.invalidateQueries({ queryKey: ['config'] });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     },
     onError: () => {
       // Revert preview to persisted theme on save failure.
-      const saved = document.documentElement.getAttribute('data-theme') ?? 'vnodes';
+      const saved = document.documentElement.getAttribute('data-theme') ?? 'vthemedgr';
       setTheme(saved);
-      document.documentElement.setAttribute('data-theme', saved);
+      applyTheme(saved);
     },
   });
 
-  const themes = [
-    { id: 'vnodes', label: 'vNodes Green', desc: 'Classic neon-green terminal aesthetic', swatch: '#00ff88' },
-    { id: 'dark-blue', label: 'Dark Blue', desc: 'Deep navy with blue-teal accents', swatch: '#3b82f6' },
-    { id: 'light-blue', label: 'Light Blue', desc: 'Silver-blue professional look', swatch: '#60a5fa' },
-  ];
+  const themes = THEMES;
 
   return (
     <SectionCard

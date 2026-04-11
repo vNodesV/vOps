@@ -1,4 +1,4 @@
-import { useState, useEffect, type CSSProperties } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   BrowserRouter,
   Routes,
@@ -22,286 +22,236 @@ import AuditPage from './pages/Audit';
 import DebugPanel from './components/DebugPanel';
 import { logout, getDebugMode, setDebugMode } from './api';
 import { BASE } from './api/client';
+import { applyTheme, THEMES } from './lib/theme';
 
-/* ── Query client ─────────────────────────────────────────────── */
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
 });
 
-/* ── Sidebar nav link ─────────────────────────────────────────── */
-function SideLink({
-  to,
-  children,
-}: {
-  to: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <NavLink
-      to={to}
-      end={to === '/'}
-      style={({ isActive }: { isActive: boolean }): CSSProperties => ({
-        display: 'flex',
-        alignItems: 'center',
-        gap: '0.5rem',
-        padding: '0.5rem 0.75rem',
-        paddingLeft: isActive ? '0.65rem' : '0.75rem',
-        borderRadius: 'var(--vn-radius)',
-        borderLeft: isActive ? '2px solid var(--vn-primary)' : '2px solid transparent',
-        fontWeight: 500,
-        fontSize: '0.875rem',
-        color: isActive ? 'var(--vn-primary)' : 'var(--vn-text-muted)',
-        background: isActive ? 'var(--vn-green-dim, rgba(0,255,0,0.08))' : 'transparent',
-        textDecoration: 'none',
-        transition: 'background 0.15s, color 0.15s, border-left-color 0.15s',
-      })}
-    >
-      {children}
-    </NavLink>
-  );
-}
-
-/* ── App shell ────────────────────────────────────────────────── */
 function Shell({ children }: { children: React.ReactNode }) {
   const loc = useLocation();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [debugEnabled, setDebugEnabled] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [currentTheme, setCurrentTheme] = useState(
+    () => document.documentElement.getAttribute('data-theme') ?? 'vthemedgr'
+  );
+  const moreRef = useRef<HTMLDivElement>(null);
 
-  // Sync debug state with server on mount
   useEffect(() => {
     if (loc.pathname === '/login') return;
     getDebugMode().then((d) => setDebugEnabled(d.enabled)).catch(() => {});
   }, [loc.pathname]);
 
+  // Close More dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (moreRef.current && !moreRef.current.contains(e.target as Node)) {
+        setMoreOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // Close mobile nav on route change
+  useEffect(() => { setMobileOpen(false); }, [loc.pathname]);
+
+  const handleLogout = async () => {
+    await logout().catch(() => {});
+    window.location.href = BASE + '/login';
+  };
+
+  const handleThemeChange = (id: string) => {
+    setCurrentTheme(id);
+    applyTheme(id);
+    fetch(BASE + '/api/v1/settings/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ section: 'preferences', data: { theme: id } }),
+      credentials: 'include',
+    }).catch(() => {});
+  };
+
   const toggleDebug = async () => {
     const next = !debugEnabled;
-    try {
-      await setDebugMode(next);
-      setDebugEnabled(next);
-    } catch {
-      // ignore
-    }
+    try { await setDebugMode(next); setDebugEnabled(next); } catch { /* ignore */ }
   };
 
   if (loc.pathname === '/login') return <>{children}</>;
 
-  const sidebar: CSSProperties = {
-    width: 220,
-    flexShrink: 0,
-    display: 'flex',
-    flexDirection: 'column',
-    background: 'var(--vn-surface)',
-    borderRight: '1px solid var(--vn-border)',
-    padding: '1rem 0.75rem',
-    gap: '0.25rem',
-    minHeight: '100vh',
-  };
+  const primaryLinks = [
+    { to: '/', label: 'Dashboard', end: true },
+    { to: '/accounts', label: 'IP Accounts', end: false },
+    { to: '/vms', label: 'VM Manager', end: false },
+    { to: '/services', label: 'Services', end: false },
+  ];
 
-  const handleLogout = async () => {
-    await logout().catch(() => {});
-    window.location.href = '/login';
-  };
+  const moreLinks = [
+    { to: '/topology', label: 'Topology' },
+    { to: '/multiprox', label: 'Multi-vProx' },
+    { to: '/audit', label: 'Audit Log' },
+    { to: '/settings', label: 'Settings' },
+  ];
+
+  const allLinks = [...primaryLinks, ...moreLinks];
+  const isMoreActive = moreLinks.some(l => loc.pathname.startsWith(l.to));
 
   return (
     <>
-      {/* Skip to main content — WCAG 2.4.1 */}
-      <a className="skip-to-content" href="#main-content">
-        Skip to main content
-      </a>
+      <a className="skip-to-content" href="#main-content">Skip to main content</a>
 
-      <div style={{ display: 'flex', minHeight: '100vh' }}>
-        {/* Mobile hamburger button — shown via CSS media query */}
-        <button
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          aria-label={sidebarOpen ? 'Close navigation' : 'Open navigation'}
-          aria-expanded={sidebarOpen}
-          aria-controls="app-sidebar"
-          className="hamburger-btn"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-            <line x1="3" y1="6" x2="21" y2="6" />
-            <line x1="3" y1="12" x2="21" y2="12" />
-            <line x1="3" y1="18" x2="21" y2="18" />
-          </svg>
-        </button>
+      {/* ── Top nav ────────────────────────────────────────────── */}
+      <nav className="page-nav" role="navigation" aria-label="Main navigation">
+        <div className="nav-inner">
+          {/* Left: logo */}
+          <a className="vops-logo-link" href={BASE + '/'} aria-label="vOps home">
+            <div className="vops-logo" aria-hidden="true" />
+            <noscript>
+              <span className="vops-logo-fallback">v[O]ps</span>
+            </noscript>
+          </a>
 
-        {/* Mobile overlay */}
-        {sidebarOpen && (
-          <div
-            onClick={() => setSidebarOpen(false)}
-            aria-hidden="true"
-            className="sidebar-overlay"
-          />
-        )}
+          {/* Center: nav links */}
+          <div className="nav-links">
+            {primaryLinks.map(l => (
+              <NavLink
+                key={l.to}
+                to={l.to}
+                end={l.end}
+                className={({ isActive }) => isActive ? 'active' : ''}
+              >
+                {l.label}
+              </NavLink>
+            ))}
 
-        {/* Sidebar */}
-        <nav
-          id="app-sidebar"
-          className={`app-sidebar${sidebarOpen ? ' open' : ''}`}
-          style={sidebar}
-          aria-label="Main navigation"
-        >
-          {/* Logo */}
-          <div
-            style={{
-              padding: '0.5rem 0.25rem 1.25rem',
-              borderBottom: '1px solid var(--vn-border)',
-              marginBottom: '0.5rem',
-            }}
-          >
-            <span
-              className="sidebar-logo-text"
-              style={{
-                fontSize: '1.25rem',
-                fontWeight: 700,
-                color: 'var(--vn-primary)',
-                letterSpacing: '-0.02em',
-              }}
-            >
-              v<span style={{ color: 'var(--vn-accent)' }}>[O]</span>ps
-            </span>
-            <div style={{ fontSize: '0.7rem', color: 'var(--vn-text-subtle)', marginTop: 2 }}>
-              Proxy &amp; Access Intelligence
+            {/* More ▾ */}
+            <div className="nav-more" ref={moreRef}>
+              <button
+                className={`nav-more-btn${moreOpen ? ' open' : ''}${isMoreActive ? ' open' : ''}`}
+                onClick={() => setMoreOpen(o => !o)}
+                aria-haspopup="true"
+                aria-expanded={moreOpen}
+              >
+                More ▾
+              </button>
+              {moreOpen && (
+                <div className="nav-more-dropdown" role="menu">
+                  {moreLinks.map(l => (
+                    <NavLink
+                      key={l.to}
+                      to={l.to}
+                      className={({ isActive }) => isActive ? 'active' : ''}
+                      role="menuitem"
+                      onClick={() => setMoreOpen(false)}
+                    >
+                      {l.label}
+                    </NavLink>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Nav items */}
-          <SideLink to="/">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" />
-              <rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
-            </svg>
-            Dashboard
-          </SideLink>
-          <SideLink to="/accounts">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
-            IP Accounts
-          </SideLink>
-          <SideLink to="/vms">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <rect x="3" y="11" width="18" height="11" rx="1" />
-              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              <circle cx="12" cy="16" r="1" />
-            </svg>
-            VM Manager
-          </SideLink>
-          <SideLink to="/services">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
-            </svg>
-            Services
-          </SideLink>
-          <SideLink to="/topology">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <circle cx="12" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/>
-              <line x1="12" y1="7" x2="5" y2="17"/><line x1="12" y1="7" x2="19" y2="17"/><line x1="5" y1="19" x2="19" y2="19"/>
-            </svg>
-            Topology
-          </SideLink>
-          <SideLink to="/multiprox">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <rect x="2" y="3" width="20" height="4" rx="1"/><rect x="2" y="10" width="20" height="4" rx="1"/>
-              <circle cx="6" cy="5" r="1" fill="currentColor"/><circle cx="6" cy="12" r="1" fill="currentColor"/>
-            </svg>
-            Multi-vProx
-          </SideLink>
-          <SideLink to="/audit">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-            </svg>
-            Audit Log
-          </SideLink>
-          <SideLink to="/settings">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-            Settings
-          </SideLink>
+          {/* Right: theme + debug + logout + hamburger */}
+          <div className="nav-right">
+            <select
+              className="nav-theme-select"
+              value={currentTheme}
+              onChange={e => handleThemeChange(e.target.value)}
+              aria-label="Select theme"
+            >
+              {THEMES.map(t => (
+                <option key={t.id} value={t.id}>{t.label}</option>
+              ))}
+            </select>
 
-          {/* Spacer + Logout */}
-          <div style={{ flex: 1 }} />
-          <button
-            onClick={handleLogout}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              padding: '0.5rem 0.75rem',
-              borderRadius: 'var(--vn-radius)',
-              border: 'none',
-              background: 'transparent',
-              color: 'var(--vn-text-muted)',
-              fontSize: '0.875rem',
-              cursor: 'pointer',
-              width: '100%',
-              textAlign: 'left',
-            }}
-            aria-label="Log out"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
-            </svg>
-            Logout
-          </button>
+            <button
+              onClick={toggleDebug}
+              className={`nav-debug-btn${debugEnabled ? ' on' : ''}`}
+              title={debugEnabled ? 'Disable debug console' : 'Enable debug console'}
+              aria-pressed={debugEnabled}
+            >
+              🐛
+            </button>
 
-          {/* Debug mode toggle */}
-          <button
-            onClick={toggleDebug}
-            title={debugEnabled ? 'Disable debug console' : 'Enable debug console'}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              padding: '0.4rem 0.75rem',
-              borderRadius: 'var(--vn-radius)',
-              border: debugEnabled ? '1px solid var(--vn-accent)' : '1px solid transparent',
-              background: debugEnabled ? 'rgba(var(--vn-accent-rgb, 230,73,128), 0.1)' : 'transparent',
-              color: debugEnabled ? 'var(--vn-accent)' : 'var(--vn-text-muted)',
-              fontSize: '0.8rem',
-              cursor: 'pointer',
-              width: '100%',
-              textAlign: 'left',
-            }}
-          >
-            🐛 Debug {debugEnabled ? 'ON' : 'OFF'}
-          </button>
-        </nav>
+            <button className="nav-logout-btn" onClick={handleLogout} aria-label="Log out">
+              Logout
+            </button>
 
-        {/* Main content */}
-        <main
-          id="main-content"
-          className="app-main"
-          style={{
-            flex: 1,
-            overflow: 'auto',
-            padding: '1.5rem',
-            minWidth: 0,
-            paddingBottom: debugEnabled ? '270px' : '1.5rem',
-          }}
-          tabIndex={-1}
-        >
-          {children}
-        </main>
-      </div>
+            <button
+              className="hamburger-btn"
+              onClick={() => setMobileOpen(o => !o)}
+              aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={mobileOpen}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="18" x2="21" y2="18" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </nav>
 
-      {/* Global debug panel — floats at bottom when enabled */}
-      {debugEnabled && (
-        <DebugPanel onDisable={() => setDebugEnabled(false)} />
+      {/* ── Mobile nav drawer ──────────────────────────────────── */}
+      {mobileOpen && (
+        <div className="nav-mobile-drawer open" role="dialog" aria-modal="true" aria-label="Mobile navigation">
+          <div className="nav-mobile-backdrop" onClick={() => setMobileOpen(false)} aria-hidden="true" />
+          <div className="nav-mobile-panel">
+            <div style={{ marginBottom: '1rem', paddingBottom: '0.75rem', borderBottom: '1px solid var(--vn-green-border)' }}>
+              <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--vn-primary)', letterSpacing: '-0.02em' }}>
+                v<span>[O]</span>ps
+              </div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--vn-text-muted)', marginTop: 2 }}>
+                Proxy &amp; Access Intelligence
+              </div>
+            </div>
+            {allLinks.map(l => (
+              <NavLink
+                key={l.to}
+                to={l.to}
+                end={'end' in l ? (l as { end: boolean }).end : false}
+                className={({ isActive }) => isActive ? 'active' : ''}
+              >
+                {l.label}
+              </NavLink>
+            ))}
+            <div style={{ flex: 1 }} />
+            <button
+              className="nav-logout-btn"
+              onClick={handleLogout}
+              style={{ marginTop: '1rem', width: '100%', justifyContent: 'center' }}
+            >
+              Logout
+            </button>
+          </div>
+        </div>
       )}
+
+      {/* ── Main content ───────────────────────────────────────── */}
+      <main
+        id="main-content"
+        className="app-main"
+        style={{ paddingBottom: debugEnabled ? '270px' : undefined }}
+        tabIndex={-1}
+      >
+        <div className="container">
+          {children}
+        </div>
+      </main>
+
+      {/* ── Footer ─────────────────────────────────────────────── */}
+      <footer className="vlog-footer">
+        v<span>[O]</span>ps · Proxy &amp; Access Intelligence · v1.1.0
+      </footer>
+
+      {debugEnabled && <DebugPanel onDisable={() => setDebugEnabled(false)} />}
     </>
   );
 }
 
-/* ── Root component ───────────────────────────────────────────── */
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
