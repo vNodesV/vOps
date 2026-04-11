@@ -1,5 +1,5 @@
 version: 2
-updated_at_utc: "2026-03-02T15:00:00Z"
+updated_at_utc: "2026-04-11T23:19:00Z"
 
 # Logical identities used for repository automation policy.
 # Note: these are policy identities; GitHub account provisioning must be done outside this repo.
@@ -27,6 +27,62 @@ users:
     agent_file: .github/agents/reviewer.agent.md
     github_login: jarvisBoss
     org: vNodes-Co
+  # --- awesome-copilot agents (dispatched by jarvis6.0) ---
+  - id: debug
+    role: specialist
+    agent_file: .github/agents/debug.agent.md
+    source: awesome-copilot
+    dispatched_by: jarvis6.0
+  - id: devops-expert
+    role: specialist
+    agent_file: .github/agents/devops-expert.agent.md
+    source: awesome-copilot
+    dispatched_by: jarvis6.0
+  - id: principal-software-engineer
+    role: specialist
+    agent_file: .github/agents/principal-software-engineer.agent.md
+    source: awesome-copilot
+    dispatched_by: jarvis6.0
+  - id: api-architect
+    role: specialist
+    agent_file: .github/agents/api-architect.agent.md
+    source: awesome-copilot
+    dispatched_by: jarvis6.0
+  - id: react19-commander
+    role: specialist
+    agent_file: .github/agents/react19-commander.agent.md
+    source: awesome-copilot
+    dispatched_by: jarvis6.0
+  - id: github-actions-expert
+    role: specialist
+    agent_file: .github/agents/github-actions-expert.agent.md
+    source: awesome-copilot
+    dispatched_by: jarvis6.0
+  - id: debian-linux-expert
+    role: specialist
+    agent_file: .github/agents/debian-linux-expert.agent.md
+    source: awesome-copilot
+    dispatched_by: jarvis6.0
+  - id: polyglot-test-generator
+    role: specialist
+    agent_file: .github/agents/polyglot-test-generator.agent.md
+    source: awesome-copilot
+    dispatched_by: jarvis6.0
+  - id: context-architect
+    role: specialist
+    agent_file: .github/agents/context-architect.agent.md
+    source: awesome-copilot
+    dispatched_by: jarvis6.0
+  - id: se-security-reviewer
+    role: specialist
+    agent_file: .github/agents/se-security-reviewer.agent.md
+    source: awesome-copilot
+    dispatched_by: jarvis6.0
+  - id: se-system-architecture-reviewer
+    role: specialist
+    agent_file: .github/agents/se-system-architecture-reviewer.agent.md
+    source: awesome-copilot
+    dispatched_by: jarvis6.0
 
 policy:
   pull_request:
@@ -35,3 +91,15 @@ policy:
   active_agents:
     - jarvis5.0
     - jarvis5.0_vscode
+    - jarvis6.0
+    - debug
+    - devops-expert
+    - principal-software-engineer
+    - api-architect
+    - react19-commander
+    - github-actions-expert
+    - debian-linux-expert
+    - polyglot-test-generator
+    - context-architect
+    - se-security-reviewer
+    - se-system-architecture-reviewer

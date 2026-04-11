@@ -567,6 +567,14 @@ Copilot session. Invoke them explicitly when the trigger conditions match. Do no
 - Any Linux/Debian host or VM debugging → **debian-linux-triage**
 - Any diagram or architecture visualization request → **excalidraw-diagram-generator**
 - Any feature involving personal data, user accounts, or logging → **gdpr-compliant**
+- Any React 19 migration or Vite major upgrade → **react19-commander** agent
+- Any new REST API design, endpoint contract, or versioning → **api-architect** agent
+- Any complex bug investigation (SSE, SSH, streaming, race) → **debug** agent
+- Any deployment automation or DevOps loop issue → **devops-expert** agent
+- Any principal-level architecture decision or tech leadership call → **principal-software-engineer** agent
+- Any GitHub Actions workflow setup or CI/CD pipeline → **github-actions-expert** agent
+- Any Debian host/VM OS issue (apt, systemd, packages, kernel) → **debian-linux-expert** agent
+- Any comprehensive multi-language test generation → **polyglot-test-generator** agent
 
 ---
 
@@ -688,6 +696,17 @@ For each excluded agent state **why**. Apply Multi-Todo Model Dispatch for all p
 | `task` sub-agent | Always included — build/test/lint |
 | `code-review` sub-agent | Always included — diff review |
 | `general-purpose` sub-agent | Include if complex multi-step subprocess tasks needed |
+| `debug.agent.md` | Include for complex bug investigations — SSE, SSH, streaming, race conditions |
+| `devops-expert.agent.md` | Include if deployment automation, binary swap, or DevOps loop needed |
+| `principal-software-engineer.agent.md` | Include for principal-level arch guidance, tech leadership decisions |
+| `api-architect.agent.md` | Include when designing new REST endpoints or API contracts |
+| `react19-commander.agent.md` | Include for React 19 migration planning and execution |
+| `github-actions-expert.agent.md` | Include when setting up CI/CD pipelines or Actions workflows |
+| `debian-linux-expert.agent.md` | Include for Debian/apt/systemd host and VM OS issues |
+| `polyglot-test-generator.agent.md` | Include for comprehensive test generation across Go + TypeScript |
+| `context-architect.agent.md` | Include for multi-file change planning when dep graph is complex |
+| `se-security-reviewer.agent.md` | Include for security audit, OWASP review, threat modeling pass |
+| `se-system-architecture-reviewer.agent.md` | Include for distributed system / Well-Architected review |
 
 **Resource efficiency rules:**
 
