@@ -334,7 +334,7 @@ func (h *Handlers) HandleHostUpgrade(w http.ResponseWriter, r *http.Request) {
 	sendEvent("update:done", "apt update complete")
 
 	sendEvent("upgrade:start", "Running apt upgrade -y…")
-	if err := streamSudo("env DEBIAN_FRONTEND=noninteractive apt upgrade -y 2>&1"); err != nil {
+	if err := streamSudo("apt upgrade -y 2>&1"); err != nil {
 		sendEvent("upgrade:error", fmt.Sprintf("apt upgrade failed: %v", err))
 		return
 	}

@@ -892,7 +892,7 @@ func (h *Handlers) HandleVMUpgrade(w http.ResponseWriter, r *http.Request) {
 
 	// apt upgrade -y.
 	sendEvent("upgrade:start", "Running apt upgrade -y…")
-	if err := streamSudo("env DEBIAN_FRONTEND=noninteractive apt upgrade -y 2>&1"); err != nil {
+	if err := streamSudo("apt upgrade -y 2>&1"); err != nil {
 		sendEvent("upgrade:error", fmt.Sprintf("apt upgrade failed: %v", err))
 		return
 	}
