@@ -435,18 +435,17 @@ frontend:
 	fi
 
 build-vops: frontend
-	@echo "Stopping $(VOPS_NAME) service (if running)..."
-	@sudo systemctl stop "$(VOPS_NAME)" 2>/dev/null && echo "  ✓ $(VOPS_NAME) stopped" || echo "  ○ $(VOPS_NAME) was not running"
-	@echo "Building $(VOPS_NAME)..."
+	@echo "Building $(VOPS_NAME) (service keeps running during compile)..."
 	mkdir -p "$(BUILD_DIR)"
 	GOROOT="$(EFFECTIVE_GOROOT)" go build -ldflags "$(VOPS_LDFLAGS)" -o "$(VOPS_BUILD)" "$(VOPS_SRC)"
+	@echo "✓ Build complete — Binary: $(VOPS_BUILD)"
+	@echo "Stopping $(VOPS_NAME) service for swap..."
+	@sudo systemctl stop "$(VOPS_NAME)" 2>/dev/null && echo "  ✓ $(VOPS_NAME) stopped" || echo "  ○ $(VOPS_NAME) was not running"
 	@cp "$(VOPS_BUILD)" "$(GOPATH_BIN)/$(VOPS_NAME)"
 	@if [ -e "/usr/local/bin/$(VOPS_NAME)" ]; then \
 		sudo cp "$(VOPS_BUILD)" "/usr/local/bin/$(VOPS_NAME)"; \
-		echo "  Updated → /usr/local/bin/$(VOPS_NAME)"; \
+		echo "  ✓ Updated → /usr/local/bin/$(VOPS_NAME)"; \
 	fi
-	@echo "✓ Build complete"
-	@echo "  Binary:  $(VOPS_BUILD)"
 	@echo "  Copied → $(GOPATH_BIN)/$(VOPS_NAME)"
 	@echo "Restarting $(VOPS_NAME) service..."
 	@sudo systemctl start "$(VOPS_NAME)" 2>/dev/null && echo "  ✓ $(VOPS_NAME) started" || echo "  ○ Could not start $(VOPS_NAME) — start manually: sudo service $(VOPS_NAME) start"
