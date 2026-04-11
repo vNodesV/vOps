@@ -383,17 +383,23 @@ systemd:
 	fi;
 	@echo ""
 	@SUDOERS_FILE="/etc/sudoers.d/vprox"; \
-	SUDOERS_LINE="$(USER) ALL=(ALL) NOPASSWD: /usr/sbin/service vProx start, /usr/sbin/service vProx stop, /usr/sbin/service vProx restart"; \
+	VPROX_LINE="$(USER) ALL=(ALL) NOPASSWD: /usr/sbin/service vProx start, /usr/sbin/service vProx stop, /usr/sbin/service vProx restart"; \
+	VOPS_LINE="$(USER) ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop $(VOPS_NAME), /usr/bin/systemctl start $(VOPS_NAME), /usr/bin/systemctl restart $(VOPS_NAME)"; \
+	MISSING=0; \
 	if [[ -f "$$SUDOERS_FILE" ]]; then \
-		if grep -qF "$$SUDOERS_LINE" "$$SUDOERS_FILE"; then \
-			echo "✓ Sudoers rule already configured ($$SUDOERS_FILE)"; \
+		grep -qF "$$VPROX_LINE" "$$SUDOERS_FILE" || MISSING=1; \
+		grep -qF "$$VOPS_LINE"  "$$SUDOERS_FILE" || MISSING=1; \
+		if [[ "$$MISSING" = "0" ]]; then \
+			echo "✓ Sudoers rules already configured ($$SUDOERS_FILE)"; \
 		else \
-			echo "⚠ $$SUDOERS_FILE exists but differs. Current content:"; \
+			echo "⚠ $$SUDOERS_FILE exists but is missing rules. Current content:"; \
 			sudo cat "$$SUDOERS_FILE"; \
+			echo "  Desired content:"; \
+			printf "    %s\n    %s\n" "$$VPROX_LINE" "$$VOPS_LINE"; \
 			echo ""; \
-			read -p "Overwrite with updated rule? (y/n) " -n 1 -r; echo ""; \
+			read -p "Overwrite with updated rules? (y/n) " -n 1 -r; echo ""; \
 			if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-				echo "$$SUDOERS_LINE" | sudo tee "$$SUDOERS_FILE" > /dev/null; \
+				printf "%s\n%s\n" "$$VPROX_LINE" "$$VOPS_LINE" | sudo tee "$$SUDOERS_FILE" > /dev/null; \
 				sudo chmod 0440 "$$SUDOERS_FILE"; \
 				echo "✓ Updated $$SUDOERS_FILE"; \
 			else \
@@ -402,16 +408,26 @@ systemd:
 		fi; \
 	else \
 		echo "Setting up passwordless service management for $(USER)..."; \
-		echo "  This allows 'vProx start -d', 'vProx stop', and 'vProx restart' without a password prompt."; \
-		read -p "Create sudoers rule? (y/n) " -n 1 -r; echo ""; \
+		echo "  Grants NOPASSWD: vProx start|stop|restart + $(VOPS_NAME) systemctl stop|start|restart"; \
+		read -p "Create sudoers rules? (y/n) " -n 1 -r; echo ""; \
 		if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-			echo "$$SUDOERS_LINE" | sudo tee "$$SUDOERS_FILE" > /dev/null; \
+			printf "%s\n%s\n" "$$VPROX_LINE" "$$VOPS_LINE" | sudo tee "$$SUDOERS_FILE" > /dev/null; \
 			sudo chmod 0440 "$$SUDOERS_FILE"; \
 			echo "✓ Created $$SUDOERS_FILE"; \
 		else \
-			echo "✓ Skipped. You can create it manually:"; \
-			echo "  echo '$$SUDOERS_LINE' | sudo tee $$SUDOERS_FILE"; \
+			echo "✓ Skipped. Create manually:"; \
+			echo "  printf '%s\\n%s\\n' '$$VPROX_LINE' '$$VOPS_LINE' | sudo tee $$SUDOERS_FILE"; \
 			echo "  sudo chmod 0440 $$SUDOERS_FILE"; \
+		fi; \
+	fi
+	@if [[ -f "/etc/sudoers.d/vlog" ]]; then \
+		echo ""; \
+		echo "⚠ Stale file /etc/sudoers.d/vlog found (old vLog era — superseded by vops)."; \
+		echo "  Content:"; sudo cat /etc/sudoers.d/vlog; \
+		read -p "Remove /etc/sudoers.d/vlog? (y/n) " -n 1 -r; echo ""; \
+		if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+			sudo rm /etc/sudoers.d/vlog; \
+			echo "✓ Removed /etc/sudoers.d/vlog"; \
 		fi; \
 	fi
 
@@ -439,6 +455,10 @@ build-vops: frontend
 	mkdir -p "$(BUILD_DIR)"
 	GOROOT="$(EFFECTIVE_GOROOT)" go build -ldflags "$(VOPS_LDFLAGS)" -o "$(VOPS_BUILD)" "$(VOPS_SRC)"
 	@echo "✓ Build complete — Binary: $(VOPS_BUILD)"
+	@VOPS_SC_LINE="$(USER) ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop $(VOPS_NAME), /usr/bin/systemctl start $(VOPS_NAME), /usr/bin/systemctl restart $(VOPS_NAME)"; \
+	if ! ([[ -f "/etc/sudoers.d/vprox" ]] && grep -qF "$$VOPS_SC_LINE" /etc/sudoers.d/vprox); then \
+		echo "  ⚠ Passwordless systemctl not configured — run 'make systemd' to avoid password prompt."; \
+	fi
 	@echo "Stopping $(VOPS_NAME) service for swap..."
 	@sudo systemctl stop "$(VOPS_NAME)" 2>/dev/null && echo "  ✓ $(VOPS_NAME) stopped" || echo "  ○ $(VOPS_NAME) was not running"
 	@cp "$(VOPS_BUILD)" "$(GOPATH_BIN)/$(VOPS_NAME)"
