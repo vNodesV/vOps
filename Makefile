@@ -430,7 +430,7 @@ frontend:
 	if [ "$$HAVE_NODE" = "0" ]; then \
 		echo "  ℹ  Node.js not found — skipping frontend build (using committed dist/)"; \
 	else \
-		cd internal/vops/web/frontend && npm install && npm run build; \
+		cd internal/vops/web/frontend && npm install && npm audit fix && npm run build; \
 		echo "✓ Frontend built → internal/vops/web/dist/"; \
 	fi
 
