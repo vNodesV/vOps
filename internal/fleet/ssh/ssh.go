@@ -4,7 +4,9 @@
 package ssh
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -125,6 +127,51 @@ func (c *Client) RunInput(cmd, stdinData string) (string, error) {
 	}
 	out, err := sess.CombinedOutput(cmd)
 	return string(out), err
+}
+
+// RunStream executes cmd on the remote host, calling lineCallback for each
+// line of combined stdout+stderr as it arrives. If stdinData is non-empty it
+// is written to the process stdin before the command starts (use for sudo -S).
+// Returns the remote exit error when the command finishes.
+func (c *Client) RunStream(cmd, stdinData string, lineCallback func(line string)) error {
+	sess, err := c.c.NewSession()
+	if err != nil {
+		return fmt.Errorf("fleet/ssh: new session: %w", err)
+	}
+	defer sess.Close()
+
+	if stdinData != "" {
+		sess.Stdin = strings.NewReader(stdinData)
+	}
+
+	// Merge stdout and stderr through a single pipe to preserve natural ordering.
+	pr, pw := io.Pipe()
+	sess.Stdout = pw
+	sess.Stderr = pw
+
+	if startErr := sess.Start(cmd); startErr != nil {
+		pw.CloseWithError(startErr)
+		pr.Close()
+		return fmt.Errorf("fleet/ssh: start: %w", startErr)
+	}
+
+	// Drain the pipe in the background until EOF (signalled by pw.Close below).
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		scanner := bufio.NewScanner(pr)
+		scanner.Buffer(make([]byte, 64*1024), 64*1024)
+		for scanner.Scan() {
+			lineCallback(scanner.Text())
+		}
+	}()
+
+	waitErr := sess.Wait()
+	pw.Close() // EOF for the scanner goroutine.
+	pr.Close() // reclaim pipe resources.
+	<-done     // wait for all buffered lines to be delivered.
+
+	return waitErr
 }
 
 // Close releases the underlying SSH connection and any parent jump connection.

@@ -92,7 +92,7 @@ export const registerDiscoveredVM = (name: string, lan_ip: string, datacenter: s
 
 /** Returns the SSE URL for streaming apt upgrade output on a named VM. */
 export const vmUpgradeURL = (name: string) =>
-  `${BASE}api/v1/fleet/vms/${encodeURIComponent(name)}/upgrade`;
+  `${BASE}/api/v1/fleet/vms/${encodeURIComponent(name)}/upgrade`;
 
 /** Returns stored host inventory from DB or config snapshot. */
 export const getHosts = () =>
@@ -104,7 +104,7 @@ export const scanHosts = () =>
 
 /** Returns the SSE URL for streaming apt upgrade on a named host. */
 export const hostUpgradeURL = (name: string) =>
-  `${BASE}api/v1/fleet/hosts/${encodeURIComponent(name)}/upgrade`;
+  `${BASE}/api/v1/fleet/hosts/${encodeURIComponent(name)}/upgrade`;
 
 export const getDeployments = (chain?: string) =>
   apiFetch<{ deployments: Deployment[] }>(

@@ -851,15 +851,7 @@ func (h *Handlers) HandleVMUpgrade(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 	}
 
-	// Build sudo runner helpers.
-	runSudo := func(client *fleetssh.Client, aptArgs string) (string, error) {
-		if req.SudoPassword != "" {
-			return client.RunInput("sudo -S "+aptArgs, req.SudoPassword+"\n")
-		}
-		return client.Run("sudo -n " + aptArgs)
-	}
-
-	// Connect.
+	// Connect (ProxyJump when configured).
 	var err error
 	var client *fleetssh.Client
 	if jp := h.svc.Config().ResolveProxyJump(vm); jp != nil {
@@ -878,23 +870,33 @@ func (h *Handlers) HandleVMUpgrade(w http.ResponseWriter, r *http.Request) {
 	defer client.Close()
 	sendEvent("connected", fmt.Sprintf("Connected to %s (%s)", vm.Name, vm.Host))
 
+	// Stream a sudo command, emitting each output line as an SSE "log" event.
+	streamSudo := func(aptArgs string) error {
+		if req.SudoPassword != "" {
+			return client.RunStream("sudo -S "+aptArgs, req.SudoPassword+"\n", func(line string) {
+				sendEvent("log", line)
+			})
+		}
+		return client.RunStream("sudo -n "+aptArgs, "", func(line string) {
+			sendEvent("log", line)
+		})
+	}
+
 	// apt update.
 	sendEvent("update:start", "Running apt update…")
-	updateOut, err := runSudo(client, "apt update -q 2>&1")
-	if err != nil {
-		sendEvent("update:error", fmt.Sprintf("apt update failed: %v\n%s", err, strings.TrimSpace(updateOut)))
+	if err := streamSudo("apt update -q 2>&1"); err != nil {
+		sendEvent("update:error", fmt.Sprintf("apt update failed: %v", err))
 		return
 	}
-	sendEvent("update:done", strings.TrimSpace(updateOut))
+	sendEvent("update:done", "apt update complete")
 
 	// apt upgrade -y.
 	sendEvent("upgrade:start", "Running apt upgrade -y…")
-	upgradeOut, err := runSudo(client, "DEBIAN_FRONTEND=noninteractive apt upgrade -y 2>&1")
-	if err != nil {
-		sendEvent("upgrade:error", fmt.Sprintf("apt upgrade failed: %v\n%s", err, strings.TrimSpace(upgradeOut)))
+	if err := streamSudo("env DEBIAN_FRONTEND=noninteractive apt upgrade -y 2>&1"); err != nil {
+		sendEvent("upgrade:error", fmt.Sprintf("apt upgrade failed: %v", err))
 		return
 	}
-	sendEvent("upgrade:done", strings.TrimSpace(upgradeOut))
+	sendEvent("upgrade:done", "Upgrade complete")
 	sendEvent("complete", "Upgrade complete on "+vm.Name)
 }
 

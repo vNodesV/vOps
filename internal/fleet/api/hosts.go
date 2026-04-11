@@ -297,13 +297,6 @@ func (h *Handlers) HandleHostUpgrade(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 	}
 
-	runSudo := func(client *fleetssh.Client, aptArgs string) (string, error) {
-		if req.SudoPassword != "" {
-			return client.RunInput("sudo -S "+aptArgs, req.SudoPassword+"\n")
-		}
-		return client.Run("sudo -n " + aptArgs)
-	}
-
 	dialAddr := targetHost.LanIP
 	if dialAddr == "" {
 		dialAddr = targetHost.Name
@@ -321,21 +314,31 @@ func (h *Handlers) HandleHostUpgrade(w http.ResponseWriter, r *http.Request) {
 	defer client.Close()
 	sendEvent("connected", fmt.Sprintf("Connected to host %s (%s)", targetHost.Name, dialAddr))
 
+	// Stream a sudo command, emitting each output line as an SSE "log" event.
+	streamSudo := func(aptArgs string) error {
+		if req.SudoPassword != "" {
+			return client.RunStream("sudo -S "+aptArgs, req.SudoPassword+"\n", func(line string) {
+				sendEvent("log", line)
+			})
+		}
+		return client.RunStream("sudo -n "+aptArgs, "", func(line string) {
+			sendEvent("log", line)
+		})
+	}
+
 	sendEvent("update:start", "Running apt update…")
-	updateOut, err := runSudo(client, "apt update -q 2>&1")
-	if err != nil {
-		sendEvent("update:error", fmt.Sprintf("apt update failed: %v\n%s", err, strings.TrimSpace(updateOut)))
+	if err := streamSudo("apt update -q 2>&1"); err != nil {
+		sendEvent("update:error", fmt.Sprintf("apt update failed: %v", err))
 		return
 	}
-	sendEvent("update:done", strings.TrimSpace(updateOut))
+	sendEvent("update:done", "apt update complete")
 
 	sendEvent("upgrade:start", "Running apt upgrade -y…")
-	upgradeOut, err := runSudo(client, "DEBIAN_FRONTEND=noninteractive apt upgrade -y 2>&1")
-	if err != nil {
-		sendEvent("upgrade:error", fmt.Sprintf("apt upgrade failed: %v\n%s", err, strings.TrimSpace(upgradeOut)))
+	if err := streamSudo("env DEBIAN_FRONTEND=noninteractive apt upgrade -y 2>&1"); err != nil {
+		sendEvent("upgrade:error", fmt.Sprintf("apt upgrade failed: %v", err))
 		return
 	}
-	sendEvent("upgrade:done", strings.TrimSpace(upgradeOut))
+	sendEvent("upgrade:done", "Upgrade complete")
 	sendEvent("complete", "Upgrade complete on host "+targetHost.Name)
 }
 
