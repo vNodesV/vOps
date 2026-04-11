@@ -556,6 +556,9 @@ Copilot session. Invoke them explicitly when the trigger conditions match. Do no
 | [`debian-linux-triage`](.github/skills/debian-linux-triage/) | Triage Debian Linux issues — apt, systemd, AppArmor; use for VM/host OS debugging | None |
 | [`excalidraw-diagram-generator`](.github/skills/excalidraw-diagram-generator/) | Generate Excalidraw diagrams from natural language — flowcharts, system architecture, mind maps | None |
 | [`gdpr-compliant`](.github/skills/gdpr-compliant/) | GDPR-compliant engineering practices — personal data, PII handling, retention/deletion, consent | None |
+| [`agent-owasp-compliance`](.github/skills/agent-owasp-compliance/) | Check agent codebases against OWASP ASI Top 10 2026; use for vOps[a] agent security review and any multi-agent security audit | None |
+| [`agent-supply-chain`](.github/skills/agent-supply-chain/) | Verify supply chain integrity for AI agent plugins/tools; use when installing new plugins or reviewing agent dependencies | None |
+| [`cli-mastery`](.github/skills/cli-mastery/) | Interactive training for GitHub Copilot CLI — commands, shortcuts, modes, agents, skills, MCP, config reference; use for CLI onboarding or feature discovery | refs |
 
 **Auto-invoke rules:**
 - Any test generation request → **polyglot-test-agent** (before writing tests manually)
@@ -578,6 +581,8 @@ Copilot session. Invoke them explicitly when the trigger conditions match. Do no
 - Any epic planning or PRD → **breakdown-epic-arch** + **breakdown-plan**
 - Any Linux/Debian host or VM debugging → **debian-linux-triage**
 - Any diagram or architecture visualization request → **excalidraw-diagram-generator**
+- Any vOps[a] agent security design or multi-agent audit → **agent-owasp-compliance** + **agent-governance**
+- Any new plugin/skill installation or agent dependency review → **agent-supply-chain**
 - Any feature involving personal data, user accounts, or logging → **gdpr-compliant**
 - Any React 19 migration or Vite major upgrade → **react19-commander** agent
 - Any new REST API design, endpoint contract, or versioning → **api-architect** agent

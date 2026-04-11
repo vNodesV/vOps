@@ -318,6 +318,7 @@ Optimized for local development with:
 | `bench [pkg]` | Run `go test -bench=. -benchmem -count=10` + benchstat comparison |
 | `profile` | Collect pprof CPU/heap/goroutine profiles and report hotspots |
 | `agentupgrade` | Full self-assessment and upgrade of all agent configuration files |
+| `@shop` | Curate optimal agent+model+skill cart for pending/requested jobs; present Shopping Cart; wait for approval; dispatch |
 
 ---
 
@@ -334,7 +335,10 @@ When multiple tasks are pending, apply the **Multi-Todo Model Dispatch** protoco
 | Standard code changes, PR reviews, CI debugging | `claude-sonnet-4.6` | Best cost/quality for bounded scope |
 | Build / test / lint execution | `claude-sonnet-4.6` | Pass/fail; reasoning depth not critical |
 | Fast codebase exploration, grep/glob synthesis | `claude-haiku-4.5` | Speed-optimized |
-| Heavy code generation, algorithmic implementation | `gpt-5.3-codex` | Codex specialization (updated from gpt-5.1-codex) |
+| Heavy code generation, algorithmic implementation | `gpt-5.3-codex` | Codex specialization |
+| Codex context saturated / fallback | `gpt-5.2-codex` | Fallback when 5.3-codex context full |
+| @shop orchestration, structured multi-job dispatch | `gpt-5.4` | Structured dispatch + plan quality |
+| Fast utility (formatting, scaffolding, quick lookup) | `gpt-5.4-mini` | More reasoning than gpt-4.1, faster than 5.1 |
 | Opus quality needed but latency matters | `claude-opus-4.6-fast` | Fast mode trade-off |
 | General-purpose strong reasoning, bounded scope | `gpt-5.1` | Strong GPT-5 family; cost-effective |
 | Fast, cheap utility tasks (formatting, scaffolding) | `gpt-4.1` | Cheapest available; deterministic low-stakes |
@@ -414,3 +418,46 @@ Skill source: `https://github.com/github/awesome-copilot/blob/main/docs/README.s
                    Skills: tldr-prompt, conventional-commit, git-commit,
                            make-repo-contribution, github-issues
 ```
+
+---
+
+## `@shop` Protocol
+
+Triggered by `@shop` or when 2+ distinct jobs are pending, sprint starts, or mixed-domain requests arrive.
+When both `@shop` and Multi-Todo Model Dispatch would fire, `@shop` takes precedence.
+
+```
+STEP 0 - INTAKE
+  Parse all pending todos, open conversations, and explicit requests.
+  Identify distinct job domains (backend, frontend, infra, docs, security, etc.)
+
+STEP 1 - CATALOG
+  For each job: identify relevant agents (.github/agents/), skills (.github/skills/), models, and plugins.
+  Cross-reference against installed inventory.
+
+STEP 2 - MATCH
+  Score each tool by fit (trigger conditions match >= 1 requirement = include).
+  Flag conflicts or redundancies. Flag missing skills/agents for on-demand install.
+
+STEP 3 - CART
+  Render Shopping Cart table:
+  | Job | Agent | Skill(s) | Model | Notes |
+  |-----|-------|----------|-------|-------|
+  One row per distinct job.
+
+STEP 4 - CONFIRM
+  Present cart to user. Wait for approval or adjustments.
+  If approved, proceed. If modified, re-render cart before dispatching.
+
+STEP 5 - DISPATCH
+  For each cart row: invoke agent (task tool) or skill with full context.
+  Parallel where jobs are independent; sequential where deps exist.
+  Report outcomes per job on completion.
+```
+
+### Auto-trigger conditions
+- 2 or more distinct job domains pending simultaneously
+- Sprint start (>2 pending todos + "go"/"start")
+- Mixed-domain request (e.g., backend + frontend + infra in one message)
+- `new project` kickoff
+- Post-agentupgrade (capabilities changed — re-evaluate routing)
