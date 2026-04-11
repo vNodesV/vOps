@@ -87,11 +87,18 @@ templates, and all project artifacts.
 - **HTTP 405 delete workaround** (commit `fe5207e`): Apache `mod_proxy` blocks HTTP DELETE → 405; fleet delete uses POST alias; JS changed from `method:'DELETE'` to `method:'POST'` for all fleet delete calls
 - **Settings/Wizard UX bridge** (v1.3.1): dashboard-native inline settings editor, chain/service tree controls, legacy TOML import field parity, and `features.mask_rpc` rewrite parity in proxy output.
 
-### vOps (module — `vOps_v1.0.0` BRANCH 🔨)
+### vOps (module — `vOps_v1.1.0` BRANCH 🔨)
 - **Binary**: `vops` (`cmd/vops/main.go`) — merged vLog+fleet; serves at `www-vm:8889` → Apache `/vlog/`
 - **Purpose**: log archive analyzer, IP intelligence CRM, fleet management, VM lifecycle management, Cosmos unit monitoring
 - **Database**: SQLite via `modernc.org/sqlite` (pure Go, no CGO, WAL mode); `internal/vops/db/`
-- **Web UI**: **React 18 + Vite + TypeScript SPA** — ground-up rebuild, `go:embed` via `internal/vops/web/frontend/dist/`; left sidebar 220px (navy `#1a2744`), `--op-*` tokens; nav: Overview/Threats/Chains/Fleet/VMs/Units/Patches/Topology/MultiProx/Settings
+- **v1.1.0 changes** (branch `vOps_v1.1.0`, build 0.0.6+):
+  - **Theme redesign**: top navigation bar replaces left sidebar; 3 themes: `vnodes` (default green), `dark-blue`, `light-blue`; `--op-*` CSS token design system; `2026_logos/` asset set (background, logo, combo, favicon, og); `_swapFavicons(theme)` JS hot-swap
+  - **Build pipeline**: service-safe swap — `make build-vops` compiles new binary while vOps runs; only restarts systemd service after binary is ready; zero downtime for frontend changes
+  - **npm audit fix**: integrated into `make build-vops` before every frontend build; eliminates high-severity vuln warnings
+  - **SSE upgrade fix**: `/api/v1/upgrade/stream` repaired — ProxyJump SSH chain (host→VM) via `DialViaProxy`; `sudo apt update && sudo apt upgrade -y` streamed line-by-line; keepalive `": ping"` every 15s; `context.Background()` (never `r.Context()`)
+  - **sudoers.d**: `make systemd` / `make install` creates `/etc/sudoers.d/vops` with NOPASSWD rules for `systemctl start|stop|restart vOps` and `apt-get update|upgrade`; idempotent check prevents duplicate entries
+  - **Agent ecosystem**: 11 awesome-copilot agents installed to `.github/agents/`; jarvis6.0 auto-invoke rules updated; `assignments.yml` updated; commit `b9430b9`
+- **Web UI**: **React 18 + Vite + TypeScript SPA** — ground-up rebuild, `go:embed` via `internal/vops/web/frontend/dist/`; top nav (v1.1.0), `--op-*` tokens; nav: Overview/Threats/Chains/Fleet/VMs/Units/Patches/Topology/MultiProx/Settings
   - **SPA routing**: `BASE_URL = import.meta.env.BASE_URL` from Vite (set in `vite.config.ts`); all `fetch()` calls use `${BASE_URL}api/...`; login redirects use `${base}login`; critical pattern to avoid blank-page under Apache sub-path `/vlog/`
   - **Login**: POST `${BASE_URL}api/auth/login` → `{token}` → stores in `sessionStorage`; `AuthProvider` context; `ProtectedRoute` wrapper; `BASE_URL` prefix on all redirects
   - **Auth**: session tokens (32-byte hex, HMAC-SHA256, 24h TTL); bcrypt Cost=12; `HttpOnly`/`SameSite=Strict` cookie; `requireSession` middleware; `[vops.auth]` in vops.toml
@@ -443,9 +450,12 @@ Apply this table every time a `task` sub-agent is invoked. Always pass `model:` 
 | Standard code changes, PR reviews, CI debugging | `claude-sonnet-4.6` | Best cost/quality balance for bounded scope |
 | Build / test / lint execution | `claude-sonnet-4.6` | Output is pass/fail; reasoning depth not critical |
 | Fast codebase exploration, grep/glob synthesis | `claude-haiku-4.5` | Speed-optimized; `explore` sub-agent default |
-| Heavy code generation, algorithmic implementation | `gpt-5.3-codex` | Codex specialization for generative coding tasks (updated from gpt-5.1-codex) |
+| Heavy code generation, algorithmic implementation | `gpt-5.3-codex` | Codex specialization for generative coding tasks |
+| Secondary code gen / codex fallback | `gpt-5.2-codex` | Fallback when gpt-5.3-codex context is saturated |
 | Opus quality needed but latency matters | `claude-opus-4.6-fast` | Fast mode; slight quality trade-off acceptable |
+| Multi-purpose structured reasoning, agent shop dispatch | `gpt-5.4` | Stronger structured reasoning than gpt-5.1; good for @shop orchestration |
 | General-purpose strong reasoning, bounded scope | `gpt-5.1` | Strong GPT-5 family; cost-effective for structured tasks |
+| Fast utility — non-trivial complexity | `gpt-5.4-mini` | Better than gpt-4.1 for tasks needing light reasoning; low cost |
 | Fast, cheap utility tasks (formatting, scaffolding) | `gpt-4.1` | Cheapest available; suitable for deterministic low-stakes tasks |
 
 **Quick rule:**
@@ -454,6 +464,7 @@ meta-engineering / agent files / architecture decisions → claude-opus-4.6
 code changes + CI / build / test work                  → claude-sonnet-4.6
 fast codebase exploration (task: explore)              → claude-haiku-4.5
 heavy code gen / algorithmic                           → gpt-5.3-codex
+@shop orchestration / structured dispatch              → gpt-5.4
 fast cheap utility (format, scaffold)                  → gpt-4.1
 ```
 
@@ -488,6 +499,7 @@ When dispatching multiple sub-agents: apply the Multi-Todo Model Dispatch protoc
 | `bench [pkg]` | Run `go test -bench=. -benchmem -count=10` + benchstat comparison |
 | `profile` | Collect pprof CPU/heap/goroutine profiles and report hotspots |
 | `agentupgrade` | Full self-assessment and upgrade of all agent configuration files (see protocol below) |
+| `@shop` | Curate optimal agent+model+skill cart for all pending/requested jobs; present shopping cart; wait for approval; dispatch (see protocol below) |
 
 ---
 
@@ -575,6 +587,8 @@ Copilot session. Invoke them explicitly when the trigger conditions match. Do no
 - Any GitHub Actions workflow setup or CI/CD pipeline → **github-actions-expert** agent
 - Any Debian host/VM OS issue (apt, systemd, packages, kernel) → **debian-linux-expert** agent
 - Any comprehensive multi-language test generation → **polyglot-test-generator** agent
+- 2+ distinct jobs in one message touching different domains → **@shop** (curate cart before dispatch)
+- Sprint start with pending todos + "go" / "start" → **@shop** (source team before executing)
 
 ---
 
@@ -1012,3 +1026,84 @@ Skill source: `https://github.com/github/awesome-copilot/blob/main/docs/README.s
 - "Not applicable" skill becomes relevant (scope expansion) → move from catalogue to active
 - New AI model available → evaluate for model routing table; update if better fit found
 - New plugin installed → add to Installed Plugins table; evaluate trigger conditions
+
+---
+
+## `shop` Protocol
+
+Triggered by `@shop` in any message — or auto-triggered when jarvis6.0 detects 2+ distinct jobs
+requiring different specialist agents, models, or skills, OR when a sprint starts with pending todos.
+
+**Purpose**: Source the optimal agent + model + skill combination for every pending and explicitly
+requested job *before* any execution begins. Acts as a curated dispatch pre-flight that maximizes
+quality and minimizes wasted effort. `@shop` is a superset of Multi-Todo Model Dispatch — it adds
+custom agent selection and skill pre-loading. When both would trigger, run `@shop`.
+
+```
+1. INTAKE
+   - Read all pending SQL todos: SELECT * FROM todos WHERE status != 'done'
+   - Read plan.md for in-progress/upcoming work
+   - Parse current message for explicit job requests
+   - Produce unified JOB LIST with: title, description, domain tags, priority
+
+2. CATALOG
+   Scan all available agents, skills, and models in parallel:
+   - Custom agents:     .github/agents/*.agent.md (name, description, trigger conditions)
+   - Installed skills:  .github/skills/ (trigger conditions, bundled assets, auto-invoke rules)
+   - Installed plugins: ~/.copilot/installed-plugins/ (sub-agent types + skills available)
+   - Built-in types:    explore | task | general-purpose | code-review
+   - Available models:  full list from Model Routing Policy table
+   Cross-reference: jarvis6.0 auto-invoke rules for domain → agent/skill mappings
+
+3. MATCH
+   For each job in JOB LIST evaluate:
+   - Custom agent match:     does any .github/agents/*.agent.md trigger condition fit?
+   - Built-in agent type:    explore (research) / task (build/test/lint) / general-purpose (complex multi-step)
+   - Optimal model:          apply Model Routing Policy table
+   - Skills to pre-activate: apply auto-invoke rules for the job domain
+   - Dependencies:           check todo_deps; does job N block job N+1?
+   - Parallelizable:         YES if no shared state and no sequential dependency on pending job
+
+4. PRESENT — THE CART
+   Output the Shopping Cart before ANY execution begins:
+
+   SHOPPING CART 🛒
+   ══════════════════════════════════════════════════════════════════════
+   | # | Job                  | Agent                 | Model             | Skills                          | Parallel?        |
+   |---|----------------------|-----------------------|-------------------|---------------------------------|------------------|
+   | 1 | Example: new API     | api-architect.agent   | claude-opus-4.6   | create-technical-spike          | Yes              |
+   | 2 | Example: fix SSH bug | debug.agent.md        | claude-opus-4.6   | doublecheck                     | No (dep: #1)     |
+   | 3 | Example: run tests   | task (built-in)       | claude-sonnet-4.6 | polyglot-test-agent             | Yes (with #1)    |
+
+   Dispatch order: [1, 3] parallel → wait → [2]
+   Estimated cost tier: Premium / Standard / Budget (based on model selection)
+
+5. CONFIRM
+   Ask: "Approve cart and dispatch? Reply 'go' or adjust item #N."
+   - NEVER dispatch without explicit approval.
+   - Offer swap options: "Swap #2 to claude-sonnet-4.6 to reduce cost — acceptable quality trade-off?"
+   - Offer merge: "Items #1 and #3 can run in the same jarvis6.0 task — save a context switch?"
+   - Offer defer: "Item #4 is low priority — defer to next session?"
+
+6. DISPATCH
+   On approval:
+   - Fire agents in parallel where Parallel? = Yes
+   - Update SQL todos to status='in_progress' as each fires
+   - Pass full vProx/vOps context + assigned skills to each sub-agent
+   - Apply Multi-Todo Model Dispatch protocol for any sub-sprint within a single agent call
+   - Report completion per item as agents return; update status='done'
+   - Surface blockers immediately (do NOT silently skip a blocked item)
+   - After all items complete: run @shop again if new todos were created during dispatch
+```
+
+**Auto-trigger conditions (no explicit `@shop` needed):**
+- Sprint start: session has >2 pending todos AND user says "go" / "start" / "begin"
+- Mixed-domain request: single message touches code + docs + agents + CI simultaneously
+- New project kickoff: `new project` protocol feeds directly into `@shop` for team dispatch
+- Post-agentupgrade: automatically propose a shop run to re-curate assignments after roster update
+
+**Cart formatting rules:**
+- Always show "Dispatch order" as a sentence below the table — makes sequencing obvious at a glance
+- Always show "Estimated cost tier" — helps user decide if model swaps are worth it
+- Offer at least one cost-reduction swap when cart total exceeds 3 Premium-model items
+- Mark items `BLOCKED` if a dependency is unresolved; never silently drop them from the cart
