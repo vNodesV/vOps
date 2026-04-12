@@ -310,6 +310,7 @@ function SummaryBoxes() {
           </div>
         )}
       </div>
+
     </div>
   );
 }
@@ -699,6 +700,80 @@ function IngestSection() {
   );
 }
 
+
+function ChainsFloater() {
+  const [expanded, setExpanded] = useState(false);
+  const qc = useQueryClient();
+  const cached = qc.getQueryData<{ chains: ChainStatus[] }>(['fleet-chains']);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['fleet-chains'],
+    queryFn: getFleetChains,
+    refetchInterval: expanded ? 30_000 : false,
+    enabled: expanded,
+  });
+
+  const chains = (data?.chains ?? cached?.chains ?? []);
+  const synced = chains.filter((c) => !c.catching_up && c.node_status !== 'down').length;
+
+  return (
+    <div className="card" style={{ marginTop: '1rem' }}>
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        style={{
+          border: '1px solid var(--vn-border)',
+          background: 'var(--vn-surface-2)',
+          color: 'var(--vn-text)',
+          borderRadius: 999,
+          padding: '0.35rem 0.75rem',
+          cursor: 'pointer',
+          fontSize: '0.82rem',
+          fontWeight: 600,
+        }}
+      >
+        {chains.length > 0 ? '⛓ Chains (' + synced + ' synced)' : '⛓ Chains'}
+      </button>
+
+      {expanded && (
+        <div style={{ marginTop: '0.75rem' }}>
+          {isLoading ? (
+            <Spinner label="Loading chains" />
+          ) : chains.length === 0 ? (
+            <p style={{ color: 'var(--vn-text-muted)', fontSize: '0.85rem', margin: 0 }}>No chains available.</p>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table className="vn-table">
+                <thead>
+                  <tr>
+                    {['Chain', 'Height', 'Status', 'Upgrade'].map((h) => <th key={h}>{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {chains.map((c) => (
+                    <tr key={c.chain}>
+                      <td>{c.dashboard_name || c.chain}</td>
+                      <td>{(c.height ?? 0).toLocaleString()}</td>
+                      <td><Badge status={c.node_status} /></td>
+                      <td>
+                        {c.upgrade_pending ? (
+                          <span style={{ color: 'var(--vn-warning)' }}>{c.upgrade_name || 'Pending'}</span>
+                        ) : (
+                          <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Dashboard Page ──────────────────────────────────────────── */
 
 export default function DashboardPage() {
@@ -764,6 +839,8 @@ export default function DashboardPage() {
         </h3>
         <ServersPanel />
       </div>
+
+      <ChainsFloater />
     </div>
   );
 }

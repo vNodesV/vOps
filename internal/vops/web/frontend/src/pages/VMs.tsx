@@ -19,6 +19,7 @@ import { openSSEStream } from '../api/sse';
 import Badge from '../components/Badge';
 import Spinner from '../components/Spinner';
 import UpgradeModal from '../components/UpgradeModal';
+import { BASE } from '../api/client';
 
 /* ═══════════════════════════════════════════════════════════════
    Shared styles
@@ -343,37 +344,44 @@ function SnapshotPanel({ host, domain }: { host: string; domain: string }) {
   );
 }
 
-function DomainCard({ host, domain }: { host: string; domain: LibvirtDomain }) {
-  const [showSnaps, setShowSnaps] = useState(false);
-  const [actionBusy, setActionBusy] = useState<string | null>(null);
-  const [actionMsg, setActionMsg] = useState('');
-  const qc = useQueryClient();
+type VMManagerAction = 'updates' | 'advanced' | 'shell';
 
-  const doAction = async (action: string) => {
-    setActionBusy(action);
-    setActionMsg('');
-    try {
-      const res = await vmDomainAction(host, domain.name, action);
-      setActionMsg(`\u2713 ${res.result || action}`);
-      setTimeout(() => qc.invalidateQueries({ queryKey: ['vm-domains', host] }), 1500);
-    } catch (e: unknown) {
-      setActionMsg(`\u2717 ${e instanceof Error ? e.message : String(e)}`);
-    } finally {
-      setActionBusy(null);
-    }
-  };
+interface DomainSelection {
+  host: string;
+  domain: LibvirtDomain;
+}
 
+function DomainCard({
+  domain,
+  vmStatus,
+  selected,
+  activeAction,
+  onSelectAction,
+}: {
+  domain: LibvirtDomain;
+  vmStatus?: VMStatus;
+  selected: boolean;
+  activeAction: VMManagerAction;
+  onSelectAction: (action: VMManagerAction) => void;
+}) {
   const isRunning = domain.state === 'running';
   const isPaused = domain.state === 'paused';
+  const aptCount = vmStatus?.apt_count ?? 0;
 
   return (
     <div
+      onClick={() => onSelectAction(activeAction)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter') onSelectAction(activeAction); }}
       style={{
-        border: `1px solid ${isRunning ? 'var(--vn-border)' : 'var(--vn-border)'}`,
-        borderLeft: `3px solid ${isRunning ? 'var(--vn-success)' : isPaused ? 'var(--vn-warning)' : 'var(--vn-text-subtle)'}`,
+        border: selected ? '1px solid var(--vn-primary)' : '1px solid var(--vn-border)',
+        borderLeft: '3px solid ' + (isRunning ? 'var(--vn-success)' : isPaused ? 'var(--vn-warning)' : 'var(--vn-text-subtle)'),
         borderRadius: 'var(--vn-radius)',
         padding: '0.875rem',
         background: 'var(--vn-surface-2)',
+        boxShadow: selected ? '0 0 0 1px var(--vn-primary) inset' : 'none',
+        cursor: 'pointer',
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
@@ -393,57 +401,78 @@ function DomainCard({ host, domain }: { host: string; domain: LibvirtDomain }) {
         {domain.autostart && <span style={{ color: 'var(--vn-success)' }}>⟳ autostart</span>}
       </div>
 
-      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
-        {!isRunning && !isPaused && (
-          <button className="btn btn-primary btn-sm" onClick={() => doAction('start')} disabled={!!actionBusy} type="button">
-            {actionBusy === 'start' ? '…' : '▶ Start'}
-          </button>
-        )}
-        {isRunning && (
-          <>
-            <button className="btn btn-secondary btn-sm" onClick={() => doAction('shutdown')} disabled={!!actionBusy} type="button">
-              {actionBusy === 'shutdown' ? '…' : '⏹ Shutdown'}
-            </button>
-            <button className="btn btn-secondary btn-sm" onClick={() => doAction('reboot')} disabled={!!actionBusy} type="button">
-              {actionBusy === 'reboot' ? '…' : '↺ Reboot'}
-            </button>
-            <button className="btn btn-secondary btn-sm" onClick={() => doAction('suspend')} disabled={!!actionBusy} type="button">
-              {actionBusy === 'suspend' ? '…' : '⏸ Suspend'}
-            </button>
-          </>
-        )}
-        {isPaused && (
-          <button className="btn btn-primary btn-sm" onClick={() => doAction('resume')} disabled={!!actionBusy} type="button">
-            {actionBusy === 'resume' ? '…' : '▶ Resume'}
-          </button>
-        )}
-        {(isRunning || isPaused) && (
-          <button className="btn btn-danger btn-sm" onClick={() => doAction('destroy')} disabled={!!actionBusy} type="button"
-            title="Force power-off (may corrupt disk)">
-            {actionBusy === 'destroy' ? '…' : '⚡ Force Off'}
-          </button>
-        )}
+      <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap' }}>
         <button
-          className="btn btn-secondary btn-sm"
-          onClick={() => setShowSnaps(v => !v)}
           type="button"
+          onClick={(e) => { e.stopPropagation(); onSelectAction('updates'); }}
+          style={{
+            padding: '0.28rem 0.6rem',
+            borderRadius: 999,
+            border: '1px solid var(--vn-border)',
+            background: aptCount > 0 ? 'rgba(245,158,11,0.16)' : 'rgba(16,185,129,0.14)',
+            color: aptCount > 0 ? 'var(--vn-warning)' : 'var(--vn-success)',
+            fontSize: '0.74rem',
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+          aria-label={'Updates for ' + domain.name}
         >
-          {showSnaps ? 'Hide Snapshots' : 'Snapshots'}
+          {aptCount > 0 ? '🔴 Updates (' + aptCount + ')' : '🟢 ✓ Updated'}
+        </button>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onSelectAction('advanced'); }}
+          style={{
+            padding: '0.28rem 0.6rem',
+            borderRadius: 999,
+            border: activeAction === 'advanced' && selected ? '1px solid var(--vn-primary)' : '1px solid var(--vn-border)',
+            background: 'var(--vn-surface)',
+            color: 'var(--vn-text-muted)',
+            fontSize: '0.74rem',
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+          aria-label={'Advanced controls for ' + domain.name}
+        >
+          ⚙ Advanced
+        </button>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onSelectAction('shell'); }}
+          style={{
+            padding: '0.28rem 0.6rem',
+            borderRadius: 999,
+            border: activeAction === 'shell' && selected ? '1px solid var(--vn-success)' : '1px solid var(--vn-border)',
+            background: 'var(--vn-surface)',
+            color: 'var(--vn-text-muted)',
+            fontSize: '0.74rem',
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+          aria-label={'Shell for ' + domain.name}
+        >
+          🖥 Shell
         </button>
       </div>
-
-      {actionMsg && (
-        <div style={{ fontSize: '0.75rem', marginTop: '0.25rem', color: actionMsg.startsWith('\u2713') ? 'var(--vn-success)' : 'var(--vn-danger)' }}>
-          {actionMsg}
-        </div>
-      )}
-
-      {showSnaps && <SnapshotPanel host={host} domain={domain.name} />}
     </div>
   );
 }
 
-function HostPanel({ host, search }: { host: HypervisorHost; search?: string }) {
+function HostPanel({
+  host,
+  search,
+  selected,
+  activeAction,
+  vmStatusMap,
+  onSelect,
+}: {
+  host: HypervisorHost;
+  search?: string;
+  selected: DomainSelection | null;
+  activeAction: VMManagerAction;
+  vmStatusMap: Map<string, VMStatus>;
+  onSelect: (selection: DomainSelection, action: VMManagerAction) => void;
+}) {
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['vm-domains', host.name],
     queryFn: () => getVMDomains(host.name),
@@ -493,15 +522,26 @@ function HostPanel({ host, search }: { host: HypervisorHost; search?: string }) 
           <p style={{ margin: '0 0 0.5rem' }}>No VMs found on this hypervisor.</p>
           <p style={{ margin: 0, fontSize: '0.8rem' }}>
             This can mean: (a) no VMs are defined yet — use <strong>+ Create VM</strong> to deploy one,
-            or (b) the SSH connection to libvirtd failed. Verify with:{' '}
+            or (b) the SSH connection to libvirtd failed. Verify with{' '}
             <code style={{ background: 'var(--vn-surface-2)', padding: '0.1rem 0.3rem', borderRadius: 3 }}>ssh user@host virsh list --all</code>
           </p>
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '0.75rem' }}>
-          {domains.map(d => (
-            <DomainCard key={d.name} host={host.name} domain={d} />
-          ))}
+          {domains.map((d) => {
+            const isSelected = selected?.host === host.name && selected?.domain.name === d.name;
+            const vmStatus = vmStatusMap.get(d.name.toLowerCase());
+            return (
+              <DomainCard
+                key={d.name}
+                domain={d}
+                vmStatus={vmStatus}
+                selected={isSelected}
+                activeAction={isSelected ? activeAction : 'updates'}
+                onSelectAction={(action) => onSelect({ host: host.name, domain: d }, action)}
+              />
+            );
+          })}
         </div>
       )}
     </div>
@@ -651,19 +691,268 @@ function CreateVMModal({ hosts, onClose }: { hosts: HypervisorHost[]; onClose: (
   );
 }
 
+function UpdatesPanel({
+  host,
+  domain,
+  vmStatus,
+}: {
+  host: string;
+  domain: LibvirtDomain;
+  vmStatus?: VMStatus;
+}) {
+  const qc = useQueryClient();
+  const [logLines, setLogLines] = useState<Array<{ step: string; msg: string }>>([]);
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const cancelRef = useRef<(() => void) | null>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => () => {
+    cancelRef.current?.();
+    cancelRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [logLines.length]);
+
+  const runUpgrade = () => {
+    cancelRef.current?.();
+    setError(null);
+    setRunning(true);
+    setLogLines([]);
+
+    const cancel = openSSEStream(
+      vmUpgradeURL(domain.name),
+      'POST',
+      (msg) => {
+        try {
+          const data = JSON.parse(msg.data) as { step: string; msg: string };
+          setLogLines((prev) => prev.concat(data));
+          if (data.step === 'complete' || data.step.includes('error')) {
+            setRunning(false);
+            cancelRef.current = null;
+            qc.invalidateQueries({ queryKey: ['vm-status'] });
+          }
+        } catch {
+        }
+      },
+      () => {
+        setRunning(false);
+        qc.invalidateQueries({ queryKey: ['vm-status'] });
+      },
+      (err) => {
+        setRunning(false);
+        setError(err.message || 'SSE connection lost');
+      },
+      {},
+    );
+
+    cancelRef.current = cancel;
+  };
+
+  const pending = vmStatus?.apt_count ?? 0;
+
+  return (
+    <div className="card" style={{ marginTop: '1rem' }}>
+      <h3 style={{ margin: '0 0 0.4rem', fontSize: '1rem' }}>Updates — {domain.name} on {host}</h3>
+      <div style={{ fontSize: '1.4rem', fontWeight: 700, color: pending > 0 ? 'var(--vn-warning)' : 'var(--vn-success)' }}>
+        {pending > 0 ? String(pending) + ' pending' : '✓ Updated'}
+      </div>
+      <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem' }}>
+        <button className="btn btn-primary btn-sm" onClick={runUpgrade} disabled={running} type="button">
+          {running ? 'Running…' : 'Run Upgrade'}
+        </button>
+      </div>
+      {(logLines.length > 0 || running || error) && (
+        <div style={{ marginTop: '0.75rem', border: '1px solid var(--vn-border)', background: 'var(--vn-surface-2)', borderRadius: 'var(--vn-radius)', maxHeight: 260, overflow: 'auto', padding: '0.75rem', fontFamily: 'monospace', fontSize: '0.75rem' }}>
+          {logLines.map((line, idx) => (
+            <div key={line.step + '-' + idx} style={{ marginBottom: '0.2rem', color: line.step.includes('error') ? 'var(--vn-danger)' : 'var(--vn-text)' }}>
+              <span style={{ color: 'var(--vn-text-subtle)', marginRight: 6 }}>{line.step}</span>
+              <span>{line.msg}</span>
+            </div>
+          ))}
+          {running && <div style={{ color: 'var(--vn-info)' }}>Streaming…</div>}
+          {error && <div style={{ color: 'var(--vn-danger)' }}>{error}</div>}
+          <div ref={bottomRef} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdvancedPanel({ host, domain }: { host: string; domain: LibvirtDomain }) {
+  const qc = useQueryClient();
+  const [actionBusy, setActionBusy] = useState<string | null>(null);
+  const [log, setLog] = useState<string[]>([]);
+
+  const doAction = async (action: string) => {
+    setActionBusy(action);
+    try {
+      const res = await vmDomainAction(host, domain.name, action);
+      setLog((prev) => prev.concat('✓ ' + (res.result || action)));
+      qc.invalidateQueries({ queryKey: ['vm-domains', host] });
+    } catch (e: unknown) {
+      setLog((prev) => prev.concat('✗ ' + (e instanceof Error ? e.message : String(e))));
+    } finally {
+      setActionBusy(null);
+    }
+  };
+
+  const isRunning = domain.state === 'running';
+  const isPaused = domain.state === 'paused';
+
+  return (
+    <div className="card" style={{ marginTop: '1rem' }}>
+      <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem' }}>Virsh Controls — {domain.name} on {host}</h3>
+      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+        {!isRunning && !isPaused && (
+          <button className="btn btn-primary btn-sm" onClick={() => doAction('start')} disabled={!!actionBusy} type="button">{actionBusy === 'start' ? '…' : '▶ Start'}</button>
+        )}
+        {isRunning && (
+          <>
+            <button className="btn btn-secondary btn-sm" onClick={() => doAction('shutdown')} disabled={!!actionBusy} type="button">{actionBusy === 'shutdown' ? '…' : '⏹ Shutdown'}</button>
+            <button className="btn btn-secondary btn-sm" onClick={() => doAction('reboot')} disabled={!!actionBusy} type="button">{actionBusy === 'reboot' ? '…' : '↺ Reboot'}</button>
+            <button className="btn btn-secondary btn-sm" onClick={() => doAction('suspend')} disabled={!!actionBusy} type="button">{actionBusy === 'suspend' ? '…' : '⏸ Suspend'}</button>
+          </>
+        )}
+        {isPaused && (
+          <button className="btn btn-primary btn-sm" onClick={() => doAction('resume')} disabled={!!actionBusy} type="button">{actionBusy === 'resume' ? '…' : '▶ Resume'}</button>
+        )}
+        {(isRunning || isPaused) && (
+          <button className="btn btn-danger btn-sm" onClick={() => doAction('destroy')} disabled={!!actionBusy} type="button" title="Force power-off (may corrupt disk)">{actionBusy === 'destroy' ? '…' : '⚡ Force Off'}</button>
+        )}
+      </div>
+      <SnapshotPanel host={host} domain={domain.name} />
+      {log.length > 0 && (
+        <div style={{ marginTop: '0.75rem', border: '1px solid var(--vn-border)', background: 'var(--vn-surface-2)', borderRadius: 'var(--vn-radius)', maxHeight: 220, overflow: 'auto', padding: '0.75rem', fontFamily: 'monospace', fontSize: '0.75rem' }}>
+          {log.map((line, i) => (
+            <div key={line + '-' + i} style={{ color: line.startsWith('✗') ? 'var(--vn-danger)' : 'var(--vn-success)', marginBottom: '0.2rem' }}>{line}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ShellPanel({ host, vmName }: { host: string; vmName: string }) {
+  const [lines, setLines] = useState<string[]>([]);
+  const [input, setInput] = useState('');
+  const [connected, setConnected] = useState(false);
+  const [unavailable, setUnavailable] = useState(false);
+  const wsRef = useRef<WebSocket | null>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const apiBase = import.meta.env.VITE_API_BASE ?? BASE;
+    const wsURL = proto + '://' + window.location.host + apiBase + '/api/v1/vm/shell?vm=' + encodeURIComponent(vmName);
+    const ws = new WebSocket(wsURL);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      setConnected(true);
+      setUnavailable(false);
+      setLines((prev) => prev.concat('Connected to ' + vmName + ' on ' + host));
+    };
+
+    ws.onmessage = (event) => {
+      setLines((prev) => prev.concat(String(event.data)));
+    };
+
+    ws.onerror = () => {
+      setUnavailable(true);
+    };
+
+    ws.onclose = (event) => {
+      setConnected(false);
+      if (event.code === 1006) setUnavailable(true);
+    };
+
+    return () => {
+      ws.close();
+      wsRef.current = null;
+    };
+  }, [host, vmName]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [lines.length]);
+
+  const send = () => {
+    if (!input.trim()) return;
+    wsRef.current?.send(input);
+    setLines((prev) => prev.concat('$ ' + input));
+    setInput('');
+  };
+
+  if (!connected && !unavailable) {
+    return (
+      <div className="card" style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <Spinner size={16} /> Shell connecting…
+      </div>
+    );
+  }
+
+  if (unavailable) {
+    return (
+      <div className="card" style={{ marginTop: '1rem', color: 'var(--vn-text-muted)' }}>
+        Shell unavailable — backend not yet configured.
+      </div>
+    );
+  }
+
+  return (
+    <div className="card" style={{ marginTop: '1rem' }}>
+      <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem' }}>Shell — {vmName}</h3>
+      <div style={{ border: '1px solid var(--vn-border)', borderRadius: 'var(--vn-radius)', background: 'var(--vn-surface-2)', height: 260, overflow: 'auto', padding: '0.75rem', fontFamily: 'monospace', fontSize: '0.78rem' }}>
+        {lines.map((line, i) => <div key={line + '-' + i}>{line}</div>)}
+        <div ref={bottomRef} />
+      </div>
+      <input
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') send();
+        }}
+        placeholder="Type command and press Enter"
+        style={{ width: '100%', marginTop: '0.6rem', padding: '0.45rem 0.6rem', borderRadius: 'var(--vn-radius)', border: '1px solid var(--vn-border)', background: 'var(--vn-surface)', color: 'var(--vn-text)', fontFamily: 'monospace', fontSize: '0.78rem' }}
+      />
+    </div>
+  );
+}
+
 function VMsTabContent() {
   const [showCreate, setShowCreate] = useState(false);
   const [hostFilter, setHostFilter] = useState('');
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState(() => searchParams.get('filter') ?? '');
+  const [selected, setSelected] = useState<DomainSelection | null>(null);
+  const [activeAction, setActiveAction] = useState<VMManagerAction>('updates');
+
   const { data, isLoading, isError } = useQuery({
     queryKey: ['vm-hosts'],
     queryFn: getVMHosts,
     staleTime: 60_000,
   });
 
+  const statusQ = useQuery({
+    queryKey: ['vm-status'],
+    queryFn: getVMStatus,
+    refetchInterval: 60_000,
+    retry: false,
+  });
+
   const hosts: HypervisorHost[] = data?.hosts ?? [];
   const visibleHosts = hostFilter ? hosts.filter(h => h.name === hostFilter) : hosts;
+
+  const vmStatusMap = new Map<string, VMStatus>((statusQ.data?.vms ?? []).map((vm) => [vm.name.toLowerCase(), vm]));
+  const selectedStatus = selected ? vmStatusMap.get(selected.domain.name.toLowerCase()) : undefined;
+
+  const handleSelect = (next: DomainSelection, action: VMManagerAction) => {
+    setSelected(next);
+    setActiveAction(action);
+  };
 
   return (
     <div>
@@ -693,7 +982,7 @@ function VMsTabContent() {
             aria-label="Filter by host"
           >
             <option value="">All hosts</option>
-            {hosts.map(h => <option key={h.name} value={h.name}>{h.name}{h.datacenter ? ` (${h.datacenter})` : ''}</option>)}
+            {hosts.map(h => <option key={h.name} value={h.name}>{h.name}{h.datacenter ? ' (' + h.datacenter + ')' : ''}</option>)}
           </select>
           <input
             type="search"
@@ -730,25 +1019,45 @@ function VMsTabContent() {
         <div className="card">
           <h3 style={{ margin: '0 0 0.5rem', fontSize: '1rem' }}>No hypervisor hosts configured</h3>
           <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--vn-text-muted)' }}>
-            Add a <code>[host]</code> entry to your <code>config/infra/*.toml</code> file with a <code>lan_ip</code> and{' '}
-            <code>user</code> that can reach the hypervisor.
+            Add a <code>[host]</code> entry to your <code>config/infra/*.toml</code> file with a <code>lan_ip</code> and <code>user</code> that can reach the hypervisor.
           </p>
           <pre style={{
             marginTop: '0.75rem', fontSize: '0.75rem', background: 'var(--vn-surface-2)',
             borderRadius: 'var(--vn-radius)', padding: '0.75rem', overflow: 'auto',
-          }}>{`[[host]]
-name       = "hypervisor"
-lan_ip     = "10.0.0.1"
-user       = "ubuntu"
-datacenter = "QC"`}</pre>
+          }}>{'[[host]\nname       = "hypervisor"\nlan_ip     = "10.0.0.1"\nuser       = "ubuntu"\ndatacenter = "QC"'}</pre>
         </div>
       ) : (
-        visibleHosts.map(h => <HostPanel key={h.name} host={h} search={search} />)
+        visibleHosts.map(h => (
+          <HostPanel
+            key={h.name}
+            host={h}
+            search={search}
+            selected={selected}
+            activeAction={activeAction}
+            vmStatusMap={vmStatusMap}
+            onSelect={handleSelect}
+          />
+        ))
+      )}
+
+      {!selected ? (
+        <div className="card" style={{ textAlign: 'center', padding: '2rem', color: 'var(--vn-text-muted)' }}>
+          Select a server above to manage…
+        </div>
+      ) : activeAction === 'updates' ? (
+        <UpdatesPanel host={selected.host} domain={selected.domain} vmStatus={selectedStatus} />
+      ) : activeAction === 'advanced' ? (
+        <AdvancedPanel host={selected.host} domain={selected.domain} />
+      ) : (
+        <ShellPanel host={selected.host} vmName={selected.domain.name} />
       )}
     </div>
   );
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   Chains Tab Components
+   ═══════════════════════════════════════════════════════════════ */
 /* ═══════════════════════════════════════════════════════════════
    Chains Tab Components
    ═══════════════════════════════════════════════════════════════ */
@@ -1533,176 +1842,6 @@ function ServicesInlineContent() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   Chains Tab Content (merged Chains + Services)
-   ═══════════════════════════════════════════════════════════════ */
-
-function ChainsTabContent() {
-  const queryClient = useQueryClient();
-
-  const [editChain, setEditChain] = useState<ChainStatus | null>(null);
-
-  const chainsQ = useQuery({
-    queryKey: ['fleet-chains'],
-    queryFn: getFleetChains,
-    refetchInterval: 30_000,
-  });
-
-  const registeredQ = useQuery({
-    queryKey: ['registered-chains'],
-    queryFn: getRegisteredChains,
-    refetchInterval: 60_000,
-  });
-
-  const servicesQ = useQuery({
-    queryKey: ['services'],
-    queryFn: getServices,
-    refetchInterval: 30_000,
-  });
-
-  const removeMutation = useMutation({
-    mutationFn: (chain: string) => unregisterChain(chain),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['fleet-chains'] });
-      queryClient.invalidateQueries({ queryKey: ['registered-chains'] });
-    },
-  });
-
-  const editMutation = useMutation({
-    mutationFn: ({ chain, rpc_url }: { chain: string; rpc_url: string }) =>
-      registerChain({ chain, rpc_url }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['fleet-chains'] });
-      queryClient.invalidateQueries({ queryKey: ['registered-chains'] });
-      setEditChain(null);
-    },
-  });
-
-  const chains = chainsQ.data?.chains ?? [];
-  const services = servicesQ.data?.services ?? [];
-  const registeredMap = new Map<string, RegisteredChain>(
-    (registeredQ.data?.registered_chains ?? []).map((r: RegisteredChain) => [r.chain, r])
-  );
-
-  const synced = chains.filter(c => !c.catching_up && !c.error).length;
-  const catching = chains.filter(c => c.catching_up).length;
-  const proposals = chains.reduce((s, c) => s + (c.active_proposals ?? 0), 0);
-  const upgrades = chains.filter(c => c.upgrade_pending).length;
-
-  const svcOnline = services.filter(s => s.state === 'online').length;
-  const svcDown = services.filter(s => s.state === 'down').length;
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-
-      {/* ── Mutation error banner ───────────────────────────────── */}
-      {(removeMutation.isError || editMutation.isError) && (
-        <div style={{
-          background: 'rgba(239,68,68,0.1)', border: '1px solid var(--vn-danger)',
-          borderRadius: 'var(--vn-radius)', padding: '0.6rem 1rem',
-          color: 'var(--vn-danger)', fontSize: '0.82rem',
-        }}>
-          {removeMutation.isError && `Remove failed: ${(removeMutation.error as Error)?.message ?? 'unknown error'}`}
-          {editMutation.isError && `Save failed: ${(editMutation.error as Error)?.message ?? 'unknown error'}`}
-        </div>
-      )}
-
-      {/* ── Page header ─────────────────────────────────────────── */}
-      <header>
-        <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700, color: 'var(--vn-text)' }}>
-          Chains &amp; Services
-        </h1>
-        <p style={{ margin: '0.25rem 0 0', color: 'var(--vn-text-muted)', fontSize: '0.875rem' }}>
-          Cosmos node status and registered services across your infrastructure
-        </p>
-      </header>
-
-      {/* ── Summary pills ───────────────────────────────────────── */}
-      <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-        {[
-          { label: 'Chains', value: chains.length, color: 'var(--vn-info)' },
-          { label: 'Synced', value: synced, color: 'var(--vn-success)' },
-          { label: 'Syncing', value: catching, color: 'var(--vn-warning)' },
-          { label: 'Proposals', value: proposals, color: proposals > 0 ? 'var(--vn-accent)' : 'var(--vn-text-muted)' },
-          { label: 'Upgrades', value: upgrades, color: upgrades > 0 ? 'var(--vn-warning)' : 'var(--vn-text-muted)' },
-          { label: 'Services', value: services.length, color: 'var(--vn-primary)' },
-          { label: 'Svc Online', value: svcOnline, color: 'var(--vn-success)' },
-          { label: 'Svc Down', value: svcDown, color: svcDown > 0 ? 'var(--vn-danger)' : 'var(--vn-text-muted)' },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="card card-sm" style={{
-            display: 'flex',
-            flexDirection: 'column',
-            minWidth: 80,
-          }}>
-            <span style={{ fontSize: '1.35rem', fontWeight: 700, color, lineHeight: 1 }}>{value}</span>
-            <span style={{ fontSize: '0.68rem', color: 'var(--vn-text-muted)', marginTop: 3, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* ── Section 1: Chains ───────────────────────────────────── */}
-      <section aria-label="Chains">
-        <h2 style={sectionTitle}>⛓ Chains</h2>
-
-        {chainsQ.isLoading && <Spinner />}
-
-        {chainsQ.error && (
-          <p role="alert" style={{ color: 'var(--vn-danger)', fontSize: '0.875rem', margin: 0 }}>
-            Failed to load chain status. Fleet module may be offline.
-          </p>
-        )}
-
-        {!chainsQ.isLoading && chains.length === 0 && !chainsQ.error && (
-          <div className="card" style={{ textAlign: 'center', padding: '2rem', color: 'var(--vn-text-muted)' }}>
-            No chains detected. Register nodes in the Fleet section to see chain status.
-          </div>
-        )}
-
-        {chains.length > 0 && (
-          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-                <thead>
-                  <tr style={{ background: 'var(--vn-surface-2)', borderBottom: '1px solid var(--vn-border)' }}>
-                    {['Chain / ID', 'Height', 'Block Speed', 'Proposals', 'Upgrade', 'Validator', 'Status', 'Actions'].map(h => (
-                      <th key={h} style={thStyle}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {chains.map(c => (
-                    <ChainRow
-                      key={`${c.chain}-${c.type}`}
-                      chain={c}
-                      isRegistered={registeredMap.has(c.chain)}
-                      onRemove={() => removeMutation.mutate(c.chain)}
-                      onEdit={() => setEditChain(c)}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-      </section>
-
-      {/* ── Section 2: Services (full inline management) ── */}
-      <ServicesInlineContent />
-
-      {/* ── Edit Chain Modal ─────────────────────────────────────── */}
-      {editChain && (
-        <EditChainModal
-          chain={editChain}
-          initialRpcUrl={registeredMap.get(editChain.chain)?.rpc_url ?? editChain.rpc_url ?? ''}
-          onClose={() => setEditChain(null)}
-          onSave={(rpcUrl) => editMutation.mutate({ chain: editChain.chain, rpc_url: rpcUrl })}
-        />
-      )}
-
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════
    Fleet Tab Components
    ═══════════════════════════════════════════════════════════════ */
 
@@ -2261,13 +2400,13 @@ function DeployWizardModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-function FleetTabContent() {
+function ManagementCenterTabContent() {
   const [showDeploy, setShowDeploy] = useState(false);
   return (
     <div>
       {showDeploy && <DeployWizardModal onClose={() => setShowDeploy(false)} />}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-        <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700 }}>Fleet</h1>
+        <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700 }}>Management Center</h1>
         <button
           onClick={() => setShowDeploy(true)}
           style={{
@@ -2279,6 +2418,7 @@ function FleetTabContent() {
           🚀 Deploy
         </button>
       </div>
+      <PendingUpdatesWidget />
       <ServersLiveSection />
       <RegisteredChainsSection />
       <VMsSection />
@@ -2287,436 +2427,142 @@ function FleetTabContent() {
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   Patches Tab Components
-   ═══════════════════════════════════════════════════════════════ */
-
-interface PatchRow {
+interface PendingRow {
   kind: 'host' | 'vm';
   name: string;
   datacenter: string;
-  ip: string;
-  os: string;
-  status: string;
-  pending: number;        // apt_count (VM) or apt_pending (host)
+  pending: number;
   online: boolean;
+  upgradeURL: string;
 }
 
-interface UpgradeLog {
-  target: string;
-  lines: { step: string; msg: string }[];
-  done: boolean;
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function stepIcon(step: string): string {
-  if (step.includes('error')) return '✗';
-  if (step === 'complete') return '✓';
-  if (step.endsWith(':start')) return '…';
-  if (step.endsWith(':done')) return '✓';
-  if (step === 'connected') return '⚡';
-  return '·';
-}
-
-function stepColor(step: string): string {
-  if (step.includes('error')) return '#f87171';
-  if (step === 'complete') return '#4ade80';
-  return '#9ca3af';
-}
-
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-function PatchBadge({ n }: { n: number }) {
-  if (n === 0) return <span style={{ color: '#4ade80', fontWeight: 600 }}>✓ up to date</span>;
-  return (
-    <span style={{
-      background: n > 20 ? '#7f1d1d' : '#451a03',
-      color: n > 20 ? '#fca5a5' : '#fbbf24',
-      borderRadius: 4,
-      padding: '2px 8px',
-      fontWeight: 700,
-      fontSize: 13,
-    }}>
-      {n} pending
-    </span>
-  );
-}
-
-function LogPanel({ log, onClose }: { log: UpgradeLog; onClose: () => void }) {
-  const bottomRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [log.lines.length]);
-
-  return (
-    <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-    }}>
-      <div style={{
-        background: '#111827', border: '1px solid #374151', borderRadius: 8,
-        width: '70%', maxWidth: 800, maxHeight: '80vh', display: 'flex', flexDirection: 'column',
-      }}>
-        <div style={{ padding: '12px 16px', borderBottom: '1px solid #374151', display: 'flex', justifyContent: 'space-between' }}>
-          <span style={{ fontWeight: 700 }}>apt upgrade — {log.target}</span>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', fontSize: 18 }}>✕</button>
-        </div>
-        <div style={{ flex: 1, overflow: 'auto', padding: 16, fontFamily: 'monospace', fontSize: 12 }}>
-          {log.lines.map((l, i) => (
-            <div key={i} style={{ color: stepColor(l.step), marginBottom: 2 }}>
-              <span style={{ opacity: 0.6, marginRight: 8 }}>{stepIcon(l.step)}</span>
-              <span style={{ whiteSpace: 'pre-wrap' }}>{l.msg}</span>
-            </div>
-          ))}
-          {!log.done && (
-            <div style={{ color: '#60a5fa', marginTop: 8 }}>
-              <span className="spinner" /> Running…
-            </div>
-          )}
-          <div ref={bottomRef} />
-        </div>
-        {log.done && (
-          <div style={{ padding: '10px 16px', borderTop: '1px solid #374151', textAlign: 'right' }}>
-            <button
-              onClick={onClose}
-              style={{ background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 18px', cursor: 'pointer' }}
-            >
-              Close
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function PatchesTabContent() {
-  const [rows, setRows] = useState<PatchRow[]>([]);
-  const [loading, setLoading] = useState(false);
+function PendingUpdatesWidget() {
+  const qc = useQueryClient();
+  const [upgradeTarget, setUpgradeTarget] = useState<{ name: string; url: string } | null>(null);
   const [scanning, setScanning] = useState(false);
-  const [log, setLog] = useState<UpgradeLog | null>(null);
-  const [upgradingAll, setUpgradingAll] = useState(false);
-  const esRef = useRef<(() => void) | null>(null);
 
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const [hostRes, vmRes] = await Promise.all([getHosts(), getVMStatus()]);
-      const hostRows: PatchRow[] = (hostRes.hosts ?? []).map((h: HostInventory) => ({
-        kind: 'host',
-        name: h.name,
-        datacenter: h.datacenter ?? '',
-        ip: h.lan_ip ?? h.host_name ?? '',
-        os: h.os ?? '',
-        status: h.status,
-        pending: h.apt_pending ?? 0,
-        online: h.status === 'online',
-      }));
-      const vmRows: PatchRow[] = (vmRes.vms ?? []).map((v: VMStatus) => ({
-        kind: 'vm',
-        name: v.name,
-        datacenter: v.datacenter,
-        ip: v.lan_ip || v.public_ip,
-        os: v.os || '',
-        status: v.online ? 'online' : 'offline',
-        pending: v.apt_count ?? 0,
-        online: v.online,
-      }));
-      setRows([...hostRows, ...vmRows]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const hostsQ = useQuery({
+    queryKey: ['fleet-hosts'],
+    queryFn: getHosts,
+    refetchInterval: 60_000,
+    retry: false,
+  });
 
-  useEffect(() => { loadData(); }, []);
+  const statusQ = useQuery({
+    queryKey: ['vm-status'],
+    queryFn: getVMStatus,
+    refetchInterval: 60_000,
+    retry: false,
+  });
 
-  const handleScan = async () => {
+  const rows: PendingRow[] = [
+    ...(hostsQ.data?.hosts ?? []).map((h: HostInventory) => ({
+      kind: 'host' as const,
+      name: h.name,
+      datacenter: h.datacenter ?? '',
+      pending: h.apt_pending ?? 0,
+      online: h.status === 'online',
+      upgradeURL: hostUpgradeURL(h.name),
+    })),
+    ...(statusQ.data?.vms ?? []).map((v: VMStatus) => ({
+      kind: 'vm' as const,
+      name: v.name,
+      datacenter: v.datacenter,
+      pending: v.apt_count ?? 0,
+      online: v.online,
+      upgradeURL: vmUpgradeURL(v.name),
+    })),
+  ];
+
+  const totalPending = rows.reduce((sum, row) => sum + row.pending, 0);
+
+  const runScan = async () => {
     setScanning(true);
     try {
       await Promise.all([scanHosts(), scanAllVMs()]);
-      await loadData();
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['fleet-hosts'] }),
+        qc.invalidateQueries({ queryKey: ['vm-status'] }),
+      ]);
     } finally {
       setScanning(false);
     }
   };
 
-  const openLog = (target: string) => {
-    setLog({ target, lines: [], done: false });
-  };
-
-  const runUpgrade = (row: PatchRow) => {
-    openLog(row.name);
-    const url = row.kind === 'host' ? hostUpgradeURL(row.name) : vmUpgradeURL(row.name);
-    if (esRef.current) esRef.current();
-    const cancel = openSSEStream(
-      url,
-      'POST',
-      (msg) => {
-        try {
-          const data = JSON.parse(msg.data) as { step: string; msg: string };
-          setLog(prev => {
-            if (!prev) return prev;
-            const done = data.step === 'complete' || data.step.includes('error');
-            return { ...prev, lines: [...prev.lines, data], done };
-          });
-          if (data.step === 'complete' || data.step.includes('error')) {
-            esRef.current = null;
-            loadData();
-          }
-        } catch { /* ignore */ }
-      },
-      () => { /* onDone */ },
-      (err) => {
-        const msg = err?.message ? `SSE error: ${err.message}` : 'SSE connection lost';
-        setLog(prev => prev ? { ...prev, lines: [...prev.lines, { step: 'error', msg }], done: true } : prev);
-      },
-      {},
-    );
-    esRef.current = cancel;
-  };
-
-  const runUpgradeAll = async () => {
-    const targets = rows.filter(r => r.online && r.pending > 0);
-    if (targets.length === 0) return;
-    setUpgradingAll(true);
-    for (const row of targets) {
-      await new Promise<void>((resolve) => {
-        openLog(row.name);
-        const url = row.kind === 'host' ? hostUpgradeURL(row.name) : vmUpgradeURL(row.name);
-        openSSEStream(
-          url,
-          'POST',
-          (msg) => {
-            try {
-              const data = JSON.parse(msg.data) as { step: string; msg: string };
-              setLog(prev => {
-                if (!prev) return prev;
-                const done = data.step === 'complete' || data.step.includes('error');
-                return { ...prev, lines: [...prev.lines, data], done };
-              });
-              if (data.step === 'complete' || data.step.includes('error')) {
-                resolve();
-              }
-            } catch { resolve(); }
-          },
-          () => resolve(),
-          () => resolve(),
-          {},
-        );
-      });
-    }
-    setUpgradingAll(false);
-    await loadData();
-  };
-
-  const totalPending = rows.reduce((s, r) => s + r.pending, 0);
-  const onlinePending = rows.filter(r => r.online && r.pending > 0).length;
-
   return (
-    <div>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>🩹 Patch Management</h1>
-        <button
-          onClick={handleScan}
-          disabled={scanning}
-          style={{ background: '#1f2937', color: '#e5e7eb', border: '1px solid #374151', borderRadius: 6, padding: '6px 14px', cursor: scanning ? 'not-allowed' : 'pointer', opacity: scanning ? 0.6 : 1 }}
-        >
-          {scanning ? '⟳ Scanning…' : '⟳ Refresh'}
+    <div className="card" style={{ marginBottom: '1.25rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>Pending Updates</h2>
+          <div style={{ fontSize: '0.78rem', color: 'var(--vn-text-muted)' }}>
+            {totalPending > 0 ? String(totalPending) + ' packages pending' : 'All hosts and VMs up to date'}
+          </div>
+        </div>
+        <button className="btn btn-secondary btn-sm" onClick={runScan} disabled={scanning} type="button">
+          {scanning ? 'Scanning…' : 'Scan'}
         </button>
-        {onlinePending > 0 && (
-          <button
-            onClick={runUpgradeAll}
-            disabled={upgradingAll}
-            style={{ background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 16px', cursor: upgradingAll ? 'not-allowed' : 'pointer', fontWeight: 600 }}
-          >
-            {upgradingAll ? '…Upgrading All' : `⬆ Upgrade All (${onlinePending})`}
-          </button>
-        )}
-        {loading && <span style={{ color: '#9ca3af', fontSize: 13 }}>Loading…</span>}
       </div>
 
-      {/* Summary strip */}
-      <div style={{ display: 'flex', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
-        {[
-          { label: 'Total tracked', value: rows.length, color: '#60a5fa' },
-          { label: 'Online', value: rows.filter(r => r.online).length, color: '#4ade80' },
-          { label: 'Hosts', value: rows.filter(r => r.kind === 'host').length, color: '#c084fc' },
-          { label: 'VMs', value: rows.filter(r => r.kind === 'vm').length, color: '#f9a8d4' },
-          { label: 'Pending updates', value: totalPending, color: totalPending > 0 ? '#fbbf24' : '#4ade80' },
-        ].map(({ label, value, color }) => (
-          <div key={label} style={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 8, padding: '10px 18px', minWidth: 110 }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color }}>{value}</div>
-            <div style={{ fontSize: 12, color: '#9ca3af' }}>{label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Table */}
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid #374151', color: '#9ca3af', textAlign: 'left' }}>
-              {['Type', 'Name', 'Datacenter', 'IP', 'OS', 'Status', 'Pending Updates', 'Action'].map(h => (
-                <th key={h} style={{ padding: '8px 12px', fontWeight: 600 }}>{h}</th>
+      {rows.length === 0 ? (
+        <p style={{ margin: 0, color: 'var(--vn-text-muted)', fontSize: '0.85rem' }}>No hosts or VMs discovered yet.</p>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--vn-border)' }}>
+                {['Type', 'Name', 'Datacenter', 'Pending', 'Action'].map((h) => (
+                  <th key={h} style={{ textAlign: 'left', padding: '0.45rem 0.5rem', color: 'var(--vn-text-muted)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.kind + '-' + row.name} style={{ borderBottom: '1px solid var(--vn-border)' }}>
+                  <td style={{ padding: '0.45rem 0.5rem' }}>{row.kind === 'host' ? '🖥 Host' : '⚙ VM'}</td>
+                  <td style={{ padding: '0.45rem 0.5rem', fontWeight: 600 }}>{row.name}</td>
+                  <td style={{ padding: '0.45rem 0.5rem', color: 'var(--vn-text-muted)' }}>{row.datacenter || '—'}</td>
+                  <td style={{ padding: '0.45rem 0.5rem', color: row.pending > 0 ? 'var(--vn-warning)' : 'var(--vn-success)' }}>{row.pending > 0 ? row.pending : '✓'}</td>
+                  <td style={{ padding: '0.45rem 0.5rem' }}>
+                    {row.online ? (
+                      <button className="btn btn-secondary btn-sm" onClick={() => setUpgradeTarget({ name: row.name, url: row.upgradeURL })} type="button">Upgrade</button>
+                    ) : (
+                      <span style={{ color: 'var(--vn-text-subtle)' }}>offline</span>
+                    )}
+                  </td>
+                </tr>
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={8} style={{ padding: '24px 12px', textAlign: 'center', color: '#6b7280' }}>
-                  {loading ? 'Loading…' : 'No hosts or VMs found. Run a scan first.'}
-                </td>
-              </tr>
-            )}
-            {rows.map(row => (
-              <tr
-                key={`${row.kind}:${row.name}`}
-                style={{ borderBottom: '1px solid #1f2937', transition: 'background .1s' }}
-                onMouseEnter={e => (e.currentTarget.style.background = '#1f2937')}
-                onMouseLeave={e => (e.currentTarget.style.background = '')}
-              >
-                <td style={{ padding: '8px 12px' }}>
-                  <span style={{
-                    background: row.kind === 'host' ? '#312e81' : '#1e3a5f',
-                    color: row.kind === 'host' ? '#a5b4fc' : '#93c5fd',
-                    borderRadius: 4, padding: '2px 8px', fontSize: 11, fontWeight: 600,
-                  }}>
-                    {row.kind === 'host' ? '🖥 Host' : '⚙ VM'}
-                  </span>
-                </td>
-                <td style={{ padding: '8px 12px', fontWeight: 600 }}>{row.name}</td>
-                <td style={{ padding: '8px 12px', color: '#9ca3af' }}>{row.datacenter || '—'}</td>
-                <td style={{ padding: '8px 12px', fontFamily: 'monospace', color: '#d1d5db' }}>{row.ip || '—'}</td>
-                <td style={{ padding: '8px 12px', color: '#9ca3af', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.os || '—'}</td>
-                <td style={{ padding: '8px 12px' }}>
-                  <span style={{ color: row.online ? '#4ade80' : '#f87171', fontWeight: 600 }}>
-                    {row.online ? '● online' : '● offline'}
-                  </span>
-                </td>
-                <td style={{ padding: '8px 12px' }}>
-                  <PatchBadge n={row.pending} />
-                </td>
-                <td style={{ padding: '8px 12px' }}>
-                  {row.online ? (
-                    <button
-                      onClick={() => runUpgrade(row)}
-                      style={{
-                        background: row.pending > 0 ? '#1d4ed8' : '#1f2937',
-                        color: row.pending > 0 ? '#fff' : '#6b7280',
-                        border: '1px solid ' + (row.pending > 0 ? '#2563eb' : '#374151'),
-                        borderRadius: 5, padding: '4px 12px', cursor: row.pending > 0 ? 'pointer' : 'default',
-                        fontSize: 12, fontWeight: 600,
-                      }}
-                    >
-                      {row.pending > 0 ? '⬆ Upgrade' : '✓ Current'}
-                    </button>
-                  ) : (
-                    <span style={{ color: '#6b7280', fontSize: 12 }}>offline</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </tbody>
+          </table>
+        </div>
+      )}
 
-      {/* SSE log modal */}
-      {log && <LogPanel log={log} onClose={() => setLog(null)} />}
+      {upgradeTarget && (
+        <UpgradeModal
+          vmName={upgradeTarget.name}
+          upgradeURL={upgradeTarget.url}
+          onClose={() => {
+            setUpgradeTarget(null);
+            qc.invalidateQueries({ queryKey: ['fleet-hosts'] });
+            qc.invalidateQueries({ queryKey: ['vm-status'] });
+          }}
+        />
+      )}
     </div>
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   Overview Tab
-   ═══════════════════════════════════════════════════════════════ */
+void getFleetChains;
+void sectionTitle;
+void thStyle;
+void ChainRow;
+void EditChainModal;
+void ServicesInlineContent;
 
-function OverviewStat({ label, value, color }: { label: string; value: number; color?: string }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-      <span style={{ fontSize: '1.5rem', fontWeight: 700, color: color ?? 'var(--vn-text)', lineHeight: 1 }}>{value}</span>
-      <span style={{ fontSize: '0.7rem', color: 'var(--vn-text-muted)', marginTop: 2 }}>{label}</span>
-    </div>
-  );
-}
-
-function OverviewTab() {
-  const { data: chainsData } = useQuery({ queryKey: ['fleet-chains'], queryFn: getFleetChains, refetchInterval: 30_000 });
-  const { data: vmData } = useQuery({ queryKey: ['vm-status'], queryFn: getVMStatus, staleTime: 60_000, retry: false });
-  const { data: hostData } = useQuery({ queryKey: ['hosts-overview'], queryFn: getHosts, staleTime: 60_000, retry: false });
-
-  const chains: ChainStatus[] = chainsData?.chains ?? [];
-  const chainsSynced = chains.filter(c => !c.catching_up && !c.error).length;
-  const chainsSyncing = chains.filter(c => c.catching_up).length;
-  const chainsUpgrades = chains.filter(c => c.upgrade_pending).length;
-  const chainsProposals = chains.reduce((s, c) => s + (c.active_proposals ?? 0), 0);
-
-  const vms: VMStatus[] = vmData?.vms ?? [];
-  const vmsOnline = vms.filter(v => v.online).length;
-  const vmsOffline = vms.filter(v => !v.online).length;
-
-  const hosts: HostInventory[] = hostData?.hosts ?? [];
-  const hostsOnline = hosts.filter(h => h.status === 'online').length;
-
-  const totalPending = [
-    ...vms.map(v => v.apt_count ?? 0),
-    ...hosts.map(h => h.apt_pending ?? 0),
-  ].reduce((a, b) => a + b, 0);
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1rem' }}>
-        {/* Chains card */}
-        <div className="card">
-          <div style={{ fontSize: '0.75rem', color: 'var(--vn-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.75rem' }}>🔗 Chains</div>
-          <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
-            <OverviewStat label="Total" value={chains.length} />
-            <OverviewStat label="Synced" value={chainsSynced} color="var(--vn-success)" />
-            <OverviewStat label="Syncing" value={chainsSyncing} color="var(--vn-warning)" />
-            {chainsUpgrades > 0 && <OverviewStat label="Upgrades ⚡" value={chainsUpgrades} color="var(--vn-warning)" />}
-            {chainsProposals > 0 && <OverviewStat label="Proposals" value={chainsProposals} color="var(--vn-accent)" />}
-          </div>
-        </div>
-        {/* Fleet/VMs card */}
-        <div className="card">
-          <div style={{ fontSize: '0.75rem', color: 'var(--vn-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.75rem' }}>🖥 Fleet / VMs</div>
-          <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
-            <OverviewStat label="Total VMs" value={vms.length} />
-            <OverviewStat label="Online" value={vmsOnline} color="var(--vn-success)" />
-            {vmsOffline > 0 && <OverviewStat label="Offline" value={vmsOffline} color="var(--vn-danger)" />}
-            <OverviewStat label="Hosts" value={hosts.length} />
-            <OverviewStat label="Hosts Online" value={hostsOnline} color={hostsOnline === hosts.length && hosts.length > 0 ? 'var(--vn-success)' : 'var(--vn-warning)'} />
-          </div>
-        </div>
-        {/* Patches card */}
-        <div className="card">
-          <div style={{ fontSize: '0.75rem', color: 'var(--vn-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.75rem' }}>🩹 Patches</div>
-          <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
-            <OverviewStat label="Pending updates" value={totalPending} color={totalPending > 0 ? 'var(--vn-warning)' : 'var(--vn-success)'} />
-            <OverviewStat label="Tracked" value={vms.length + hosts.length} />
-          </div>
-        </div>
-      </div>
-      {/* Recent activity */}
-      <div className="card">
-        <div style={{ fontSize: '0.75rem', color: 'var(--vn-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.75rem' }}>📋 Recent Activity</div>
-        <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--vn-text-muted)' }}>No recent activity. Navigate to Audit Log for full history.</p>
-      </div>
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   Main Export — Tabbed Mega-Module
-   ═══════════════════════════════════════════════════════════════ */
-
-const TABS = ['Overview', 'Chains', 'Fleet', 'Patches', 'VMs'] as const;
+const TABS = ['VM Manager', 'Management Center'] as const;
 type Tab = typeof TABS[number];
 
 export default function VMsPage() {
-  const [activeTab, setActiveTab] = useState<Tab>('Overview');
+  const [activeTab, setActiveTab] = useState<Tab>('VM Manager');
   return (
     <div>
       <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--vn-border)', paddingBottom: '0' }}>
@@ -2736,11 +2582,8 @@ export default function VMsPage() {
           </button>
         ))}
       </div>
-      {activeTab === 'Overview' && <OverviewTab />}
-      {activeTab === 'Chains' && <ChainsTabContent />}
-      {activeTab === 'Fleet' && <FleetTabContent />}
-      {activeTab === 'Patches' && <PatchesTabContent />}
-      {activeTab === 'VMs' && <VMsTabContent />}
+      {activeTab === 'VM Manager' && <VMsTabContent />}
+      {activeTab === 'Management Center' && <ManagementCenterTabContent />}
     </div>
   );
 }

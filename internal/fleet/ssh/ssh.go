@@ -174,6 +174,78 @@ func (c *Client) RunStream(cmd, stdinData string, lineCallback func(line string)
 	return waitErr
 }
 
+// ShellSession wraps an interactive PTY session on the remote host.
+// It implements io.ReadWriteCloser: Write sends to SSH stdin, Read returns
+// merged stdout+stderr, and Close tears down the session.
+type ShellSession struct {
+	session *ssh.Session
+	stdin   io.WriteCloser
+	stdout  io.Reader
+}
+
+// Write sends p to the remote shell's stdin.
+func (s *ShellSession) Write(p []byte) (int, error) { return s.stdin.Write(p) }
+
+// Read returns merged stdout+stderr from the remote shell.
+func (s *ShellSession) Read(p []byte) (int, error) { return s.stdout.Read(p) }
+
+// Close terminates the interactive shell session.
+func (s *ShellSession) Close() error {
+	_ = s.stdin.Close()
+	return s.session.Close()
+}
+
+// Resize sends a window-change request to the remote PTY.
+func (s *ShellSession) Resize(rows, cols int) error {
+	return s.session.WindowChange(rows, cols)
+}
+
+// Shell opens an interactive PTY session on the remote host.
+// The caller is responsible for closing the returned ShellSession.
+func (c *Client) Shell() (*ShellSession, error) {
+	sess, err := c.c.NewSession()
+	if err != nil {
+		return nil, fmt.Errorf("fleet/ssh: new session: %w", err)
+	}
+
+	modes := ssh.TerminalModes{
+		ssh.ECHO:          1,
+		ssh.TTY_OP_ISPEED: 14400,
+		ssh.TTY_OP_OSPEED: 14400,
+	}
+	if err := sess.RequestPty("xterm-256color", 24, 80, modes); err != nil {
+		sess.Close()
+		return nil, fmt.Errorf("fleet/ssh: request pty: %w", err)
+	}
+
+	stdinPipe, err := sess.StdinPipe()
+	if err != nil {
+		sess.Close()
+		return nil, fmt.Errorf("fleet/ssh: stdin pipe: %w", err)
+	}
+	stdoutPipe, err := sess.StdoutPipe()
+	if err != nil {
+		sess.Close()
+		return nil, fmt.Errorf("fleet/ssh: stdout pipe: %w", err)
+	}
+	stderrPipe, err := sess.StderrPipe()
+	if err != nil {
+		sess.Close()
+		return nil, fmt.Errorf("fleet/ssh: stderr pipe: %w", err)
+	}
+
+	if err := sess.Shell(); err != nil {
+		sess.Close()
+		return nil, fmt.Errorf("fleet/ssh: start shell: %w", err)
+	}
+
+	return &ShellSession{
+		session: sess,
+		stdin:   stdinPipe,
+		stdout:  io.MultiReader(stdoutPipe, stderrPipe),
+	}, nil
+}
+
 // Close releases the underlying SSH connection and any parent jump connection.
 func (c *Client) Close() error {
 	err := c.c.Close()

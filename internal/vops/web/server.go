@@ -323,6 +323,9 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 			s.requireSession(http.HandlerFunc(s.vmMgr.HandleListNetworks)))
 		mux.Handle("GET /api/v1/vm/hosts/{host}/domains/{domain}/interfaces",
 			s.requireSession(http.HandlerFunc(s.vmMgr.HandleDomainInterfaces)))
+		// WebSocket shell — bidirectional SSH PTY session to a hypervisor host.
+		mux.Handle("GET /api/v1/vm/shell",
+			s.requireSession(http.HandlerFunc(s.vmMgr.HandleShell)))
 	}
 
 	// Services registry routes.
