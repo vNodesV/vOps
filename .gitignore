@@ -97,3 +97,4 @@ ip2l/ip2location.mmdb
 # Built binaries
 /vprox
 /vlog
+agents/.DS_Store
