@@ -98,3 +98,6 @@ ip2l/ip2location.mmdb
 /vprox
 /vlog
 agents/.DS_Store
+
+# Live memo working files (not for public repo)
+.act/
