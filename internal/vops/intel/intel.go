@@ -15,8 +15,8 @@ import (
 
 	"golang.org/x/time/rate"
 
-	"github.com/vNodesV/vProx/internal/vops/config"
-	"github.com/vNodesV/vProx/internal/vops/db"
+	"github.com/vNodesV/vOps/internal/vops/config"
+	"github.com/vNodesV/vOps/internal/vops/db"
 )
 
 // intel source identifiers for cache keys.

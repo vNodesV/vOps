@@ -16,9 +16,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vNodesV/vProx/internal/vops/db"
-	"github.com/vNodesV/vProx/internal/vops/intel"
-	"github.com/vNodesV/vProx/internal/vops/ufw"
+	"github.com/vNodesV/vOps/internal/vops/db"
+	"github.com/vNodesV/vOps/internal/vops/intel"
+	"github.com/vNodesV/vOps/internal/vops/ufw"
 )
 
 // ---------------------------------------------------------------------------

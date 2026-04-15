@@ -3,7 +3,7 @@ package configwizard
 import (
 	"fmt"
 
-	vopscfg "github.com/vNodesV/vProx/internal/vops/config"
+	vopscfg "github.com/vNodesV/vOps/internal/vops/config"
 )
 
 // runVOps runs the interactive wizard for config/vops/vops.toml (Step 4).

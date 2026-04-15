@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	fleetssh "github.com/vNodesV/vProx/internal/fleet/ssh"
-	opsdb "github.com/vNodesV/vProx/internal/vops/db"
+	fleetssh "github.com/vNodesV/vOps/internal/fleet/ssh"
+	opsdb "github.com/vNodesV/vOps/internal/vops/db"
 )
 
 // hostHealthCmd collects host metrics in a single SSH round-trip.

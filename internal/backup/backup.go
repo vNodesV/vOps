@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	applog "github.com/vNodesV/vProx/internal/logging"
+	applog "github.com/vNodesV/vOps/internal/logging"
 )
 
 const defaultCompression = "tar.gz"

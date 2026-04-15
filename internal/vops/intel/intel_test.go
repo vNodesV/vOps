@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vNodesV/vProx/internal/vops/config"
-	"github.com/vNodesV/vProx/internal/vops/db"
-	"github.com/vNodesV/vProx/internal/vops/intel"
+	"github.com/vNodesV/vOps/internal/vops/config"
+	"github.com/vNodesV/vOps/internal/vops/db"
+	"github.com/vNodesV/vOps/internal/vops/intel"
 )
 
 func TestComputeScore_AllSources(t *testing.T) {

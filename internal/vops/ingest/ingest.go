@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vNodesV/vProx/internal/vops/db"
+	"github.com/vNodesV/vOps/internal/vops/db"
 )
 
 // ---------------------------------------------------------------------------

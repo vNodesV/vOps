@@ -26,15 +26,15 @@ import (
 	toml "github.com/pelletier/go-toml/v2"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	backup "github.com/vNodesV/vProx/internal/backup"
-	"github.com/vNodesV/vProx/internal/config"
-	"github.com/vNodesV/vProx/internal/cosmos"
-	"github.com/vNodesV/vProx/internal/counter"
-	"github.com/vNodesV/vProx/internal/geo"
-	"github.com/vNodesV/vProx/internal/limit"
-	applog "github.com/vNodesV/vProx/internal/logging"
-	"github.com/vNodesV/vProx/internal/metrics"
-	ws "github.com/vNodesV/vProx/internal/ws"
+	backup "github.com/vNodesV/vOps/internal/backup"
+	"github.com/vNodesV/vOps/internal/config"
+	"github.com/vNodesV/vOps/internal/cosmos"
+	"github.com/vNodesV/vOps/internal/counter"
+	"github.com/vNodesV/vOps/internal/geo"
+	"github.com/vNodesV/vOps/internal/limit"
+	applog "github.com/vNodesV/vOps/internal/logging"
+	"github.com/vNodesV/vOps/internal/metrics"
+	ws "github.com/vNodesV/vOps/internal/ws"
 )
 
 // --------------------- GLOBALS ---------------------

@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vNodesV/vProx/internal/vops/db"
+	"github.com/vNodesV/vOps/internal/vops/db"
 )
 
 // ScanPorts is the set of ports probed by CheckOSINT / OSINTStream.

@@ -8,8 +8,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/vNodesV/vProx/internal/fleet/config"
-	fleetssh "github.com/vNodesV/vProx/internal/fleet/ssh"
+	"github.com/vNodesV/vOps/internal/fleet/config"
+	fleetssh "github.com/vNodesV/vOps/internal/fleet/ssh"
 )
 
 // scriptBase is the path on remote VMs where vProx scripts are cloned.

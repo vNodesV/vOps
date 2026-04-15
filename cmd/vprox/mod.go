@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"text/tabwriter"
 
-	"github.com/vNodesV/vProx/internal/modules"
+	"github.com/vNodesV/vOps/internal/modules"
 )
 
 // runModCmd handles: vprox mod <sub> [flags]

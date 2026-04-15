@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/vNodesV/vProx/internal/vops/config"
+	"github.com/vNodesV/vOps/internal/vops/config"
 )
 
 func TestDefaultConfig(t *testing.T) {

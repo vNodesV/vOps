@@ -9,10 +9,10 @@ import (
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
-	"github.com/vNodesV/vProx/internal/fleet/config"
-	fleetssh "github.com/vNodesV/vProx/internal/fleet/ssh"
-	"github.com/vNodesV/vProx/internal/fleet/state"
-	vopsconfig "github.com/vNodesV/vProx/internal/vops/config"
+	"github.com/vNodesV/vOps/internal/fleet/config"
+	fleetssh "github.com/vNodesV/vOps/internal/fleet/ssh"
+	"github.com/vNodesV/vOps/internal/fleet/state"
+	vopsconfig "github.com/vNodesV/vOps/internal/vops/config"
 )
 
 // runFleetCmd handles: vprox fleet <sub> [flags]

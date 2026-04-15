@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vNodesV/vProx/internal/fleet/config"
-	fleetssh "github.com/vNodesV/vProx/internal/fleet/ssh"
+	"github.com/vNodesV/vOps/internal/fleet/config"
+	fleetssh "github.com/vNodesV/vOps/internal/fleet/ssh"
 )
 
 // VMStatus holds live system metrics for one VM, collected via SSH.

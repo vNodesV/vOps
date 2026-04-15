@@ -7,7 +7,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
-	"github.com/vNodesV/vProx/internal/metrics"
+	"github.com/vNodesV/vOps/internal/metrics"
 )
 
 // newRegistry creates an isolated registry and registers all vProx collectors

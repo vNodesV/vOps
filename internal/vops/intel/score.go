@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/vNodesV/vProx/internal/vops/db"
+	"github.com/vNodesV/vOps/internal/vops/db"
 )
 
 // ThreatLevel classifies a composite threat score.

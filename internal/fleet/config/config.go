@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
-	chainconfig "github.com/vNodesV/vProx/internal/config"
+	chainconfig "github.com/vNodesV/vOps/internal/config"
 )
 
 // VMPing holds probe configuration for external latency checks via check-host.net.

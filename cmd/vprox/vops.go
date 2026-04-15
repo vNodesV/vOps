@@ -12,13 +12,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/vNodesV/vProx/internal/fleet"
-	fleetcfg "github.com/vNodesV/vProx/internal/fleet/config"
-	vopscfg "github.com/vNodesV/vProx/internal/vops/config"
-	"github.com/vNodesV/vProx/internal/vops/db"
-	"github.com/vNodesV/vProx/internal/vops/ingest"
-	"github.com/vNodesV/vProx/internal/vops/intel"
-	"github.com/vNodesV/vProx/internal/vops/web"
+	"github.com/vNodesV/vOps/internal/fleet"
+	fleetcfg "github.com/vNodesV/vOps/internal/fleet/config"
+	vopscfg "github.com/vNodesV/vOps/internal/vops/config"
+	"github.com/vNodesV/vOps/internal/vops/db"
+	"github.com/vNodesV/vOps/internal/vops/ingest"
+	"github.com/vNodesV/vOps/internal/vops/intel"
+	"github.com/vNodesV/vOps/internal/vops/web"
 )
 
 // runVOpsCmd handles: vprox vops [args...]

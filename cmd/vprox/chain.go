@@ -8,8 +8,8 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/vNodesV/vProx/internal/chain/upgrade"
-	"github.com/vNodesV/vProx/internal/fleet/status"
+	"github.com/vNodesV/vOps/internal/chain/upgrade"
+	"github.com/vNodesV/vOps/internal/fleet/status"
 )
 
 // runChainCmd handles: vprox chain <sub> [flags]

@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
-	chainconfig "github.com/vNodesV/vProx/internal/config"
+	chainconfig "github.com/vNodesV/vOps/internal/config"
 )
 
 // runChain runs the interactive wizard for config/chains/<name>.toml (Step 3).

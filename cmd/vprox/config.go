@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/vNodesV/vProx/internal/configwizard"
+	"github.com/vNodesV/vOps/internal/configwizard"
 )
 
 // runConfigCmd dispatches the `vprox config [step] [args...]` command.

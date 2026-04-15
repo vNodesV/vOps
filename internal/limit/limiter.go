@@ -16,8 +16,8 @@ import (
 
 	"golang.org/x/time/rate"
 
-	"github.com/vNodesV/vProx/internal/geo"
-	applog "github.com/vNodesV/vProx/internal/logging"
+	"github.com/vNodesV/vOps/internal/geo"
+	applog "github.com/vNodesV/vOps/internal/logging"
 )
 
 // OnRateLimitHit is called (if non-nil) each time a 429 response is served.

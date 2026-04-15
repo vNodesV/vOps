@@ -21,9 +21,9 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"github.com/pelletier/go-toml/v2"
-	"github.com/vNodesV/vProx/internal/configwizard"
-	fleetcfg "github.com/vNodesV/vProx/internal/fleet/config"
-	vopscfg "github.com/vNodesV/vProx/internal/vops/config"
+	"github.com/vNodesV/vOps/internal/configwizard"
+	fleetcfg "github.com/vNodesV/vOps/internal/fleet/config"
+	vopscfg "github.com/vNodesV/vOps/internal/vops/config"
 )
 
 // vopsSecretDir returns the path to ~/.vprox/secret and ensures it exists (0700).

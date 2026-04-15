@@ -1,4 +1,4 @@
-module github.com/vNodesV/vProx
+module github.com/vNodesV/vOps
 
 go 1.25
 

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/vNodesV/vProx/internal/backup"
+	"github.com/vNodesV/vOps/internal/backup"
 )
 
 // runBackup runs the interactive wizard for config/backup/backup.toml (Step 7).

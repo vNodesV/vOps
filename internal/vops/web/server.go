@@ -26,16 +26,16 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	gossh "golang.org/x/crypto/ssh"
 
-	"github.com/vNodesV/vProx/internal/fleet"
-	"github.com/vNodesV/vProx/internal/fleet/api"
-	"github.com/vNodesV/vProx/internal/vops/config"
-	"github.com/vNodesV/vProx/internal/vops/db"
-	"github.com/vNodesV/vProx/internal/vops/ingest"
-	"github.com/vNodesV/vProx/internal/vops/intel"
-	"github.com/vNodesV/vProx/internal/vops/services"
-	"github.com/vNodesV/vProx/internal/vops/multiprox"
-	"github.com/vNodesV/vProx/internal/vops/units"
-	"github.com/vNodesV/vProx/internal/vops/vm"
+	"github.com/vNodesV/vOps/internal/fleet"
+	"github.com/vNodesV/vOps/internal/fleet/api"
+	"github.com/vNodesV/vOps/internal/vops/config"
+	"github.com/vNodesV/vOps/internal/vops/db"
+	"github.com/vNodesV/vOps/internal/vops/ingest"
+	"github.com/vNodesV/vOps/internal/vops/intel"
+	"github.com/vNodesV/vOps/internal/vops/services"
+	"github.com/vNodesV/vOps/internal/vops/multiprox"
+	"github.com/vNodesV/vOps/internal/vops/units"
+	"github.com/vNodesV/vOps/internal/vops/vm"
 )
 
 //go:embed static dist

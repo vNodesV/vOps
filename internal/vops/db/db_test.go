@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/vNodesV/vProx/internal/vops/db"
+	"github.com/vNodesV/vOps/internal/vops/db"
 )
 
 func openTestDB(t *testing.T) *db.DB {

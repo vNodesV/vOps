@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vNodesV/vProx/internal/vops/db"
-	"github.com/vNodesV/vProx/internal/vops/ingest"
+	"github.com/vNodesV/vOps/internal/vops/db"
+	"github.com/vNodesV/vOps/internal/vops/ingest"
 )
 
 func TestParseLogLine_Access(t *testing.T) {

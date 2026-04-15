@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"strings"
 
-	fleetssh "github.com/vNodesV/vProx/internal/fleet/ssh"
+	fleetssh "github.com/vNodesV/vOps/internal/fleet/ssh"
 )
 
 // ── GET /api/v1/units/{name}/logs ─────────────────────────────────────────────

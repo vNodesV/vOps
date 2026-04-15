@@ -15,11 +15,11 @@ import (
 	"sync"
 	"time"
 
-	chainconfig "github.com/vNodesV/vProx/internal/config"
-	"github.com/vNodesV/vProx/internal/fleet/config"
-	"github.com/vNodesV/vProx/internal/fleet/runner"
-	"github.com/vNodesV/vProx/internal/fleet/state"
-	"github.com/vNodesV/vProx/internal/fleet/status"
+	chainconfig "github.com/vNodesV/vOps/internal/config"
+	"github.com/vNodesV/vOps/internal/fleet/config"
+	"github.com/vNodesV/vOps/internal/fleet/runner"
+	"github.com/vNodesV/vOps/internal/fleet/state"
+	"github.com/vNodesV/vOps/internal/fleet/status"
 )
 
 // Service is the top-level fleet control plane.

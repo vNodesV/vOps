@@ -19,12 +19,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vNodesV/vProx/internal/fleet"
-	"github.com/vNodesV/vProx/internal/fleet/config"
-	fleetssh "github.com/vNodesV/vProx/internal/fleet/ssh"
-	"github.com/vNodesV/vProx/internal/fleet/state"
-	"github.com/vNodesV/vProx/internal/fleet/status"
-	opsdb "github.com/vNodesV/vProx/internal/vops/db"
+	"github.com/vNodesV/vOps/internal/fleet"
+	"github.com/vNodesV/vOps/internal/fleet/config"
+	fleetssh "github.com/vNodesV/vOps/internal/fleet/ssh"
+	"github.com/vNodesV/vOps/internal/fleet/state"
+	"github.com/vNodesV/vOps/internal/fleet/status"
+	opsdb "github.com/vNodesV/vOps/internal/vops/db"
 )
 
 // DebugEmitter is satisfied by *web.DebugRing; it allows the fleet API package

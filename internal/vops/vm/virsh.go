@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	fleetssh "github.com/vNodesV/vProx/internal/fleet/ssh"
+	fleetssh "github.com/vNodesV/vOps/internal/fleet/ssh"
 )
 
 // Domain represents a libvirt domain (virtual machine) on a hypervisor.

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	chainconfig "github.com/vNodesV/vProx/internal/config"
+	chainconfig "github.com/vNodesV/vOps/internal/config"
 )
 
 // LoadRuntimeConfig builds the fleet runtime config from the current layout:

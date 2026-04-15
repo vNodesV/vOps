@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/vNodesV/vProx/internal/fleet/config"
-	opsdb "github.com/vNodesV/vProx/internal/vops/db"
+	"github.com/vNodesV/vOps/internal/fleet/config"
+	opsdb "github.com/vNodesV/vOps/internal/vops/db"
 )
 
 // configProvider is satisfied by *fleet.Service and allows Handlers to read

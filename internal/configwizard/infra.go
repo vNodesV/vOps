@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
-	fleetcfg "github.com/vNodesV/vProx/internal/fleet/config"
+	fleetcfg "github.com/vNodesV/vOps/internal/fleet/config"
 )
 
 // infraFile is the top-level structure for config/infra/<dc>.toml.

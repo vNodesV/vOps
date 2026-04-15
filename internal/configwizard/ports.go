@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	chainconfig "github.com/vNodesV/vProx/internal/config"
+	chainconfig "github.com/vNodesV/vOps/internal/config"
 )
 
 // runPorts runs the interactive wizard for config/chains/ports.toml (Step 1).

@@ -14,11 +14,11 @@ import (
 	"unicode/utf8"
 
 	"github.com/pelletier/go-toml/v2"
-	"github.com/vNodesV/vProx/internal/backup"
-	chainconfig "github.com/vNodesV/vProx/internal/config"
-	fleetcfg "github.com/vNodesV/vProx/internal/fleet/config"
-	fleetstate "github.com/vNodesV/vProx/internal/fleet/state"
-	vopscfg "github.com/vNodesV/vProx/internal/vops/config"
+	"github.com/vNodesV/vOps/internal/backup"
+	chainconfig "github.com/vNodesV/vOps/internal/config"
+	fleetcfg "github.com/vNodesV/vOps/internal/fleet/config"
+	fleetstate "github.com/vNodesV/vOps/internal/fleet/state"
+	vopscfg "github.com/vNodesV/vOps/internal/vops/config"
 )
 
 const maxImportFileBytes int64 = 512 * 1024

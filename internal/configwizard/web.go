@@ -17,8 +17,8 @@ import (
 	"time"
 
 	"github.com/pelletier/go-toml/v2"
-	chainconfig "github.com/vNodesV/vProx/internal/config"
-	fleetcfg "github.com/vNodesV/vProx/internal/fleet/config"
+	chainconfig "github.com/vNodesV/vOps/internal/config"
+	fleetcfg "github.com/vNodesV/vOps/internal/fleet/config"
 )
 
 //go:embed wizard.html

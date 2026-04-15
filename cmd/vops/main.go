@@ -15,13 +15,13 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/vNodesV/vProx/internal/fleet"
-	fleetcfg "github.com/vNodesV/vProx/internal/fleet/config"
-	"github.com/vNodesV/vProx/internal/vops/config"
-	"github.com/vNodesV/vProx/internal/vops/db"
-	"github.com/vNodesV/vProx/internal/vops/ingest"
-	"github.com/vNodesV/vProx/internal/vops/intel"
-	"github.com/vNodesV/vProx/internal/vops/web"
+	"github.com/vNodesV/vOps/internal/fleet"
+	fleetcfg "github.com/vNodesV/vOps/internal/fleet/config"
+	"github.com/vNodesV/vOps/internal/vops/config"
+	"github.com/vNodesV/vOps/internal/vops/db"
+	"github.com/vNodesV/vOps/internal/vops/ingest"
+	"github.com/vNodesV/vOps/internal/vops/intel"
+	"github.com/vNodesV/vOps/internal/vops/web"
 )
 
 // Build-time variables injected via -ldflags "-X main.version=... -X main.commit=... -X main.buildDate=...".

@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
-	chainconfig "github.com/vNodesV/vProx/internal/config"
-	vopscfg "github.com/vNodesV/vProx/internal/vops/config"
+	chainconfig "github.com/vNodesV/vOps/internal/config"
+	vopscfg "github.com/vNodesV/vOps/internal/vops/config"
 )
 
 // listConfigs prints all TOML files under $VPROX_HOME/config/ with status markers.

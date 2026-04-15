@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	fleetssh "github.com/vNodesV/vProx/internal/fleet/ssh"
-	opsdb "github.com/vNodesV/vProx/internal/vops/db"
+	fleetssh "github.com/vNodesV/vOps/internal/fleet/ssh"
+	opsdb "github.com/vNodesV/vOps/internal/vops/db"
 )
 
 const (

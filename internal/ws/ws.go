@@ -11,7 +11,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	applog "github.com/vNodesV/vProx/internal/logging"
+	applog "github.com/vNodesV/vOps/internal/logging"
 )
 
 // Deps abstracts what we need from main without importing it.
