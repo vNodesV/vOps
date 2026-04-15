@@ -62,10 +62,10 @@ tmp/
 scripts/harden_repo_settings.sh
 scripts/set_required_checks.sh
 
-# Local collaboration and agent artifacts (private/local-only)
-# Note: `.github/agents/` is repo configuration for Copilot agents and should be tracked.
-agents/
-.github/agents/*.*
+# Local agent state (private/local-only — never commit state files)
+# /agents/ is root-anchored so it does NOT match .github/agents/
+/agents/
+# .github/agents/ is intentionally tracked — do NOT add any rule ignoring it
 .github/dependabot.yml
 AGENT_DIRECTIVE.md
 doc.go

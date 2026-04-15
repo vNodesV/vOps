@@ -1,97 +1,110 @@
-version: 2
-updated_at_utc: "2026-07-17T00:00:00Z"
+version: 3
+updated_at_utc: "2026-04-15T00:00:00Z"
 
-# Logical identities used for repository automation policy.
-# Note: these are policy identities; GitHub account provisioning must be done outside this repo.
+# Logical identities for repository automation policy.
+# Primary intelligence: cortex (br[AI]n layer) — loaded from ~/gitHub/.github/agents/
+# Specialist agents below are dispatched by cortex when vProx context is active.
+# Archived agents: jarvis5.0, jarvis5.0_vscode, jarvis6.0, jarvis6.0_vscode (.archived.md)
+
 users:
-  - id: jarvis5.0
+  # --- Primary operator: cortex (br[AI]n — global, loaded from umbrella workspace) ---
+  - id: cortex
     role: operator
-    agent_file: .github/agents/jarvis5.0.agent.md
-    skills_file: agents/jarvis5.0_skills.md
-    resources_file: agents/jarvis5.0_resources.md
-    state_file: agents/jarvis5.0_state.md
+    agent_file: ~/.github/agents/cortex.agent.md
+    state_file: ~/gitHub/agents/cortex_state.md
+    context_file: .github/agents/cortex_context_vprox.md
     target: github-copilot
     github_login: null
     org: vNodes-Co
-  - id: jarvis5.0_vscode
+
+  - id: cortex_vscode
     role: operator
-    agent_file: .github/agents/jarvis5.0_vscode.agent.md
-    skills_file: agents/jarvis5.0_skills.md
-    resources_file: agents/jarvis5.0_resources.md
-    state_file: agents/jarvis5.0_vscode_state.md
+    agent_file: ~/.github/agents/cortex_vscode.agent.md
+    state_file: ~/gitHub/agents/cortex_state.md
     target: vscode
     github_login: null
     org: vNodes-Co
+
   - id: jarvisBoss
     role: reviewer-approver
     agent_file: .github/agents/reviewer.agent.md
     github_login: jarvisBoss
     org: vNodes-Co
-  # --- awesome-copilot agents (dispatched by jarvis6.0) ---
+
+  # --- Specialist agents (dispatched by cortex when vProx context loaded) ---
   - id: debug
     role: specialist
     agent_file: .github/agents/debug.agent.md
     source: awesome-copilot
-    dispatched_by: jarvis6.0
+    dispatched_by: cortex
+
   - id: devops-expert
     role: specialist
     agent_file: .github/agents/devops-expert.agent.md
     source: awesome-copilot
-    dispatched_by: jarvis6.0
+    dispatched_by: cortex
+
   - id: principal-software-engineer
     role: specialist
     agent_file: .github/agents/principal-software-engineer.agent.md
     source: awesome-copilot
-    dispatched_by: jarvis6.0
+    dispatched_by: cortex
+
   - id: api-architect
     role: specialist
     agent_file: .github/agents/api-architect.agent.md
     source: awesome-copilot
-    dispatched_by: jarvis6.0
+    dispatched_by: cortex
+
   - id: react19-commander
     role: specialist
     agent_file: .github/agents/react19-commander.agent.md
     source: awesome-copilot
-    dispatched_by: jarvis6.0
+    dispatched_by: cortex
+
   - id: github-actions-expert
     role: specialist
     agent_file: .github/agents/github-actions-expert.agent.md
     source: awesome-copilot
-    dispatched_by: jarvis6.0
+    dispatched_by: cortex
+
   - id: debian-linux-expert
     role: specialist
     agent_file: .github/agents/debian-linux-expert.agent.md
     source: awesome-copilot
-    dispatched_by: jarvis6.0
+    dispatched_by: cortex
+
   - id: polyglot-test-generator
     role: specialist
     agent_file: .github/agents/polyglot-test-generator.agent.md
     source: awesome-copilot
-    dispatched_by: jarvis6.0
+    dispatched_by: cortex
+
   - id: context-architect
     role: specialist
     agent_file: .github/agents/context-architect.agent.md
     source: awesome-copilot
-    dispatched_by: jarvis6.0
+    dispatched_by: cortex
+
   - id: se-security-reviewer
     role: specialist
     agent_file: .github/agents/se-security-reviewer.agent.md
     source: awesome-copilot
-    dispatched_by: jarvis6.0
+    dispatched_by: cortex
+
   - id: se-system-architecture-reviewer
     role: specialist
     agent_file: .github/agents/se-system-architecture-reviewer.agent.md
     source: awesome-copilot
-    dispatched_by: jarvis6.0
+    dispatched_by: cortex
 
 policy:
   pull_request:
     required_reviewer_ids:
       - jarvisBoss
   active_agents:
-    - jarvis5.0
-    - jarvis5.0_vscode
-    - jarvis6.0
+    - cortex
+    - cortex_vscode
     - debug
     - devops-expert
     - principal-software-engineer
@@ -103,3 +116,8 @@ policy:
     - context-architect
     - se-security-reviewer
     - se-system-architecture-reviewer
+  archived_agents:
+    - jarvis5.0        # → jarvis5.0.archived.md
+    - jarvis5.0_vscode # → jarvis5.0_vscode.archived.md
+    - jarvis6.0        # → jarvis6.0.archived.md (cortex source — do not delete)
+    - jarvis6.0_vscode # → jarvis6.0_vscode.archived.md
