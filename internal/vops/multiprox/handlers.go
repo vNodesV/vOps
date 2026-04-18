@@ -8,10 +8,37 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"time"
 )
+
+// isDangerousHost returns true when the URL hostname resolves to an address
+// that must never be reached via user-submitted URLs (SSRF guard).
+// Blocks: loopback (127.x / ::1), unspecified (0.0.0.0), and link-local
+// (169.254.x.x — AWS/GCP/Azure instance-metadata endpoints).
+// Private network ranges (10.x, 172.16-31.x, 192.168.x) are allowed because
+// vProx instances legitimately run on vRack / LAN addresses.
+func isDangerousHost(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return true // unparseable is dangerous
+	}
+	hostname := u.Hostname()
+	ip := net.ParseIP(hostname)
+	if ip == nil {
+		return false // hostname — DNS resolution happens at request time; not blocked here
+	}
+	if ip.IsLoopback() || ip.IsUnspecified() {
+		return true
+	}
+	// Block link-local (169.254.0.0/16) — covers cloud metadata services.
+	if ip4 := ip.To4(); ip4 != nil && ip4[0] == 169 && ip4[1] == 254 {
+		return true
+	}
+	return false
+}
 
 // Instance represents a registered vProx instance.
 type Instance struct {
@@ -27,11 +54,14 @@ type Instance struct {
 
 // Handlers exposes CRUD endpoints for vProx instance management.
 type Handlers struct {
-	db *sql.DB
+	db  *sql.DB
+	key [32]byte // AES-256-GCM key for api_key at-rest encryption; zero = disabled
 }
 
 // New creates a Handlers bound to the given database.
-func New(db *sql.DB) *Handlers { return &Handlers{db: db} }
+// key is used to encrypt/decrypt api_key values at rest; pass a zero [32]byte
+// to disable encryption (legacy plaintext mode).
+func New(db *sql.DB, key [32]byte) *Handlers { return &Handlers{db: db, key: key} }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
@@ -82,9 +112,18 @@ func (h *Handlers) HandleCreate(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid URL: must be http or https"})
 		return
 	}
+	if isDangerousHost(req.URL) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "URL targets a restricted address"})
+		return
+	}
+	encKey, err := encryptAPIKey(h.key, req.APIKey)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "key encryption failed"})
+		return
+	}
 	_, err = h.db.Exec(
 		`INSERT INTO vprox_instances (name, url, api_key, datacenter) VALUES (?,?,?,?)`,
-		req.Name, req.URL, req.APIKey, req.Datacenter)
+		req.Name, req.URL, encKey, req.Datacenter)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -118,6 +157,7 @@ func (h *Handlers) HandlePing(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found: " + name})
 		return
 	}
+	apiKey, _ = decryptAPIKey(h.key, apiKey)
 
 	status := "online"
 	client := &http.Client{Timeout: 5 * time.Second}
@@ -166,6 +206,7 @@ func (h *Handlers) HandlePingAll(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var inst row
 		if scanErr := rows.Scan(&inst.name, &inst.url, &inst.apiKey); scanErr == nil {
+			inst.apiKey, _ = decryptAPIKey(h.key, inst.apiKey)
 			instances = append(instances, inst)
 		}
 	}
@@ -247,13 +288,26 @@ func (h *Handlers) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid URL"})
 			return
 		}
+		if isDangerousHost(body.URL) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "URL targets a restricted address"})
+			return
+		}
+	}
+	encKey := body.APIKey
+	if encKey != "" {
+		var encErr error
+		encKey, encErr = encryptAPIKey(h.key, body.APIKey)
+		if encErr != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "key encryption failed"})
+			return
+		}
 	}
 	result, err := h.db.Exec(
 		`UPDATE vprox_instances SET url=COALESCE(NULLIF(?,''),(SELECT url FROM vprox_instances WHERE name=?)),
          api_key=COALESCE(NULLIF(?,''),(SELECT api_key FROM vprox_instances WHERE name=?)),
          datacenter=COALESCE(NULLIF(?,''),(SELECT datacenter FROM vprox_instances WHERE name=?))
          WHERE name=?`,
-		body.URL, name, body.APIKey, name, body.Datacenter, name, name,
+		body.URL, name, encKey, name, body.Datacenter, name, name,
 	)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})

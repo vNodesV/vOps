@@ -7,6 +7,7 @@ import {
   updateUnit,
   getUnitStatusHistory,
 } from '../api';
+import { openSSEStream } from '../api/sse';
 import type { CosmosUnit, CosmosUnitWithStatus, NodeType, NetworkType, UnitStatus } from '../api/types';
 
 const BASE = (import.meta.env.VITE_API_BASE ?? '') as string;
@@ -295,18 +296,24 @@ function DeployModal({ unit, onClose }: { unit: CosmosUnitWithStatus; onClose: (
     setRunning(true);
     setLines([]);
     setDone(false);
-    const es = new EventSource(
-      `${BASE}/api/v1/units/${encodeURIComponent(unit.name)}/deploy?sudo_password=${encodeURIComponent(sudoPwd)}`
+    const body = sudoPwd ? { sudo_password: sudoPwd } : {};
+    openSSEStream(
+      `${BASE}/api/v1/units/${encodeURIComponent(unit.name)}/deploy`,
+      'POST',
+      (msg) => {
+        try {
+          const d = JSON.parse(msg.data) as { step: string; msg: string };
+          setLines(prev => [...prev, `[${d.step}] ${d.msg}`]);
+          if (d.step === 'complete' || d.step === 'error') {
+            setDone(true);
+            setRunning(false);
+          }
+        } catch { /* ignore */ }
+      },
+      () => { setDone(true); setRunning(false); },
+      () => { setRunning(false); setLines(prev => [...prev, '[error] Connection lost']); },
+      body,
     );
-    es.onmessage = ev => {
-      try {
-        const d = JSON.parse(ev.data) as { step: string; msg: string };
-        setLines(prev => [...prev, `[${d.step}] ${d.msg}`]);
-        if (d.step === 'complete') { setDone(true); es.close(); setRunning(false); }
-        if (d.step === 'error') { setDone(true); es.close(); setRunning(false); }
-      } catch { /* ignore */ }
-    };
-    es.onerror = () => { setRunning(false); es.close(); setLines(prev => [...prev, '[error] Connection lost']); };
   }
 
   return (

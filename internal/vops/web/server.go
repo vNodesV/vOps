@@ -137,7 +137,8 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 
 	s.svcMgr = services.NewHandlers(d.DB)
 	s.unitsMgr = units.NewHandlers(d.DB)
-	s.multiproxMgr = multiprox.New(d.DB)
+	mpKey := multiprox.LoadOrGenerateKey(s.home + "/config/vops.key")
+	s.multiproxMgr = multiprox.New(d.DB, mpKey)
 
 	// Build the units poller — uses fleetSvc to resolve VM LAN IPs.
 	lanIPFunc := func(vmName string) string {
@@ -377,7 +378,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		s.requireSession(http.HandlerFunc(s.unitsMgr.HandleStatusHistory)))
 	mux.Handle("GET /api/v1/units/{name}/logs",
 		s.requireSession(http.HandlerFunc(s.handleUnitLogStream)))
-	mux.Handle("GET /api/v1/units/{name}/deploy",
+	mux.Handle("POST /api/v1/units/{name}/deploy",
 		s.requireSession(http.HandlerFunc(s.handleUnitDeploy)))
 	// DB reset endpoints — clear status history or wipe all units (fresh start).
 	mux.Handle("POST /api/v1/units/reset-status",

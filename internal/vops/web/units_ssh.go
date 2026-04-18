@@ -8,10 +8,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 
 	fleetssh "github.com/vNodesV/vOps/internal/fleet/ssh"
 )
+
+// safeServiceName matches valid systemd service names: alphanumeric, hyphens,
+// underscores, dots — max 64 chars. Used to guard shell template interpolation.
+var safeServiceName = regexp.MustCompile(`^[a-zA-Z0-9_.\-]{1,64}$`)
 
 // ── GET /api/v1/units/{name}/logs ─────────────────────────────────────────────
 //
@@ -32,6 +37,10 @@ func (s *Server) handleUnitLogStream(w http.ResponseWriter, r *http.Request) {
 	var vmName, serviceName string
 	if err := row.Scan(&vmName, &serviceName); err != nil {
 		http.Error(w, "unit not found: "+name, http.StatusNotFound)
+		return
+	}
+	if !safeServiceName.MatchString(serviceName) {
+		http.Error(w, "invalid service_name in unit record", http.StatusInternalServerError)
 		return
 	}
 
@@ -136,10 +145,6 @@ func (s *Server) handleUnitDeploy(w http.ResponseWriter, r *http.Request) {
 	if r.Body != nil {
 		_ = json.NewDecoder(r.Body).Decode(&req)
 	}
-	// Also allow passing via query param (for EventSource which only supports GET).
-	if q := r.URL.Query().Get("sudo_password"); q != "" && req.SudoPassword == "" {
-		req.SudoPassword = q
-	}
 
 	// Look up unit details.
 	row := s.db.DB.QueryRow(
@@ -147,6 +152,10 @@ func (s *Server) handleUnitDeploy(w http.ResponseWriter, r *http.Request) {
 	var vmName, serviceName, cosmovisorPath string
 	if err := row.Scan(&vmName, &serviceName, &cosmovisorPath); err != nil {
 		http.Error(w, "unit not found: "+name, http.StatusNotFound)
+		return
+	}
+	if !safeServiceName.MatchString(serviceName) {
+		http.Error(w, "invalid service_name in unit record", http.StatusInternalServerError)
 		return
 	}
 	if cosmovisorPath == "" {
