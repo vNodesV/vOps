@@ -64,7 +64,10 @@ func (s *Server) handleUnitLogStream(w http.ResponseWriter, r *http.Request) {
 	var client *fleetssh.Client
 	var err error
 	if jp := s.fleetSvc.Config().ResolveProxyJump(vm); jp != nil {
-		jumpAddr := jp.LanIP
+		jumpAddr := jp.VRackIP // prefer vRack for cross-DC routing
+		if jumpAddr == "" {
+			jumpAddr = jp.LanIP
+		}
 		if jumpAddr == "" {
 			jumpAddr = jp.Name
 		}
@@ -179,7 +182,10 @@ func (s *Server) handleUnitDeploy(w http.ResponseWriter, r *http.Request) {
 	var client *fleetssh.Client
 	var err error
 	if jp := s.fleetSvc.Config().ResolveProxyJump(vm); jp != nil {
-		jumpAddr := jp.LanIP
+		jumpAddr := jp.VRackIP // prefer vRack for cross-DC routing
+		if jumpAddr == "" {
+			jumpAddr = jp.LanIP
+		}
 		if jumpAddr == "" {
 			jumpAddr = jp.Name
 		}

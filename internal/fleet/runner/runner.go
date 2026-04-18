@@ -22,7 +22,10 @@ var safeSegment = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 // dialVM opens an SSH connection to vm using a ProxyJump when configured.
 func dialVM(vm config.VM) (*fleetssh.Client, error) {
 	if jp := vm.ProxyJumpParams; jp != nil {
-		jumpAddr := jp.LanIP
+		jumpAddr := jp.VRackIP // prefer vRack for cross-DC routing
+		if jumpAddr == "" {
+			jumpAddr = jp.LanIP
+		}
 		if jumpAddr == "" {
 			jumpAddr = jp.Name
 		}
