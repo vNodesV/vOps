@@ -15,7 +15,6 @@ import type {
   VMView, Deployment, VMStatus, VMMetricPoint,
   HostInventory,
 } from '../api/types';
-import { openSSEStream } from '../api/sse';
 import Badge from '../components/Badge';
 import Spinner from '../components/Spinner';
 import UpgradeModal from '../components/UpgradeModal';
@@ -701,55 +700,7 @@ function UpdatesPanel({
   vmStatus?: VMStatus;
 }) {
   const qc = useQueryClient();
-  const [logLines, setLogLines] = useState<Array<{ step: string; msg: string }>>([]);
-  const [running, setRunning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const cancelRef = useRef<(() => void) | null>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => () => {
-    cancelRef.current?.();
-    cancelRef.current = null;
-  }, []);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [logLines.length]);
-
-  const runUpgrade = () => {
-    cancelRef.current?.();
-    setError(null);
-    setRunning(true);
-    setLogLines([]);
-
-    const cancel = openSSEStream(
-      vmUpgradeURL(domain.name),
-      'POST',
-      (msg) => {
-        try {
-          const data = JSON.parse(msg.data) as { step: string; msg: string };
-          setLogLines((prev) => prev.concat(data));
-          if (data.step === 'complete' || data.step.includes('error')) {
-            setRunning(false);
-            cancelRef.current = null;
-            qc.invalidateQueries({ queryKey: ['vm-status'] });
-          }
-        } catch {
-        }
-      },
-      () => {
-        setRunning(false);
-        qc.invalidateQueries({ queryKey: ['vm-status'] });
-      },
-      (err) => {
-        setRunning(false);
-        setError(err.message || 'SSE connection lost');
-      },
-      {},
-    );
-
-    cancelRef.current = cancel;
-  };
+  const [showUpgrade, setShowUpgrade] = useState(false);
 
   const pending = vmStatus?.apt_count ?? 0;
 
@@ -760,22 +711,19 @@ function UpdatesPanel({
         {pending > 0 ? String(pending) + ' pending' : '✓ Updated'}
       </div>
       <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem' }}>
-        <button className="btn btn-primary btn-sm" onClick={runUpgrade} disabled={running} type="button">
-          {running ? 'Running…' : 'Run Upgrade'}
+        <button className="btn btn-primary btn-sm" onClick={() => setShowUpgrade(true)} type="button">
+          Run Upgrade
         </button>
       </div>
-      {(logLines.length > 0 || running || error) && (
-        <div style={{ marginTop: '0.75rem', border: '1px solid var(--vn-border)', background: 'var(--vn-surface-2)', borderRadius: 'var(--vn-radius)', maxHeight: 260, overflow: 'auto', padding: '0.75rem', fontFamily: 'monospace', fontSize: '0.75rem' }}>
-          {logLines.map((line, idx) => (
-            <div key={line.step + '-' + idx} style={{ marginBottom: '0.2rem', color: line.step.includes('error') ? 'var(--vn-danger)' : 'var(--vn-text)' }}>
-              <span style={{ color: 'var(--vn-text-subtle)', marginRight: 6 }}>{line.step}</span>
-              <span>{line.msg}</span>
-            </div>
-          ))}
-          {running && <div style={{ color: 'var(--vn-info)' }}>Streaming…</div>}
-          {error && <div style={{ color: 'var(--vn-danger)' }}>{error}</div>}
-          <div ref={bottomRef} />
-        </div>
+      {showUpgrade && (
+        <UpgradeModal
+          vmName={domain.name}
+          upgradeURL={vmUpgradeURL(domain.name)}
+          onClose={() => {
+            setShowUpgrade(false);
+            qc.invalidateQueries({ queryKey: ['vm-status'] });
+          }}
+        />
       )}
     </div>
   );
