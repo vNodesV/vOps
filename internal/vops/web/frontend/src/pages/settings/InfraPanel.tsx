@@ -415,6 +415,7 @@ interface InfraHostFields {
   name: string;
   lan_ip: string;
   public_ip: string;
+  vrack_ip: string;
   user: string;
   ssh_key_path: string;
   port: string;
@@ -440,7 +441,7 @@ const emptyVM = (): InfraVM => ({
 });
 
 const emptyHost = (): InfraHostFields => ({
-  name: '', lan_ip: '', public_ip: '', user: '', ssh_key_path: '', port: '22',
+  name: '', lan_ip: '', public_ip: '', vrack_ip: '', user: '', ssh_key_path: '', port: '22',
 });
 
 const emptyVprox = (): InfraVproxFields => ({
@@ -454,6 +455,7 @@ export function DatacenterCard({ entry, onSaved }: { entry: InfraEntry; onSaved:
     name:         String(entry.host?.name         ?? ''),
     lan_ip:       String(entry.host?.lan_ip       ?? ''),
     public_ip:    String(entry.host?.public_ip    ?? ''),
+    vrack_ip:     String(entry.host?.vrack_ip     ?? ''),
     user:         String(entry.host?.user         ?? ''),
     ssh_key_path: String(entry.host?.ssh_key_path ?? ''),
     port:         String(entry.host?.port         ?? '22'),
@@ -488,6 +490,7 @@ export function DatacenterCard({ entry, onSaved }: { entry: InfraEntry; onSaved:
       host_name:        host.name,
       host_lan_ip:      host.lan_ip,
       host_public_ip:   host.public_ip,
+      host_vrack_ip:    host.vrack_ip,
       host_user:        host.user,
       host_ssh_key_path:host.ssh_key_path,
       host_port:        host.port ? Number(host.port) : 22,
@@ -537,6 +540,7 @@ export function DatacenterCard({ entry, onSaved }: { entry: InfraEntry; onSaved:
           <LabeledInput label="Hostname / FQDN" value={host.name} onChange={setHostField('name')} placeholder="qc.vnodesv.net" />
           <LabeledInput label="LAN IP" value={host.lan_ip} onChange={setHostField('lan_ip')} placeholder="10.0.0.1" />
           <LabeledInput label="Public IP" value={host.public_ip} onChange={setHostField('public_ip')} placeholder="203.0.113.10" />
+          <LabeledInput label="vRack IP (cross-DC private, optional)" value={host.vrack_ip} onChange={setHostField('vrack_ip')} placeholder="10.1.0.1" />
           <LabeledInput label="SSH Port" value={host.port} onChange={setHostField('port')} placeholder="22" />
           <LabeledInput label="SSH User (hypervisor only)" value={host.user} onChange={setHostField('user')} placeholder="ubuntu" />
           <LabeledInput label="SSH Key Path (hypervisor only)" value={host.ssh_key_path} onChange={setHostField('ssh_key_path')} placeholder="/home/ubuntu/.ssh/id_rsa" />
@@ -668,6 +672,7 @@ export function NewDatacenterForm({ onSaved }: { onSaved: () => void }) {
       host_name:         host.name,
       host_lan_ip:       host.lan_ip,
       host_public_ip:    host.public_ip,
+      host_vrack_ip:     host.vrack_ip,
       host_user:         host.user,
       host_ssh_key_path: host.ssh_key_path,
       host_port:         host.port ? Number(host.port) : 22,
@@ -718,6 +723,7 @@ export function NewDatacenterForm({ onSaved }: { onSaved: () => void }) {
         <LabeledInput label="Hostname / FQDN" value={host.name} onChange={setHostField('name')} placeholder="qc.vnodesv.net" />
         <LabeledInput label="LAN IP" value={host.lan_ip} onChange={setHostField('lan_ip')} placeholder="10.0.0.1" />
         <LabeledInput label="Public IP" value={host.public_ip} onChange={setHostField('public_ip')} placeholder="203.0.113.10" />
+        <LabeledInput label="vRack IP (cross-DC private, optional)" value={host.vrack_ip} onChange={setHostField('vrack_ip')} placeholder="10.1.0.1" />
         <LabeledInput label="SSH Port" value={host.port} onChange={setHostField('port')} placeholder="22" />
         <LabeledInput label="SSH User (hypervisor only)" value={host.user} onChange={setHostField('user')} placeholder="ubuntu" />
         <LabeledInput label="SSH Key Path (hypervisor only)" value={host.ssh_key_path} onChange={setHostField('ssh_key_path')} placeholder="/home/ubuntu/.ssh/id_rsa" />

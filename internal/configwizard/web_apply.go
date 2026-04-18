@@ -642,6 +642,7 @@ func applyInfra(home string, f map[string]any) error {
 	inf.Host.User = fieldStr(f, "host_user", "")
 	inf.Host.SSHKeyPath = fieldStr(f, "host_ssh_key_path", "")
 	inf.Host.Port = fieldInt(f, "host_port", 22)
+	inf.Host.VRackIP = fieldStr(f, "host_vrack_ip", "")
 
 	if inf.Host.Name == "" {
 		if inf.Host.LanIP != "" || inf.Host.PublicIP != "" || inf.Host.Datacenter != "" || inf.Host.User != "" || inf.Host.SSHKeyPath != "" {
@@ -656,6 +657,9 @@ func applyInfra(home string, f map[string]any) error {
 		}
 		if inf.Host.PublicIP != "" && net.ParseIP(inf.Host.PublicIP) == nil {
 			return fmt.Errorf("host_public_ip must be a valid IP address")
+		}
+		if inf.Host.VRackIP != "" && net.ParseIP(inf.Host.VRackIP) == nil {
+			return fmt.Errorf("host_vrack_ip must be a valid IP address")
 		}
 		if inf.Host.Port != 0 && (inf.Host.Port < 1 || inf.Host.Port > 65535) {
 			return fmt.Errorf("host_port must be between 1 and 65535")
@@ -1666,6 +1670,7 @@ func importInfraFields(path string, data []byte) (map[string]any, error) {
 		"datacenter":         strings.ToLower(strings.TrimSpace(dc)),
 		"host_name":          inf.Host.Name,
 		"host_lan_ip":        inf.Host.LanIP,
+		"host_vrack_ip":      inf.Host.VRackIP,
 		"host_public_ip":     inf.Host.PublicIP,
 		"host_datacenter":    inf.Host.Datacenter,
 		"host_user":          inf.Host.User,
