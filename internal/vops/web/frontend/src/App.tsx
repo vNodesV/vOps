@@ -244,7 +244,7 @@ function Shell({ children }: { children: React.ReactNode }) {
 
       {/* ── Footer ─────────────────────────────────────────────── */}
       <footer className="vlog-footer">
-        v<span>[O]</span>ps · Proxy &amp; Access Intelligence · v1.1.0
+        v<span>[O]</span>ps · Proxy &amp; Access Intelligence
       </footer>
 
       {debugEnabled && <DebugPanel onDisable={() => setDebugEnabled(false)} />}
