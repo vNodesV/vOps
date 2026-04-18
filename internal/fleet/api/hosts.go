@@ -255,6 +255,7 @@ func (h *Handlers) HandleHostUpgrade(w http.ResponseWriter, r *http.Request) {
 	var targetHost *struct {
 		Name       string
 		LanIP      string
+		VRackIP    string
 		Port       int
 		User       string
 		SSHKeyPath string
@@ -264,10 +265,11 @@ func (h *Handlers) HandleHostUpgrade(w http.ResponseWriter, r *http.Request) {
 			targetHost = &struct {
 				Name       string
 				LanIP      string
+				VRackIP    string
 				Port       int
 				User       string
 				SSHKeyPath string
-			}{hst.Name, hst.LanIP, hst.Port, hst.User, hst.SSHKeyPath}
+			}{hst.Name, hst.LanIP, hst.VRackIP, hst.Port, hst.User, hst.SSHKeyPath}
 			break
 		}
 	}
@@ -297,7 +299,10 @@ func (h *Handlers) HandleHostUpgrade(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 	}
 
-	dialAddr := targetHost.LanIP
+	dialAddr := targetHost.VRackIP
+	if dialAddr == "" {
+		dialAddr = targetHost.LanIP
+	}
 	if dialAddr == "" {
 		dialAddr = targetHost.Name
 	}

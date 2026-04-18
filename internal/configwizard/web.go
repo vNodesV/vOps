@@ -547,6 +547,7 @@ func hostToMap(h fleetcfg.Host) map[string]any {
 		"name":         h.Name,
 		"public_ip":    h.PublicIP,
 		"lan_ip":       h.LanIP,
+		"vrack_ip":     h.VRackIP,
 		"datacenter":   h.Datacenter,
 		"user":         h.User,
 		"ssh_key_path": h.SSHKeyPath,

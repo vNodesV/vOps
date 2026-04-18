@@ -279,7 +279,10 @@ func (h *Handlers) HandleHypervisorScan(w http.ResponseWriter, r *http.Request) 
 
 			sshKey := host.SSHKeyPath
 			user := host.User
-			dialAddr := host.LanIP
+			dialAddr := host.VRackIP
+			if dialAddr == "" {
+				dialAddr = host.LanIP
+			}
 			if dialAddr == "" {
 				dialAddr = host.Name
 			}
