@@ -70,7 +70,10 @@ func (h *Handlers) HandleHostScan(w http.ResponseWriter, r *http.Request) {
 				Status:     "unreachable",
 			}
 
-			dialAddr := host.LanIP
+			dialAddr := host.VRackIP // prefer vRack for cross-DC routing
+			if dialAddr == "" {
+				dialAddr = host.LanIP
+			}
 			if dialAddr == "" {
 				dialAddr = host.Name
 			}
