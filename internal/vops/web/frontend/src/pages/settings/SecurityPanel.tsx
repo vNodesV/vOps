@@ -1,17 +1,20 @@
 /**
  * settings/SecurityPanel.tsx
- * Security & Access panel: SSH keys, API key generation, password hash utility.
+ * Security & Access panel: SSH keys, API key generation, password hash utility,
+ * and UFW Auto-Ban configuration.
  */
 import { useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   genAPIKey,
   hashPassword,
   getSSHPubKey,
   genSSHKey,
+  saveConfig,
 } from '../../api';
 import Spinner from '../../components/Spinner';
-import { SectionCard, FieldDoc } from './shared';
+import { SectionCard, FieldDoc, SaveBar, parseTOML } from './shared';
+import type { ConfigSnapshot } from '../../api/types';
 
 export function SecurityPanel() {
   const [passwordInput, setPasswordInput] = useState('');
@@ -161,5 +164,156 @@ export function SecurityPanel() {
         )}
       </SectionCard>
     </div>
+  );
+}
+
+/* ── Security → Auto-Ban ─────────────────────────────────────── */
+
+export function AutoBanPanel({ config }: { config: ConfigSnapshot }) {
+  const queryClient = useQueryClient();
+  const raw = typeof config.vops === 'string' ? config.vops : '';
+  const t = parseTOML(raw);
+
+  const [fields, setFields] = useState({
+    auto_ban_enabled:     t['vops.intel.auto_ban_enabled']     ?? 'true',
+    auto_ban_threshold:   t['vops.intel.auto_ban_threshold']   ?? '5',
+    ban_duration_minutes: t['vops.intel.ban_duration_minutes'] ?? '60',
+    ban_whitelist:        t['vops.intel.ban_whitelist']        ?? '',
+  });
+
+  const set = (k: keyof typeof fields) => (v: string) => setFields((f) => ({ ...f, [k]: v }));
+
+  const saveMut = useMutation({
+    mutationFn: () => saveConfig('vops', {
+      auto_ban_enabled:     fields.auto_ban_enabled === 'true',
+      auto_ban_threshold:   Number(fields.auto_ban_threshold)   || 5,
+      ban_duration_minutes: Number(fields.ban_duration_minutes) || 60,
+      ban_whitelist:        fields.ban_whitelist,
+    }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['config'] }),
+  });
+
+  const DURATION_PRESETS = [
+    { label: '15m', value: '15' },
+    { label: '30m', value: '30' },
+    { label: '1h',  value: '60' },
+    { label: '6h',  value: '360' },
+    { label: '24h', value: '1440' },
+  ];
+
+  return (
+    <SectionCard
+      title="UFW Auto-Ban"
+      subtitle="Automatically ban IPs via UFW when they trigger too many rate-limit events. Requires ufw installed and vOps running with sufficient privileges to modify firewall rules."
+    >
+      {/* Enable toggle */}
+      <div className="flex items-center gap-3">
+        <label className="text-xs font-medium" style={{ color: 'var(--vn-text-muted)' }}>
+          Enable Auto-Ban
+        </label>
+        <button
+          onClick={() => set('auto_ban_enabled')(fields.auto_ban_enabled === 'true' ? 'false' : 'true')}
+          className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
+          style={{
+            backgroundColor: fields.auto_ban_enabled === 'true' ? 'var(--vn-primary)' : 'var(--vn-border)',
+          }}
+          role="switch"
+          aria-checked={fields.auto_ban_enabled === 'true'}
+        >
+          <span
+            className="inline-block h-3.5 w-3.5 rounded-full transition-transform"
+            style={{
+              backgroundColor: 'white',
+              transform: fields.auto_ban_enabled === 'true' ? 'translateX(18px)' : 'translateX(2px)',
+            }}
+          />
+        </button>
+        <span className="text-xs" style={{ color: 'var(--vn-text-subtle)' }}>
+          {fields.auto_ban_enabled === 'true' ? 'Enabled' : 'Disabled'}
+        </span>
+      </div>
+
+      {/* Threshold */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs mb-0.5" style={{ color: 'var(--vn-text-muted)' }}>
+            Ban Threshold
+          </label>
+          <input
+            type="number"
+            min={1}
+            max={100}
+            value={fields.auto_ban_threshold}
+            onChange={(e) => set('auto_ban_threshold')(e.target.value)}
+            className="vn-input w-full"
+          />
+          <p className="text-xs mt-0.5" style={{ color: 'var(--vn-text-subtle)' }}>
+            Number of rate-limit events before IP is banned (1–100)
+          </p>
+        </div>
+
+        {/* Ban Duration with quick-select presets */}
+        <div>
+          <label className="block text-xs mb-0.5" style={{ color: 'var(--vn-text-muted)' }}>
+            Ban Duration (minutes)
+          </label>
+          <input
+            type="number"
+            min={1}
+            value={fields.ban_duration_minutes}
+            onChange={(e) => set('ban_duration_minutes')(e.target.value)}
+            className="vn-input w-full"
+          />
+          <div className="flex gap-1 mt-1 flex-wrap">
+            {DURATION_PRESETS.map((p) => (
+              <button
+                key={p.value}
+                onClick={() => set('ban_duration_minutes')(p.value)}
+                className="text-xs px-2 py-0.5 rounded cursor-pointer transition-colors"
+                style={{
+                  backgroundColor:
+                    fields.ban_duration_minutes === p.value
+                      ? 'var(--vn-primary)'
+                      : 'var(--vn-surface-2)',
+                  color:
+                    fields.ban_duration_minutes === p.value
+                      ? 'var(--vn-on-primary)'
+                      : 'var(--vn-text-muted)',
+                  border: '1px solid var(--vn-border)',
+                }}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Whitelist */}
+      <div>
+        <label className="block text-xs mb-0.5" style={{ color: 'var(--vn-text-muted)' }}>
+          Whitelisted IPs
+        </label>
+        <textarea
+          value={fields.ban_whitelist}
+          onChange={(e) => set('ban_whitelist')(e.target.value)}
+          rows={4}
+          placeholder={"127.0.0.1\n10.0.0.1\n192.168.1.0/24"}
+          className="vn-input w-full font-mono resize-y"
+          style={{ minHeight: 80 }}
+        />
+        <p className="text-xs mt-0.5" style={{ color: 'var(--vn-text-subtle)' }}>
+          One IP or CIDR per line. These IPs will never be auto-banned.
+        </p>
+      </div>
+
+      <SaveBar
+        onSave={() => saveMut.mutate()}
+        isPending={saveMut.isPending}
+        isSuccess={saveMut.isSuccess}
+        isError={saveMut.isError}
+        error={saveMut.error as Error | null}
+      />
+    </SectionCard>
   );
 }

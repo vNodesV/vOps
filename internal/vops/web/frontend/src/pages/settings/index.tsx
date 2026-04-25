@@ -13,7 +13,7 @@ import Spinner from '../../components/Spinner';
 import { FleetScanPanel, FleetSSHPanel, DatacentersPanel } from './InfraPanel';
 import { PortsPanel, ProxyControlsPanel, ChainProfilesPanel, RegisteredChainsPanel } from './ProxyPanel';
 import { VOpsPanel, BackupsPanel, PreferencesPanel } from './SystemPanel';
-import { SecurityPanel } from './SecurityPanel';
+import { SecurityPanel, AutoBanPanel } from './SecurityPanel';
 
 /* ── Nav types ───────────────────────────────────────────────── */
 
@@ -68,7 +68,8 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Security & Access',
     desc: 'SSH keys, API keys, password management, and firewall',
     sections: [
-      { id: 'keys', label: 'Keys & Credentials' },
+      { id: 'keys',     label: 'Keys & Credentials' },
+      { id: 'auto-ban', label: 'Auto-Ban' },
     ],
   },
 ];
@@ -116,6 +117,8 @@ export default function SettingsPage() {
         return <PreferencesPanel />;
       case 'keys':
         return <SecurityPanel />;
+      case 'auto-ban':
+        return config ? <AutoBanPanel config={config} /> : null;
       default:
         return (
           <p className="text-sm" style={{ color: 'var(--vn-text-muted)' }}>
@@ -134,7 +137,7 @@ export default function SettingsPage() {
             Settings
           </h2>
           <p className="text-xs mt-0.5" style={{ color: 'var(--vn-text-muted)' }}>
-            Configure vProx, fleet, chains, authentication, and infrastructure.
+            Configure vOps, fleet, chains, authentication, and infrastructure.
           </p>
         </div>
         <button

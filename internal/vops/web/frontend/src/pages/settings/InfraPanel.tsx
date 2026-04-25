@@ -336,6 +336,7 @@ export function FleetSSHPanel({ config }: { config: ConfigSnapshot }) {
   const [fields, setFields] = useState({
     ssh_user:          t['ssh.user']              ?? '',
     ssh_key_path:      t['ssh.key_path']          ?? '',
+    known_hosts_path:  t['ssh.known_hosts_path']  ?? '',
     ssh_port:          t['ssh.port']              ?? '22',
     ssh_timeout_sec:   t['ssh.timeout_sec']       ?? '15',
     poll_interval_sec: t['poll.interval_sec']     ?? '60',
@@ -350,6 +351,7 @@ export function FleetSSHPanel({ config }: { config: ConfigSnapshot }) {
     mutationFn: () => saveConfig('fleet', {
       ssh_user:          fields.ssh_user,
       ssh_key_path:      fields.ssh_key_path,
+      known_hosts_path:  fields.known_hosts_path,
       ssh_port:          Number(fields.ssh_port) || 22,
       ssh_timeout_sec:   Number(fields.ssh_timeout_sec) || 15,
       poll_interval_sec: Number(fields.poll_interval_sec) || 60,
@@ -367,12 +369,14 @@ export function FleetSSHPanel({ config }: { config: ConfigSnapshot }) {
         <LabeledInput label="SSH User" value={fields.ssh_user} onChange={set('ssh_user')} placeholder="ubuntu" />
         <LabeledInput label="SSH Port" value={fields.ssh_port} onChange={set('ssh_port')} placeholder="22" />
         <LabeledInput label="SSH Key Path" value={fields.ssh_key_path} onChange={set('ssh_key_path')} placeholder="/home/ubuntu/.vprox/secret/vops_ssh_key" wide />
+        <LabeledInput label="Known Hosts File" value={fields.known_hosts_path} onChange={set('known_hosts_path')} placeholder="~/.ssh/known_hosts" wide />
         <LabeledInput label="Connection Timeout (sec)" value={fields.ssh_timeout_sec} onChange={set('ssh_timeout_sec')} placeholder="15" />
         <LabeledInput label="Poll Interval (sec)" value={fields.poll_interval_sec} onChange={set('poll_interval_sec')} placeholder="60" />
         <LabeledInput label="Default Datacenter" value={fields.datacenter} onChange={set('datacenter')} placeholder="hetzner" />
       </div>
       <p className="text-xs mt-1" style={{ color: 'var(--vn-text-subtle)' }}>
         SSH User must have passwordless <code>sudo</code> on each VM. Generate the SSH key in Security → Keys &amp; Credentials.
+        Known Hosts File — path to SSH known_hosts for host-key verification. Leave blank to use <code>~/.ssh/known_hosts</code>.
       </p>
       <SaveBar
         onSave={() => saveMut.mutate()}
@@ -547,10 +551,10 @@ export function DatacenterCard({ entry, onSaved }: { entry: InfraEntry; onSaved:
         </div>
       </div>
 
-      {/* vProx section */}
+      {/* vOps → VM Credentials section */}
       <div>
         <p className="text-xs font-medium mb-2" style={{ color: 'var(--vn-text-muted)' }}>
-          vProx → VM Credentials
+          vOps → VM Credentials
           <span className="ml-1 font-normal">— Default SSH user and key used to connect to VMs (separate from hypervisor).</span>
         </p>
         <div className="grid grid-cols-2 gap-2">
@@ -728,7 +732,7 @@ export function NewDatacenterForm({ onSaved }: { onSaved: () => void }) {
         <LabeledInput label="SSH User (hypervisor only)" value={host.user} onChange={setHostField('user')} placeholder="ubuntu" />
         <LabeledInput label="SSH Key Path (hypervisor only)" value={host.ssh_key_path} onChange={setHostField('ssh_key_path')} placeholder="/home/ubuntu/.ssh/id_rsa" />
       </div>
-      <p className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>vProx → VM Credentials (default SSH creds for VM connections)</p>
+      <p className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>vOps → VM Credentials (default SSH creds for VM connections)</p>
       <div className="grid grid-cols-2 gap-2">
         <LabeledInput label="VM SSH User" value={vprox.user} onChange={setVproxField('user')} placeholder="vnodesv" />
         <LabeledInput label="VM SSH Key Path" value={vprox.ssh_key_path} onChange={setVproxField('ssh_key_path')} placeholder="/home/vnodesv/.vprox/secret/vops_ssh_key" wide />
