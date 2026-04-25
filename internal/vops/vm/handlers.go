@@ -650,7 +650,7 @@ func (h *Handlers) HandleGuestAgent(w http.ResponseWriter, r *http.Request) {
 // ── GET /api/v1/vm/hosts/{host}/domains/{domain}/agent/install ────────────────
 
 // HandleInstallGuestAgent SSHes directly into the VM (using fleet VM config)
-// and runs apt-get install qemu-guest-agent, streaming progress as SSE.
+// and runs apt install qemu-guest-agent, streaming progress as SSE.
 func (h *Handlers) HandleInstallGuestAgent(w http.ResponseWriter, r *http.Request) {
 	_, domainName := r.PathValue("host"), r.PathValue("domain")
 
@@ -709,19 +709,19 @@ func (h *Handlers) HandleInstallGuestAgent(w http.ResponseWriter, r *http.Reques
 	defer client.Close()
 	sendEvent("connected", fmt.Sprintf("Connected to %s (%s)", domainName, dialAddr))
 
-	sendEvent("step", "Running apt-get update...")
-	if err := client.RunStream("apt-get update -y 2>&1", "", func(line string) {
+	sendEvent("step", "Running apt update...")
+	if err := client.RunStream("apt update -y 2>&1", "", func(line string) {
 		sendEvent("log", strings.TrimRight(line, "\r\n"))
 	}); err != nil {
-		sendEvent("error", fmt.Sprintf("apt-get update: %v", err))
+		sendEvent("error", fmt.Sprintf("apt update: %v", err))
 		return
 	}
 
 	sendEvent("step", "Installing qemu-guest-agent...")
-	if err := client.RunStream("apt-get install -y qemu-guest-agent 2>&1", "", func(line string) {
+	if err := client.RunStream("apt install -y qemu-guest-agent 2>&1", "", func(line string) {
 		sendEvent("log", strings.TrimRight(line, "\r\n"))
 	}); err != nil {
-		sendEvent("error", fmt.Sprintf("apt-get install: %v", err))
+		sendEvent("error", fmt.Sprintf("apt install: %v", err))
 		return
 	}
 
