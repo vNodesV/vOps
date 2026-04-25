@@ -26,22 +26,37 @@ type BannedIP struct {
 
 // autoBanStore holds active auto-bans in memory, protected by a mutex.
 type autoBanStore struct {
-	mu       sync.RWMutex
-	banned   map[string]BannedIP
-	timers   map[string]*time.Timer
-	sudoPass string // empty = NOPASSWD required
+	mu        sync.RWMutex
+	banned    map[string]BannedIP
+	timers    map[string]*time.Timer
+	sudoPass  string // empty = NOPASSWD required
+	whitelist map[string]struct{}
 }
 
-func newAutoBanStore(sudoPass string) *autoBanStore {
-	return &autoBanStore{
-		banned:   make(map[string]BannedIP),
-		timers:   make(map[string]*time.Timer),
-		sudoPass: sudoPass,
+func newAutoBanStore(sudoPass string, whitelist []string) *autoBanStore {
+	wl := make(map[string]struct{}, len(whitelist))
+	for _, ip := range whitelist {
+		if net.ParseIP(ip) != nil {
+			wl[ip] = struct{}{}
+		}
 	}
+	return &autoBanStore{
+		banned:    make(map[string]BannedIP),
+		timers:    make(map[string]*time.Timer),
+		sudoPass:  sudoPass,
+		whitelist: wl,
+	}
+}
+
+// isWhitelisted reports whether ip is in the never-ban list.
+func (s *autoBanStore) isWhitelisted(ip string) bool {
+	_, ok := s.whitelist[ip]
+	return ok
 }
 
 // BanIP records the ban and fires UFW insert 1 deny. Schedules auto-expiry.
 // Re-banning an already-banned IP resets its timer.
+// UFW exec is performed inside the lock to prevent TOCTOU races with UnbanIP.
 func (s *autoBanStore) BanIP(ip string, duration time.Duration, reason string) error {
 	if net.ParseIP(ip) == nil {
 		return fmt.Errorf("autoban: invalid IP: %q", ip)
@@ -49,16 +64,22 @@ func (s *autoBanStore) BanIP(ip string, duration time.Duration, reason string) e
 	now := time.Now()
 	entry := BannedIP{IP: ip, BannedAt: now, ExpiresAt: now.Add(duration), Reason: reason}
 
-	if err := ufw.BlockInsert(ip, s.sudoPass); err != nil {
-		log.Printf("[autoban] ufw insert failed for %s: %v (continuing)", ip, err)
-	}
-
 	s.mu.Lock()
 	if t, ok := s.timers[ip]; ok {
 		t.Stop()
 	}
+	// UFW exec inside the lock serializes with UnbanIP, preventing a race
+	// where UnbanIP clears the map and removes the UFW rule between our
+	// BlockInsert call and our map write.
+	if err := ufw.BlockInsert(ip, s.sudoPass); err != nil {
+		log.Printf("[autoban] ufw insert failed for %s: %v (continuing)", ip, err)
+	}
 	s.banned[ip] = entry
-	t := time.AfterFunc(duration, func() { _ = s.UnbanIP(ip) })
+	t := time.AfterFunc(duration, func() {
+		if err := s.UnbanIP(ip); err != nil {
+			log.Printf("[autoban] timer unban %s failed: %v", ip, err)
+		}
+	})
 	s.timers[ip] = t
 	s.mu.Unlock()
 
@@ -67,6 +88,7 @@ func (s *autoBanStore) BanIP(ip string, duration time.Duration, reason string) e
 }
 
 // UnbanIP removes the UFW rule and clears the in-memory entry.
+// UFW exec is performed inside the lock to prevent TOCTOU races with BanIP.
 func (s *autoBanStore) UnbanIP(ip string) error {
 	s.mu.Lock()
 	if t, ok := s.timers[ip]; ok {
@@ -74,9 +96,11 @@ func (s *autoBanStore) UnbanIP(ip string) error {
 		delete(s.timers, ip)
 	}
 	delete(s.banned, ip)
+	// UFW exec inside the lock serializes with BanIP.
+	err := ufw.Unblock(ip, s.sudoPass)
 	s.mu.Unlock()
 
-	if err := ufw.Unblock(ip, s.sudoPass); err != nil {
+	if err != nil {
 		log.Printf("[autoban] ufw unblock failed for %s: %v", ip, err)
 		return err
 	}
@@ -146,7 +170,7 @@ func (s *Server) autoBanSweep(threshold int, banDuration time.Duration) {
 		return
 	}
 	for _, acc := range accounts {
-		if s.autoBan.IsBanned(acc.IP) {
+		if s.autoBan.IsBanned(acc.IP) || s.autoBan.isWhitelisted(acc.IP) {
 			continue
 		}
 		reason := fmt.Sprintf("auto-ban: %d rate-limit events (threshold: %d)", acc.RatelimitEvents, threshold)

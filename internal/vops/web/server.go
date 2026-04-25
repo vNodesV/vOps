@@ -122,7 +122,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		loginAttempts: make(map[string]*loginAttempt),
 		debug:         &DebugRing{},
 	}
-	s.autoBan = newAutoBanStore("") // NOPASSWD required; see sudoers config
+	s.autoBan = newAutoBanStore("", cfg.VOps.Intel.BanWhitelist) // NOPASSWD required; see sudoers config
 	if fleetSvc != nil {
 		s.fleet = api.New(fleetSvc, d.DB)
 		s.fleet.SetDebug(s.debug)
@@ -141,6 +141,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 			cfg.VOps.Push.Defaults.KnownHostsPath,
 		)
 		s.vmMgr.SetDebug(s.debug)
+		s.vmMgr.SetAllowedOrigin(fmt.Sprintf("%s:%d", cfg.VOps.BindAddress, cfg.VOps.Port))
 	}
 
 	s.svcMgr = services.NewHandlers(d.DB)
@@ -440,13 +441,23 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		WriteTimeout: writeTimeout,
 	}
 
-	go func() {
-		t := time.NewTicker(2 * time.Minute)
-		defer t.Stop()
-		for range t.C {
-			s.autoBanSweep(defaultAutoBanThreshold, defaultBanDuration)
+	if cfg.VOps.Intel.AutoBanEnabled {
+		threshold := cfg.VOps.Intel.AutoBanThreshold
+		if threshold <= 0 {
+			threshold = defaultAutoBanThreshold
 		}
-	}()
+		banDur := time.Duration(cfg.VOps.Intel.BanDurationMinutes) * time.Minute
+		if banDur <= 0 {
+			banDur = defaultBanDuration
+		}
+		go func() {
+			t := time.NewTicker(2 * time.Minute)
+			defer t.Stop()
+			for range t.C {
+				s.autoBanSweep(threshold, banDur)
+			}
+		}()
+	}
 
 	return s, nil
 }

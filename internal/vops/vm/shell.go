@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -33,10 +34,10 @@ func (h *Handlers) wsUpgrader() *websocket.Upgrader {
 		CheckOrigin: func(r *http.Request) bool {
 			origin := r.Header.Get("Origin")
 			if origin == "" {
-				return true
+				// Non-browser clients (no Origin header): allow only loopback.
+				host, _, _ := net.SplitHostPort(r.RemoteAddr)
+				return host == "127.0.0.1" || host == "::1"
 			}
-			// Compare against server's configured address, not the attacker-
-			// controllable Host request header.
 			target := h.allowedOrigin
 			if target == "" {
 				target = r.Host
