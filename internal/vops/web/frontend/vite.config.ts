@@ -18,6 +18,8 @@ export default defineConfig({
     // Output goes inside the Go package for go:embed
     outDir: '../dist',
     emptyOutDir: true,
+    // Single-bundle internal tool — 1 MB gzipped to ~230 KB, acceptable for now
+    chunkSizeWarningLimit: 1000,
   },
   // Relative base so asset paths work when served under any sub-path proxy
   // (e.g. Apache ProxyPass /vlog/ → http://127.0.0.1:8889/ with prefix stripping).

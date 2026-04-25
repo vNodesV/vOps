@@ -11,7 +11,7 @@ import type { ConfigSnapshot } from '../../api/types';
 import Spinner from '../../components/Spinner';
 
 import { FleetScanPanel, FleetSSHPanel, DatacentersPanel } from './InfraPanel';
-import { PortsPanel, ProxyControlsPanel, ChainProfilesPanel } from './ProxyPanel';
+import { PortsPanel, ProxyControlsPanel, ChainProfilesPanel, RegisteredChainsPanel } from './ProxyPanel';
 import { VOpsPanel, BackupsPanel, PreferencesPanel } from './SystemPanel';
 import { SecurityPanel } from './SecurityPanel';
 
@@ -47,9 +47,10 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Proxy & Chains',
     desc: 'vProx reverse proxy and Cosmos chain endpoint configuration',
     sections: [
-      { id: 'ports',          label: 'vProx Ports' },
-      { id: 'proxy-controls', label: 'Proxy Controls' },
-      { id: 'chain-profiles', label: 'Chain Profiles' },
+      { id: 'ports',             label: 'vProx Ports' },
+      { id: 'proxy-controls',    label: 'Proxy Controls' },
+      { id: 'chain-profiles',    label: 'Chain Profiles' },
+      { id: 'registered-chains', label: 'Registered Chains' },
     ],
   },
   {
@@ -105,6 +106,8 @@ export default function SettingsPage() {
         return config ? <ProxyControlsPanel config={config} /> : null;
       case 'chain-profiles':
         return config ? <ChainProfilesPanel config={config} /> : null;
+      case 'registered-chains':
+        return <RegisteredChainsPanel />;
       case 'vops':
         return config ? <VOpsPanel config={config} /> : null;
       case 'backups':

@@ -212,6 +212,28 @@ export interface LibvirtSnapshot {
   state?: string;
 }
 
+export interface DomainDisk {
+  target: string; // vda, vdb, sda
+  source: string; // backing file path (empty = no media)
+  type: string;   // disk | cdrom | floppy
+  device: string; // virtio-blk device type
+}
+
+export interface Interface {
+  interface: string;
+  type: string;
+  source: string;
+  model: string;
+  mac: string;
+}
+
+export interface Network {
+  name: string;
+  state: string;
+  autostart: boolean;
+  persistent: boolean;
+}
+
 export interface HypervisorHost {
   name: string;
   lan_ip?: string;

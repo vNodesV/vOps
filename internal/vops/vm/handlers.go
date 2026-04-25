@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/vNodesV/vOps/internal/fleet/config"
+	fleetssh "github.com/vNodesV/vOps/internal/fleet/ssh"
 	opsdb "github.com/vNodesV/vOps/internal/vops/db"
 )
 
@@ -557,4 +558,173 @@ func (h *Handlers) audit(actor, action, targetType, targetName string, opErr err
 		entry.Error = opErr.Error()
 	}
 	_ = opsdb.InsertAuditLog(h.db, entry)
+}
+
+// ── GET /api/v1/vm/hosts/{host}/domains/{domain}/disks ────────────────────────
+
+// HandleListDisks returns the block devices attached to a domain.
+func (h *Handlers) HandleListDisks(w http.ResponseWriter, r *http.Request) {
+	hostName, domainName := r.PathValue("host"), r.PathValue("domain")
+	hi, err := h.findHost(hostName)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+		return
+	}
+	client, err := h.dialHost(hi)
+	if err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": fmt.Sprintf("ssh: %v", err)})
+		return
+	}
+	disks, err := ListDomainDisks(client, domainName)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	if disks == nil {
+		disks = []DomainDisk{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"host": hostName, "domain": domainName, "disks": disks})
+}
+
+// ── POST /api/v1/vm/hosts/{host}/domains/{domain}/disks/resize ────────────────
+
+type resizeDiskRequest struct {
+	Target string `json:"target"`  // e.g. "vda"
+	SizeGB int    `json:"size_gb"` // new total size in GiB
+}
+
+// HandleResizeDisk resizes a domain disk via virsh blockresize.
+func (h *Handlers) HandleResizeDisk(w http.ResponseWriter, r *http.Request) {
+	hostName, domainName := r.PathValue("host"), r.PathValue("domain")
+	var req resizeDiskRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Target == "" || req.SizeGB <= 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "provide target and size_gb > 0"})
+		return
+	}
+	hi, err := h.findHost(hostName)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+		return
+	}
+	client, err := h.dialHost(hi)
+	if err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": fmt.Sprintf("ssh: %v", err)})
+		return
+	}
+	opErr := ResizeDisk(client, domainName, req.Target, req.SizeGB)
+	actor, _ := r.Context().Value("vops-actor").(string)
+	if actor == "" {
+		actor = hostName
+	}
+	h.audit(actor, "vm.disk.resize", "domain", domainName, opErr)
+	if opErr != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": opErr.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"result": "resized"})
+}
+
+// ── GET /api/v1/vm/hosts/{host}/domains/{domain}/agent ────────────────────────
+
+// HandleGuestAgent checks whether the QEMU guest agent is present and responding.
+func (h *Handlers) HandleGuestAgent(w http.ResponseWriter, r *http.Request) {
+	hostName, domainName := r.PathValue("host"), r.PathValue("domain")
+	hi, err := h.findHost(hostName)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+		return
+	}
+	client, err := h.dialHost(hi)
+	if err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": fmt.Sprintf("ssh: %v", err)})
+		return
+	}
+	present, err := CheckGuestAgent(client, domainName)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"host": hostName, "domain": domainName, "present": present})
+}
+
+// ── GET /api/v1/vm/hosts/{host}/domains/{domain}/agent/install ────────────────
+
+// HandleInstallGuestAgent SSHes directly into the VM (using fleet VM config)
+// and runs apt-get install qemu-guest-agent, streaming progress as SSE.
+func (h *Handlers) HandleInstallGuestAgent(w http.ResponseWriter, r *http.Request) {
+	_, domainName := r.PathValue("host"), r.PathValue("domain")
+
+	cfg := h.svc.Config()
+	if cfg == nil {
+		http.Error(w, "no fleet config", http.StatusInternalServerError)
+		return
+	}
+
+	// Find VM SSH credentials from fleet config by domain (VM) name.
+	var vmCfg *config.VM
+	for i := range cfg.VMs {
+		if cfg.VMs[i].Name == domainName {
+			vmCfg = &cfg.VMs[i]
+			break
+		}
+	}
+	if vmCfg == nil {
+		http.Error(w, fmt.Sprintf("VM %q not found in fleet config", domainName), http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		return
+	}
+	sendEvent := func(step, msg string) {
+		b, _ := json.Marshal(map[string]string{"step": step, "msg": msg})
+		fmt.Fprintf(w, "data: %s\n\n", b)
+		flusher.Flush()
+	}
+
+	dialAddr := vmCfg.LanIP
+	if dialAddr == "" {
+		dialAddr = vmCfg.Host
+	}
+	port := vmCfg.Port
+	if port == 0 {
+		port = 22
+	}
+	keyPath := vmCfg.KeyPath
+	if keyPath == "" {
+		keyPath = h.sshKeyPath
+	}
+
+	client, err := fleetssh.Dial(dialAddr, port, vmCfg.User, keyPath, h.knownHosts)
+	if err != nil {
+		sendEvent("error", fmt.Sprintf("ssh connect failed: %v", err))
+		return
+	}
+	defer client.Close()
+	sendEvent("connected", fmt.Sprintf("Connected to %s (%s)", domainName, dialAddr))
+
+	sendEvent("step", "Running apt-get update...")
+	if err := client.RunStream("apt-get update -y 2>&1", "", func(line string) {
+		sendEvent("log", strings.TrimRight(line, "\r\n"))
+	}); err != nil {
+		sendEvent("error", fmt.Sprintf("apt-get update: %v", err))
+		return
+	}
+
+	sendEvent("step", "Installing qemu-guest-agent...")
+	if err := client.RunStream("apt-get install -y qemu-guest-agent 2>&1", "", func(line string) {
+		sendEvent("log", strings.TrimRight(line, "\r\n"))
+	}); err != nil {
+		sendEvent("error", fmt.Sprintf("apt-get install: %v", err))
+		return
+	}
+
+	_, _ = client.Run("systemctl enable qemu-guest-agent && systemctl start qemu-guest-agent 2>&1")
+	sendEvent("done", "qemu-guest-agent installed and started successfully.")
 }

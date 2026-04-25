@@ -14,7 +14,7 @@ import AccountsPage from './pages/Accounts';
 import AccountDetail from './pages/AccountDetail';
 import LoginPage from './pages/Login';
 import SettingsPage from './pages/settings';
-import VMsPage from './pages/VMs';
+import OperationsPage from './pages/Operations';
 import ServicesPage from './pages/Services';
 import TopologyPage from './pages/Topology';
 import MultiProxPage from './pages/MultiProx';
@@ -83,7 +83,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   const primaryLinks = [
     { to: '/', label: 'Dashboard', end: true },
     { to: '/accounts', label: 'IP Accounts', end: false },
-    { to: '/vms', label: 'VM Manager', end: false },
+    { to: '/ops', label: 'Operations Center', end: false },
     { to: '/services', label: 'Services', end: false },
   ];
 
@@ -262,7 +262,8 @@ export default function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/accounts" element={<AccountsPage />} />
             <Route path="/accounts/:ip" element={<AccountDetail />} />
-            <Route path="/vms" element={<VMsPage />} />
+            <Route path="/vms" element={<Navigate to="/ops" replace />} />
+            <Route path="/ops" element={<OperationsPage />} />
             <Route path="/services" element={<ServicesPage />} />
             <Route path="/topology" element={<TopologyPage />} />
             <Route path="/multiprox" element={<MultiProxPage />} />

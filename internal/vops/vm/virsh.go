@@ -621,6 +621,83 @@ func domainDiskPaths(client sshClient, domainName string) ([]string, error) {
 	return paths, nil
 }
 
+// ── Disk management ───────────────────────────────────────────────────────────
+
+// DomainDisk represents one block device attached to a libvirt domain.
+type DomainDisk struct {
+	Target string `json:"target"` // device target name: vda, vdb, sda
+	Source string `json:"source"` // backing file path (empty = no media)
+	Type   string `json:"type"`   // disk | cdrom | floppy
+	Device string `json:"device"` // virtio-blk device type
+}
+
+// ListDomainDisks returns the block devices attached to a domain via virsh domblklist.
+// Format returned by virsh: Type  Device  Target  Source
+func ListDomainDisks(client sshClient, domainName string) ([]DomainDisk, error) {
+	out, err := client.Run(fmt.Sprintf(
+		"virsh -c qemu:///system domblklist %s --details 2>&1",
+		shellescape(domainName),
+	))
+	if err != nil {
+		return nil, fmt.Errorf("virsh domblklist: %w", err)
+	}
+	var disks []DomainDisk
+	for i, line := range strings.Split(out, "\n") {
+		if i < 2 {
+			continue // skip two header rows
+		}
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "-") {
+			continue
+		}
+		f := strings.Fields(line)
+		// Fields: Type  Device  Target  Source
+		if len(f) < 3 {
+			continue
+		}
+		d := DomainDisk{
+			Type:   f[0],
+			Device: f[1],
+			Target: f[2],
+		}
+		if len(f) >= 4 && f[3] != "-" {
+			d.Source = f[3]
+		}
+		disks = append(disks, d)
+	}
+	return disks, nil
+}
+
+// ResizeDisk resizes a domain disk using virsh blockresize.
+// target is the device target (e.g. "vda"); sizeGB is the new total size in GiB.
+func ResizeDisk(client sshClient, domainName, target string, sizeGB int) error {
+	out, err := client.Run(fmt.Sprintf(
+		"virsh -c qemu:///system blockresize %s %s %dG 2>&1",
+		shellescape(domainName), shellescape(target), sizeGB,
+	))
+	if err != nil {
+		return fmt.Errorf("virsh blockresize: %w — %s", err, out)
+	}
+	return nil
+}
+
+// ── QEMU Guest Agent ──────────────────────────────────────────────────────────
+
+// CheckGuestAgent pings the QEMU guest agent on a running domain.
+// Returns (true, nil) when the agent responds; (false, nil) when absent/not running.
+// Returns (false, err) only on SSH failure, not on agent absence.
+func CheckGuestAgent(client sshClient, domainName string) (bool, error) {
+	out, err := client.Run(fmt.Sprintf(
+		`virsh -c qemu:///system qemu-agent-command %s '{"execute":"guest-ping"}' 2>&1`,
+		shellescape(domainName),
+	))
+	if err != nil {
+		// virsh exits non-zero when agent is absent — not an SSH error.
+		return false, nil
+	}
+	return strings.Contains(out, `"return"`), nil
+}
+
 // shellquote wraps a string in single quotes and escapes any embedded single quotes.
 // Use this for file paths and any string that may contain special shell characters.
 // For domain/snapshot names (restricted charset) prefer shellescape.

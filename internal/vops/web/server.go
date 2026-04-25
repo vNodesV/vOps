@@ -320,6 +320,16 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 			s.requireSession(http.HandlerFunc(s.vmMgr.HandleListNetworks)))
 		mux.Handle("GET /api/v1/vm/hosts/{host}/domains/{domain}/interfaces",
 			s.requireSession(http.HandlerFunc(s.vmMgr.HandleDomainInterfaces)))
+		// Disk management.
+		mux.Handle("GET /api/v1/vm/hosts/{host}/domains/{domain}/disks",
+			s.requireSession(http.HandlerFunc(s.vmMgr.HandleListDisks)))
+		mux.Handle("POST /api/v1/vm/hosts/{host}/domains/{domain}/disks/resize",
+			s.requireSession(http.HandlerFunc(s.vmMgr.HandleResizeDisk)))
+		// QEMU guest agent.
+		mux.Handle("GET /api/v1/vm/hosts/{host}/domains/{domain}/agent",
+			s.requireSession(http.HandlerFunc(s.vmMgr.HandleGuestAgent)))
+		mux.Handle("GET /api/v1/vm/hosts/{host}/domains/{domain}/agent/install",
+			s.requireSession(http.HandlerFunc(s.vmMgr.HandleInstallGuestAgent)))
 		// WebSocket shell — bidirectional SSH PTY session to a hypervisor host.
 		mux.Handle("GET /api/v1/vm/shell",
 			s.requireSession(http.HandlerFunc(s.vmMgr.HandleShell)))

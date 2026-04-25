@@ -1,12 +1,13 @@
 /**
  * settings/ProxyPanel.tsx
  * Proxy & Chains panels: PortsPanel, ProxyControlsPanel, ChainProfilesPanel,
- * ChainCard, NewChainForm.
+ * ChainCard, NewChainForm, RegisteredChainsPanel.
  */
 import { useState, useCallback } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { saveConfig } from '../../api';
-import type { ConfigSnapshot } from '../../api/types';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { saveConfig, getRegisteredChains, registerChain, unregisterChain, forcePoll } from '../../api';
+import type { ConfigSnapshot, RegisteredChain } from '../../api/types';
+import Spinner from '../../components/Spinner';
 import {
   SectionCard,
   SaveBar,
@@ -288,5 +289,160 @@ export function ChainProfilesPanel({ config }: { config: ConfigSnapshot }) {
         </div>
       </SectionCard>
     </div>
+  );
+}
+
+/* ── Registered Chains ───────────────────────────────────────── */
+
+const fleetBtn: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', gap: '0.375rem',
+  padding: '0.4rem 0.85rem', border: 'none', borderRadius: 'var(--vn-radius)',
+  background: 'var(--vn-primary)', color: 'var(--vn-on-primary)',
+  fontSize: '0.8rem', fontWeight: 500, cursor: 'pointer',
+};
+const fleetTable: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' };
+const fleetTh: React.CSSProperties = {
+  padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 600, fontSize: '0.75rem',
+  color: 'var(--vn-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em',
+  borderBottom: '1px solid var(--vn-border)',
+};
+const fleetTd: React.CSSProperties = { padding: '0.5rem 0.75rem', borderBottom: '1px solid var(--vn-border)', color: 'var(--vn-text)' };
+const fleetInput: React.CSSProperties = {
+  padding: '0.4rem 0.65rem', border: '1px solid var(--vn-border)', borderRadius: 'var(--vn-radius)',
+  background: 'var(--vn-surface-2)', color: 'var(--vn-text)', fontSize: '0.875rem',
+};
+
+export function RegisteredChainsPanel() {
+  const qc = useQueryClient();
+  const [newChain, setNewChain] = useState('');
+  const [newRPC, setNewRPC] = useState('');
+  const [newNote, setNewNote] = useState('');
+  const [addErr, setAddErr] = useState('');
+  const [msg, setMsg] = useState('');
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['registered-chains'],
+    queryFn: getRegisteredChains,
+    staleTime: 30_000,
+  });
+  const chains: RegisteredChain[] = data?.registered_chains ?? [];
+
+  const { mutate: doRegister, isPending: registering } = useMutation({
+    mutationFn: () => registerChain({ chain: newChain.trim(), rpc_url: newRPC.trim(), note: newNote.trim() || undefined }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['registered-chains'] });
+      setNewChain('');
+      setNewRPC('');
+      setNewNote('');
+      setAddErr('');
+      setMsg('Chain registered.');
+    },
+    onError: (e: Error) => setAddErr(e.message),
+  });
+
+  const { mutate: doUnregister } = useMutation({
+    mutationFn: (chain: string) => unregisterChain(chain),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['registered-chains'] }); setMsg('Chain removed.'); },
+    onError: (e: Error) => setMsg(`Error: ${e.message}`),
+  });
+
+  const { mutate: doPoll } = useMutation({
+    mutationFn: () => forcePoll(),
+    onSuccess: () => setMsg('Poll triggered.'),
+    onError: (e: Error) => setMsg(`Error: ${e.message}`),
+  });
+
+  return (
+    <SectionCard title="Registered Chains" subtitle="Chains registered for live status polling via vProx.">
+      {isLoading ? <Spinner label="Loading chains…" /> : (
+        <>
+          {chains.length === 0 ? (
+            <p style={{ fontSize: '0.85rem', color: 'var(--vn-text-muted)', margin: '0 0 1rem' }}>
+              No chains registered yet.
+            </p>
+          ) : (
+            <div style={{ overflowX: 'auto', marginBottom: '1rem' }}>
+              <table style={fleetTable}>
+                <thead>
+                  <tr>
+                    {['Chain', 'RPC URL', 'Note', ''].map(h => (
+                      <th key={h} style={fleetTh}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {chains.map((c) => (
+                    <tr key={c.chain}>
+                      <td style={{ ...fleetTd, fontWeight: 600 }}>{c.chain}</td>
+                      <td style={{ ...fleetTd, fontFamily: 'monospace', fontSize: '0.78rem', color: 'var(--vn-text-muted)' }}>{c.rpc_url || '—'}</td>
+                      <td style={{ ...fleetTd, fontSize: '0.78rem', color: 'var(--vn-text-muted)' }}>{c.note || '—'}</td>
+                      <td style={fleetTd}>
+                        <div style={{ display: 'flex', gap: '0.4rem' }}>
+                          <button
+                            onClick={() => doPoll()}
+                            style={{ ...fleetBtn, background: 'var(--vn-surface)', color: 'var(--vn-text)', border: '1px solid var(--vn-border)', padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}
+                          >
+                            Poll All
+                          </button>
+                          <button
+                            onClick={() => { if (confirm(`Unregister chain "${c.chain}"?`)) doUnregister(c.chain); }}
+                            style={{ ...fleetBtn, background: 'transparent', color: 'var(--vn-danger)', border: '1px solid var(--vn-danger)', padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {msg && <p style={{ fontSize: '0.8rem', color: msg.startsWith('Error') ? 'var(--vn-danger)' : 'var(--vn-success)', marginBottom: '0.75rem' }}>{msg}</p>}
+
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--vn-text-muted)', marginBottom: '0.25rem' }}>Chain ID</label>
+              <input
+                value={newChain}
+                onChange={e => { setNewChain(e.target.value); setAddErr(''); }}
+                placeholder="cosmoshub-4"
+                style={{ ...fleetInput, width: 140 }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--vn-text-muted)', marginBottom: '0.25rem' }}>RPC URL</label>
+              <input
+                value={newRPC}
+                onChange={e => setNewRPC(e.target.value)}
+                placeholder="http://localhost:26657"
+                style={{ ...fleetInput, width: 220 }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--vn-text-muted)', marginBottom: '0.25rem' }}>Note (opt)</label>
+              <input
+                value={newNote}
+                onChange={e => setNewNote(e.target.value)}
+                placeholder="optional note"
+                style={{ ...fleetInput, width: 120 }}
+              />
+            </div>
+            <button
+              onClick={() => {
+                if (!newChain.trim() || !newRPC.trim()) { setAddErr('Chain ID and RPC URL are required'); return; }
+                doRegister();
+              }}
+              disabled={registering}
+              style={fleetBtn}
+            >
+              {registering ? 'Registering…' : 'Register'}
+            </button>
+          </div>
+          {addErr && <p style={{ fontSize: '0.78rem', color: 'var(--vn-danger)', marginTop: '0.4rem' }}>{addErr}</p>}
+        </>
+      )}
+    </SectionCard>
   );
 }

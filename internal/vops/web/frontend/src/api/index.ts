@@ -199,6 +199,46 @@ export const deleteVMSnapshot = (host: string, domain: string, snap: string) =>
     {},
   );
 
+export const resizeDomain = (host: string, domain: string, body: { memory_mib?: number; vcpus?: number; live?: boolean }) =>
+  apiPost<{ result: string }>(
+    `/api/v1/vm/hosts/${encodeURIComponent(host)}/domains/${encodeURIComponent(domain)}/resize`,
+    body,
+  );
+
+export const getDomainStats = (host: string, domain: string) =>
+  apiFetch<{ stats: Record<string, string> }>(
+    `/api/v1/vm/hosts/${encodeURIComponent(host)}/domains/${encodeURIComponent(domain)}/stats`,
+  );
+
+export const getDomainInterfaces = (host: string, domain: string) =>
+  apiFetch<{ interfaces: import('./types').Interface[] }>(
+    `/api/v1/vm/hosts/${encodeURIComponent(host)}/domains/${encodeURIComponent(domain)}/interfaces`,
+  );
+
+export const getVMNetworks = (host: string) =>
+  apiFetch<{ networks: import('./types').Network[] }>(
+    `/api/v1/vm/hosts/${encodeURIComponent(host)}/networks`,
+  );
+
+export const getDomainDisks = (host: string, domain: string) =>
+  apiFetch<{ disks: import('./types').DomainDisk[] }>(
+    `/api/v1/vm/hosts/${encodeURIComponent(host)}/domains/${encodeURIComponent(domain)}/disks`,
+  );
+
+export const resizeDisk = (host: string, domain: string, body: { target: string; size_gb: number }) =>
+  apiPost<{ result: string }>(
+    `/api/v1/vm/hosts/${encodeURIComponent(host)}/domains/${encodeURIComponent(domain)}/disks/resize`,
+    body,
+  );
+
+export const checkGuestAgent = (host: string, domain: string) =>
+  apiFetch<{ present: boolean }>(
+    `/api/v1/vm/hosts/${encodeURIComponent(host)}/domains/${encodeURIComponent(domain)}/agent`,
+  );
+
+export const guestAgentInstallURL = (host: string, domain: string) =>
+  BASE + `/api/v1/vm/hosts/${encodeURIComponent(host)}/domains/${encodeURIComponent(domain)}/agent/install`;
+
 // ── Debug console ────────────────────────────────────────────────────────────
 
 export interface DebugEvent {
