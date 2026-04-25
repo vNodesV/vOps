@@ -1,0 +1,157 @@
+package web
+
+import (
+	"fmt"
+	"log"
+	"net"
+	"net/http"
+	"sync"
+	"time"
+
+	"github.com/vNodesV/vOps/internal/vops/ufw"
+)
+
+const (
+	defaultAutoBanThreshold = 5              // rate-limit events before auto-ban
+	defaultBanDuration      = 60 * time.Minute
+)
+
+// BannedIP records a single active auto-ban.
+type BannedIP struct {
+	IP        string    `json:"ip"`
+	BannedAt  time.Time `json:"banned_at"`
+	ExpiresAt time.Time `json:"expires_at"`
+	Reason    string    `json:"reason"`
+}
+
+// autoBanStore holds active auto-bans in memory, protected by a mutex.
+type autoBanStore struct {
+	mu       sync.RWMutex
+	banned   map[string]BannedIP
+	timers   map[string]*time.Timer
+	sudoPass string // empty = NOPASSWD required
+}
+
+func newAutoBanStore(sudoPass string) *autoBanStore {
+	return &autoBanStore{
+		banned:   make(map[string]BannedIP),
+		timers:   make(map[string]*time.Timer),
+		sudoPass: sudoPass,
+	}
+}
+
+// BanIP records the ban and fires UFW insert 1 deny. Schedules auto-expiry.
+// Re-banning an already-banned IP resets its timer.
+func (s *autoBanStore) BanIP(ip string, duration time.Duration, reason string) error {
+	if net.ParseIP(ip) == nil {
+		return fmt.Errorf("autoban: invalid IP: %q", ip)
+	}
+	now := time.Now()
+	entry := BannedIP{IP: ip, BannedAt: now, ExpiresAt: now.Add(duration), Reason: reason}
+
+	if err := ufw.BlockInsert(ip, s.sudoPass); err != nil {
+		log.Printf("[autoban] ufw insert failed for %s: %v (continuing)", ip, err)
+	}
+
+	s.mu.Lock()
+	if t, ok := s.timers[ip]; ok {
+		t.Stop()
+	}
+	s.banned[ip] = entry
+	t := time.AfterFunc(duration, func() { _ = s.UnbanIP(ip) })
+	s.timers[ip] = t
+	s.mu.Unlock()
+
+	log.Printf("[autoban] banned %s for %s: %s", ip, duration, reason)
+	return nil
+}
+
+// UnbanIP removes the UFW rule and clears the in-memory entry.
+func (s *autoBanStore) UnbanIP(ip string) error {
+	s.mu.Lock()
+	if t, ok := s.timers[ip]; ok {
+		t.Stop()
+		delete(s.timers, ip)
+	}
+	delete(s.banned, ip)
+	s.mu.Unlock()
+
+	if err := ufw.Unblock(ip, s.sudoPass); err != nil {
+		log.Printf("[autoban] ufw unblock failed for %s: %v", ip, err)
+		return err
+	}
+	log.Printf("[autoban] unbanned %s", ip)
+	return nil
+}
+
+// IsBanned reports whether ip is currently in the active ban list.
+func (s *autoBanStore) IsBanned(ip string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	_, ok := s.banned[ip]
+	return ok
+}
+
+// List returns a snapshot of all active bans.
+func (s *autoBanStore) List() []BannedIP {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]BannedIP, 0, len(s.banned))
+	for _, b := range s.banned {
+		out = append(out, b)
+	}
+	return out
+}
+
+// ── HTTP handlers ────────────────────────────────────────────────────────────
+
+// handleAPIBannedList returns all active auto-bans.
+func (s *Server) handleAPIBannedList(w http.ResponseWriter, _ *http.Request) {
+	type bannedEntry struct {
+		BannedIP
+		RemainingSeconds int `json:"remaining_seconds"`
+	}
+	bans := s.autoBan.List()
+	entries := make([]bannedEntry, 0, len(bans))
+	for _, b := range bans {
+		rem := int(time.Until(b.ExpiresAt).Seconds())
+		if rem < 0 {
+			rem = 0
+		}
+		entries = append(entries, bannedEntry{BannedIP: b, RemainingSeconds: rem})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"banned": entries})
+}
+
+// handleAPIBannedUnban removes an auto-ban for a specific IP.
+func (s *Server) handleAPIBannedUnban(w http.ResponseWriter, r *http.Request) {
+	ip := r.PathValue("ip")
+	if net.ParseIP(ip) == nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid IP"})
+		return
+	}
+	if err := s.autoBan.UnbanIP(ip); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// autoBanSweep queries the DB and bans IPs that exceed the ratelimit threshold.
+// Called from a background goroutine in the server.
+func (s *Server) autoBanSweep(threshold int, banDuration time.Duration) {
+	accounts, err := s.db.ListIPAccountsExceedingRatelimit(int64(threshold), 100)
+	if err != nil {
+		log.Printf("[autoban] sweep DB error: %v", err)
+		return
+	}
+	for _, acc := range accounts {
+		if s.autoBan.IsBanned(acc.IP) {
+			continue
+		}
+		reason := fmt.Sprintf("auto-ban: %d rate-limit events (threshold: %d)", acc.RatelimitEvents, threshold)
+		if err := s.autoBan.BanIP(acc.IP, banDuration, reason); err != nil {
+			log.Printf("[autoban] failed to ban %s: %v", acc.IP, err)
+		}
+	}
+}

@@ -585,6 +585,10 @@ func applyVOps(home string, f map[string]any) error {
 	v.Intel.AutoEnrich = fieldBool(f, "auto_enrich", true)
 	v.Intel.CacheTTLHours = fieldInt(f, "cache_ttl_hours", 24)
 	v.Intel.RateLimitRPM = fieldInt(f, "rate_limit_rpm", 10)
+	v.Intel.AutoBanEnabled = fieldBool(f, "auto_ban_enabled", true)
+	v.Intel.AutoBanThreshold = fieldInt(f, "auto_ban_threshold", 5)
+	v.Intel.BanDurationMinutes = fieldInt(f, "ban_duration_minutes", 60)
+	v.Intel.BanWhitelist = fieldLines(f, "ban_whitelist")
 	v.Push.Defaults.User = fieldStr(f, "push_user", "")
 	v.Push.Defaults.KeyPath = fieldStr(f, "push_key_path", "")
 	v.Push.PollIntervalSec = fieldInt(f, "poll_interval_sec", 60)
@@ -606,6 +610,7 @@ func applyFleet(home string, f map[string]any) error {
 	var s fleetSettingsFile
 	s.SSH.User = fieldStr(f, "ssh_user", "ubuntu")
 	s.SSH.KeyPath = fieldStr(f, "ssh_key_path", "")
+	s.SSH.KnownHostsPath = fieldStr(f, "known_hosts_path", "")
 	s.SSH.Port = fieldInt(f, "ssh_port", 22)
 	s.SSH.TimeoutSec = fieldInt(f, "ssh_timeout_sec", 15)
 	s.Poll.IntervalSec = fieldInt(f, "poll_interval_sec", 60)
@@ -931,6 +936,32 @@ func fieldBool(f map[string]any, key string, def bool) bool {
 
 func splitList(s string) []string {
 	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// fieldLines extracts a []string from a newline-or-comma-separated field value.
+func fieldLines(f map[string]any, key string) []string {
+	raw, ok := f[key]
+	if !ok {
+		return nil
+	}
+	s, ok := raw.(string)
+	if !ok || strings.TrimSpace(s) == "" {
+		return nil
+	}
+	// Support both newline-separated (textarea) and comma-separated inputs.
+	sep := "\n"
+	if !strings.Contains(s, "\n") {
+		sep = ","
+	}
+	parts := strings.Split(s, sep)
 	out := make([]string, 0, len(parts))
 	for _, p := range parts {
 		p = strings.TrimSpace(p)
@@ -1618,6 +1649,7 @@ func importFleetFields(data []byte) (map[string]any, error) {
 	return map[string]any{
 		"ssh_user":          s.SSH.User,
 		"ssh_key_path":      s.SSH.KeyPath,
+		"known_hosts_path":  s.SSH.KnownHostsPath,
 		"ssh_port":          s.SSH.Port,
 		"ssh_timeout_sec":   s.SSH.TimeoutSec,
 		"poll_interval_sec": s.Poll.IntervalSec,

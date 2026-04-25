@@ -108,20 +108,34 @@ func (s *Server) handleUnitLogStream(w http.ResponseWriter, r *http.Request) {
 	}
 	sendEvent("tail:start", "--- live tail ---")
 
-	// Live tail — runs until the client disconnects or SSH session ends.
-	// We use a pipe-based approach: stream output line-by-line.
-	tailOut, tailErr := client.Run(fmt.Sprintf(
-		"journalctl -u %s -f --no-pager 2>&1", serviceName))
-	if tailErr != nil {
-		// journalctl -f may return an error if the connection drops; that's fine.
-		return
-	}
-	for _, line := range strings.Split(strings.TrimSpace(tailOut), "\n") {
-		sendEvent("log", line)
-		select {
-		case <-r.Context().Done():
-			return
-		default:
+	// Live tail — RunStream uses sess.Start + goroutine piping io.Copy so lines
+	// are forwarded as they arrive without buffering the full output in memory.
+	// Run in a goroutine so we can select on client disconnect; when the HTTP
+	// connection closes, r.Context() fires → defer client.Close() terminates
+	// the SSH session and causes RunStream to return.
+	tailDone := make(chan error, 1)
+	go func() {
+		tailDone <- client.RunStream(
+			fmt.Sprintf("journalctl -u %s -f --no-pager 2>&1", serviceName),
+			"",
+			func(line string) {
+				select {
+				case <-r.Context().Done():
+					return // client disconnected — stop sending
+				default:
+					sendEvent("log", line)
+				}
+			},
+		)
+	}()
+
+	select {
+	case <-r.Context().Done():
+		// Client disconnected; defer client.Close() will terminate SSH session.
+	case tailErr := <-tailDone:
+		if tailErr != nil {
+			// journalctl -f exits when SSH drops or service restarts; that is expected.
+			sendEvent("tail:end", fmt.Sprintf("log tail ended: %v", tailErr))
 		}
 	}
 }
@@ -282,6 +296,9 @@ WantedBy=multi-user.target
 `, serviceName, vm.User, cosmovisorPath, cosmovisorPath, serviceName)
 
 	// Write via tee to avoid shell quoting issues.
+	// H-7 path-traversal note: serviceName is validated against safeServiceName
+	// (^[a-zA-Z0-9_.\-]{1,64}$) before reaching this point, which blocks all
+	// slash, tilde, and dot-dot sequences.  No additional sanitization is needed.
 	writeUnit := fmt.Sprintf(
 		"cat > /tmp/%s.service << 'EOSVC'\n%sEOSVC", serviceName, unitContent)
 	if out, err = runUser(writeUnit); err != nil {

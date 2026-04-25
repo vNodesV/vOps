@@ -8,11 +8,13 @@ interface UpgradeModalProps {
   vmName: string;
   upgradeURL: string;
   onClose: () => void;
+  onStart?: () => void;
+  onDone?: (success: boolean, detail?: string) => void;
 }
 
 interface LogEntry { text: string; step: string; }
 
-export default function UpgradeModal({ vmName, upgradeURL, onClose }: UpgradeModalProps) {
+export default function UpgradeModal({ vmName, upgradeURL, onClose, onStart, onDone }: UpgradeModalProps) {
   const [pass, setPass]         = useState('');
   const [phase, setPhase]       = useState<Phase>('input');
   const [log, setLog]           = useState<LogEntry[]>([]);
@@ -41,6 +43,7 @@ export default function UpgradeModal({ vmName, upgradeURL, onClose }: UpgradeMod
     setPhase('running');
     setLog([]);
     setErrMsg('');
+    onStart?.();
 
     const body = pass ? { sudo_password: pass } : {};
 
@@ -55,11 +58,11 @@ export default function UpgradeModal({ vmName, upgradeURL, onClose }: UpgradeMod
           setLog(prev => [...prev, { step: '', text: msg.data }]);
         }
       },
-      () => setPhase('done'),
-      (err) => { setErrMsg(err.message); setPhase('error'); },
+      () => { setPhase('done'); onDone?.(true); },
+      (err) => { setErrMsg(err.message); setPhase('error'); onDone?.(false, err.message); },
       body,
     );
-  }, [upgradeURL, pass]);
+  }, [upgradeURL, pass, onStart, onDone]);
 
   const stepColor = (step: string) => {
     if (step.endsWith(':error') || step === 'error') return 'var(--vn-danger)';

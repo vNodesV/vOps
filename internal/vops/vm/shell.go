@@ -13,6 +13,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	fleetssh "github.com/vNodesV/vOps/internal/fleet/ssh"
+	"github.com/vNodesV/vOps/internal/vops/ctxkeys"
 	opsdb "github.com/vNodesV/vOps/internal/vops/db"
 )
 
@@ -23,14 +24,26 @@ const (
 	shellReadBufSize = 4096
 )
 
-var wsUpgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		origin := r.Header.Get("Origin")
-		if origin == "" {
-			return true
-		}
-		return r.Host != "" && (origin == "http://"+r.Host || origin == "https://"+r.Host)
-	},
+// wsUpgrader returns a websocket.Upgrader whose CheckOrigin validates the
+// request Origin against h.allowedOrigin (the server's configured bind address).
+// This prevents cross-origin WebSocket hijacking (H-8).
+// When allowedOrigin is empty the check falls back to r.Host (request header).
+func (h *Handlers) wsUpgrader() *websocket.Upgrader {
+	return &websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			origin := r.Header.Get("Origin")
+			if origin == "" {
+				return true
+			}
+			// Compare against server's configured address, not the attacker-
+			// controllable Host request header.
+			target := h.allowedOrigin
+			if target == "" {
+				target = r.Host
+			}
+			return origin == "http://"+target || origin == "https://"+target
+		},
+	}
 }
 
 // shellMsg is the JSON envelope sent from server → client on the WebSocket.
@@ -65,7 +78,7 @@ func (h *Handlers) HandleShell(w http.ResponseWriter, r *http.Request) {
 
 	// Upgrade to WebSocket before opening SSH — this lets the client know
 	// the route is valid before committing to a potentially slow SSH dial.
-	conn, err := wsUpgrader.Upgrade(w, r, nil)
+	conn, err := h.wsUpgrader().Upgrade(w, r, nil)
 	if err != nil {
 		slog.Error("vm.shell: websocket upgrade failed", "err", err)
 		return // Upgrade already wrote an HTTP error
@@ -89,7 +102,7 @@ func (h *Handlers) HandleShell(w http.ResponseWriter, r *http.Request) {
 	defer shell.Close()
 
 	// Audit: record session open.
-	actor, _ := r.Context().Value("vops-actor").(string)
+	actor, _ := r.Context().Value(ctxkeys.Actor).(string)
 	if actor == "" {
 		actor = "unknown"
 	}

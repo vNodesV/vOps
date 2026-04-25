@@ -38,6 +38,11 @@ type Host struct {
 	// VRackIP is the host's IP on the OVH vRack private network, used for
 	// cross-datacenter management traffic (e.g. QC ↔ RBX).
 	VRackIP string `toml:"vrack_ip" json:"vrack_ip,omitempty"`
+	// KnownHostsPath is the SSH known_hosts file used when dialing this host.
+	// When empty, fleet/ssh.Dial falls back to ~/.ssh/known_hosts, then
+	// InsecureIgnoreHostKey (with a WARN log). Set in infra TOML or via
+	// [vops.push.defaults].known_hosts_path.
+	KnownHostsPath string `toml:"ssh_known_hosts_path" json:"-"`
 
 	// VMUser and VMKeyPath are runtime-only defaults for VM SSH within this host.
 	// Populated from [vprox].user / [vprox].ssh_key_path during LoadFromInfraFiles.

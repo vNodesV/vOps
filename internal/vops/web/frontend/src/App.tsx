@@ -8,6 +8,7 @@ import {
   useLocation,
 } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { TaskProvider } from './contexts/TaskContext';
 
 import Dashboard from './pages/Dashboard';
 import AccountsPage from './pages/Accounts';
@@ -254,25 +255,27 @@ function Shell({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter basename={BASE || ''}>
-        <Shell>
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/accounts" element={<AccountsPage />} />
-            <Route path="/accounts/:ip" element={<AccountDetail />} />
-            <Route path="/vms" element={<Navigate to="/ops" replace />} />
-            <Route path="/ops" element={<OperationsPage />} />
-            <Route path="/services" element={<ServicesPage />} />
-            <Route path="/topology" element={<TopologyPage />} />
-            <Route path="/multiprox" element={<MultiProxPage />} />
-            <Route path="/audit" element={<AuditPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Shell>
-      </BrowserRouter>
-    </QueryClientProvider>
+    <TaskProvider>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter basename={BASE || ''}>
+          <Shell>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/accounts" element={<AccountsPage />} />
+              <Route path="/accounts/:ip" element={<AccountDetail />} />
+              <Route path="/vms" element={<Navigate to="/ops" replace />} />
+              <Route path="/ops" element={<OperationsPage />} />
+              <Route path="/services" element={<ServicesPage />} />
+              <Route path="/topology" element={<TopologyPage />} />
+              <Route path="/multiprox" element={<MultiProxPage />} />
+              <Route path="/audit" element={<AuditPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Shell>
+        </BrowserRouter>
+      </QueryClientProvider>
+    </TaskProvider>
   );
 }

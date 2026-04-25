@@ -360,3 +360,12 @@ export const getAuditLog = (limit = 100, offset = 0, actor = '', action = '') =>
   if (action) p.set('action', action);
   return apiFetch<{ entries: Array<{ id: number; ts: string; actor: string; action: string; target_type: string; target_name: string; params?: string; result?: string; error?: string }> }>(`/api/v1/audit?${p}`);
 };
+
+// Intel auto-ban
+export const getBannedIPs = () =>
+  apiFetch<{ banned: import('./types').BannedIPEntry[] }>('/api/v1/intel/banned');
+
+export const unbanIP = (ip: string) =>
+  apiFetch<{ ok: boolean }>(`/api/v1/intel/banned/${encodeURIComponent(ip)}/unban`, {
+    method: 'POST',
+  });

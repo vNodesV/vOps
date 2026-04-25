@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vNodesV/vOps/internal/vops/ctxkeys"
 	"github.com/vNodesV/vOps/internal/vops/db"
 	"github.com/vNodesV/vOps/internal/vops/intel"
 	"github.com/vNodesV/vOps/internal/vops/ufw"
@@ -656,11 +657,23 @@ func (s *Server) handleAPIProbe(w http.ResponseWriter, r *http.Request) {
 	providerParam := strings.TrimSpace(r.URL.Query().Get("provider"))
 
 	// SSRF guard — only hosts present in ingested data.
-	stats, err := s.db.EndpointSummary(500)
-	if err != nil {
-		log.Printf("[web] internal error: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
-		return
+	// M-5: EndpointSummary is a full table scan; cache the result for 30 s.
+	s.probeHostCacheMu.RLock()
+	stats := s.probeHostCache
+	cacheAge := time.Since(s.probeHostCacheAt)
+	s.probeHostCacheMu.RUnlock()
+	if stats == nil || cacheAge > 30*time.Second {
+		var err error
+		stats, err = s.db.EndpointSummary(500)
+		if err != nil {
+			log.Printf("[web] internal error: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			return
+		}
+		s.probeHostCacheMu.Lock()
+		s.probeHostCache = stats
+		s.probeHostCacheAt = time.Now()
+		s.probeHostCacheMu.Unlock()
 	}
 	hostKey := normalizeProbeHost(host)
 	hostSet := make(map[string]struct{}, len(stats))
@@ -848,7 +861,7 @@ func (s *Server) handleAPIBlock(w http.ResponseWriter, r *http.Request) {
 		"reason":  reason,
 	})
 
-	actor, _ := r.Context().Value("vops-actor").(string)
+	actor, _ := r.Context().Value(ctxkeys.Actor).(string)
 	params, _ := json.Marshal(map[string]string{"reason": reason})
 	_ = db.InsertAuditLog(s.db.DB, db.AuditEntry{
 		Actor:      actor,
@@ -885,7 +898,7 @@ func (s *Server) handleAPIUnblock(w http.ResponseWriter, r *http.Request) {
 		"ufw":     ufwOK,
 	})
 
-	actor, _ := r.Context().Value("vops-actor").(string)
+	actor, _ := r.Context().Value(ctxkeys.Actor).(string)
 	_ = db.InsertAuditLog(s.db.DB, db.AuditEntry{
 		Actor:      actor,
 		Action:     "ip.unblock",

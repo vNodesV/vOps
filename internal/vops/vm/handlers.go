@@ -9,6 +9,7 @@ import (
 
 	"github.com/vNodesV/vOps/internal/fleet/config"
 	fleetssh "github.com/vNodesV/vOps/internal/fleet/ssh"
+	"github.com/vNodesV/vOps/internal/vops/ctxkeys"
 	opsdb "github.com/vNodesV/vOps/internal/vops/db"
 )
 
@@ -22,12 +23,13 @@ type configProvider interface {
 // It is wired into the vOps mux by server.go when fleet config is available.
 // svc is queried on every request so VM Manager always reflects live TOML state.
 type Handlers struct {
-	svc        configProvider
-	db         *sql.DB // optional; used for audit logging
-	sshPort    int
-	sshKeyPath string
-	knownHosts string
-	debug      vmDebugEmitter
+	svc           configProvider
+	db            *sql.DB // optional; used for audit logging
+	sshPort       int
+	sshKeyPath    string
+	knownHosts    string
+	allowedOrigin string // scheme+host:port for WebSocket origin check, e.g. "127.0.0.1:8080"
+	debug         vmDebugEmitter
 }
 
 // vmDebugEmitter is satisfied by *web.DebugRing; defined locally to avoid
@@ -53,6 +55,11 @@ func NewHandlers(svc configProvider, db *sql.DB, sshPort int, sshKeyPath, knownH
 // SetDebug attaches a debug emitter so all SSH commands executed by VM manager
 // handlers are recorded in the debug console.
 func (h *Handlers) SetDebug(d vmDebugEmitter) { h.debug = d }
+
+// SetAllowedOrigin sets the expected WebSocket Origin, used by HandleShell to
+// reject cross-origin upgrade requests. Pass the server's bind address including
+// port (e.g. "127.0.0.1:8080").  When empty the check falls back to r.Host.
+func (h *Handlers) SetAllowedOrigin(addr string) { h.allowedOrigin = addr }
 
 // ── GET /api/v1/vm/hosts ──────────────────────────────────────────────────────
 
@@ -372,7 +379,7 @@ func (h *Handlers) HandleDeleteDomain(w http.ResponseWriter, r *http.Request) {
 	opts := UndefineOpts{DeleteStorage: req.DeleteStorage, Pool: req.Pool}
 	opErr := UndefineVM(client, domainName, opts)
 
-	actor, _ := r.Context().Value("vops-actor").(string)
+	actor, _ := r.Context().Value(ctxkeys.Actor).(string)
 	if actor == "" {
 		actor = hostName
 	}
@@ -425,7 +432,7 @@ func (h *Handlers) HandleResizeDomain(w http.ResponseWriter, r *http.Request) {
 		opErr = SetVCPUs(client, domainName, req.VCPUs, req.Live)
 	}
 
-	actor, _ := r.Context().Value("vops-actor").(string)
+	actor, _ := r.Context().Value(ctxkeys.Actor).(string)
 	if actor == "" {
 		actor = hostName
 	}
@@ -524,7 +531,7 @@ func (h *Handlers) HandleCreateDomain(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	actor, _ := r.Context().Value("vops-actor").(string)
+	actor, _ := r.Context().Value(ctxkeys.Actor).(string)
 	if actor == "" {
 		actor = hostName
 	}
@@ -612,7 +619,7 @@ func (h *Handlers) HandleResizeDisk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	opErr := ResizeDisk(client, domainName, req.Target, req.SizeGB)
-	actor, _ := r.Context().Value("vops-actor").(string)
+	actor, _ := r.Context().Value(ctxkeys.Actor).(string)
 	if actor == "" {
 		actor = hostName
 	}

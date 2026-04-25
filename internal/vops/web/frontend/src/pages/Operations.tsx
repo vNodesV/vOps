@@ -8,15 +8,18 @@ import {
   vmUpgradeURL,
   resizeDomain, getDomainDisks, resizeDisk, getDomainInterfaces,
   checkGuestAgent, guestAgentInstallURL,
+  getHosts, scanHosts, hostUpgradeURL,
+  getBannedIPs, unbanIP,
 } from '../api';
 import type {
   VMStatus, VMView, Service, HypervisorHost, LibvirtDomain, LibvirtSnapshot,
-  DomainDisk, Interface as VMIface, RegisteredChain,
+  DomainDisk, Interface as VMIface, RegisteredChain, HostInventory, BannedIPEntry,
 } from '../api/types';
 import UpgradeModal from '../components/UpgradeModal';
 import Spinner from '../components/Spinner';
 import { openSSEStream } from '../api/sse';
 import { BASE } from '../api/client';
+import { useTasks } from '../contexts/TaskContext';
 
 /* ═══════════════════════════════════════════════════════════════
    SVG Icons
@@ -1031,6 +1034,7 @@ function VMWidget({
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'reboot' | 'destroy' | 'shutdown' | null>(null);
   const [actionMsg, setActionMsg] = useState('');
+  const { addTask, updateTask } = useTasks();
 
   const agentQ = useQuery({
     queryKey: ['vm-agent', hostName, vm.name],
@@ -1070,6 +1074,8 @@ function VMWidget({
           vmName={vm.name}
           upgradeURL={vmUpgradeURL(vm.name)}
           onClose={() => { setModal(null); qc.invalidateQueries({ queryKey: ['vm-status'] }); }}
+          onStart={() => addTask({ id: `vm-upgrade-${vm.name}`, label: `Upgrading ${vm.name}…`, status: 'running', startedAt: new Date() })}
+          onDone={(success, detail) => updateTask(`vm-upgrade-${vm.name}`, { status: success ? 'done' : 'error', detail })}
         />
       )}
       {modal === 'agent-install' && hostName && (
@@ -1338,39 +1344,73 @@ function DatacenterBox({
   vmHostMap,
   domainMap,
   services,
+  inventoryHosts,
 }: {
   datacenter: string;
   vms: VMStatus[];
   vmHostMap: Record<string, string>;
   domainMap: Record<string, Record<string, LibvirtDomain>>;
   services: Service[];
+  inventoryHosts: HostInventory[];
 }) {
   const [showDeploy, setShowDeploy] = useState(false);
+  const [upgradeHost, setUpgradeHost] = useState<string | null>(null);
+  const { addTask, updateTask } = useTasks();
   const runningCount = vms.filter(vm => vm.online).length;
+
+  const hostsWithUpdates = inventoryHosts.filter(
+    h => h.apt_pending > 0 && (!h.datacenter || h.datacenter === datacenter),
+  );
 
   return (
     <div style={{ border: '1px solid var(--vn-border)', borderRadius: 'var(--vn-radius)', padding: '1rem', marginBottom: '1.5rem', background: 'var(--vn-surface)' }}>
       {showDeploy && <DeployWizardModal onClose={() => setShowDeploy(false)} />}
+      {upgradeHost && (
+        <UpgradeModal
+          vmName={upgradeHost}
+          upgradeURL={hostUpgradeURL(upgradeHost)}
+          onClose={() => setUpgradeHost(null)}
+          onStart={() => addTask({ id: `host-upgrade-${upgradeHost}`, label: `Upgrading host ${upgradeHost}…`, status: 'running', startedAt: new Date() })}
+          onDone={(success, detail) => updateTask(`host-upgrade-${upgradeHost}`, { status: success ? 'done' : 'error', detail })}
+        />
+      )}
 
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--vn-text)' }}>{datacenter}</span>
           <span style={{ fontSize: '0.75rem', color: 'var(--vn-text-muted)' }}>
             {runningCount}/{vms.length} online
           </span>
         </div>
-        <button
-          onClick={() => setShowDeploy(true)}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
-            fontSize: '0.75rem', padding: '0.3rem 0.75rem',
-            border: '1px solid var(--vn-primary)', borderRadius: 'var(--vn-radius)',
-            background: 'transparent', color: 'var(--vn-primary)', cursor: 'pointer',
-          }}
-        >
-          <IconDeploy /> Deploy
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+          {hostsWithUpdates.map(host => (
+            <button
+              key={host.name}
+              onClick={() => setUpgradeHost(host.name)}
+              title={`${host.apt_pending} pending updates on ${host.name}`}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+                fontSize: '0.72rem', padding: '0.2rem 0.6rem',
+                borderRadius: '999px', border: '1px solid var(--vn-warning)',
+                color: 'var(--vn-warning)', background: 'transparent', cursor: 'pointer',
+              }}
+            >
+              {host.host_name ?? host.name} 🔄 {host.apt_pending}
+            </button>
+          ))}
+          <button
+            onClick={() => setShowDeploy(true)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+              fontSize: '0.75rem', padding: '0.3rem 0.75rem',
+              border: '1px solid var(--vn-primary)', borderRadius: 'var(--vn-radius)',
+              background: 'transparent', color: 'var(--vn-primary)', cursor: 'pointer',
+            }}
+          >
+            <IconDeploy /> Deploy
+          </button>
+        </div>
       </div>
 
       {/* VM grid */}
@@ -1400,6 +1440,8 @@ function DatacenterBox({
 
 export default function OperationsPage() {
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const { addTask, updateTask } = useTasks();
+  const qc = useQueryClient();
 
   const statusQ = useQuery({
     queryKey: ['vm-status'],
@@ -1425,10 +1467,24 @@ export default function OperationsPage() {
     staleTime: 60_000,
   });
 
+  const hostInventoryQ = useQuery({
+    queryKey: ['fleet-host-inventory'],
+    queryFn: getHosts,
+    staleTime: 60_000,
+  });
+
+  const bannedIPsQ = useQuery({
+    queryKey: ['intel-banned'],
+    queryFn: getBannedIPs,
+    refetchInterval: 30_000,
+  });
+
   const vms: VMStatus[] = statusQ.data?.vms ?? [];
   const vmViews: VMView[] = fleetVMsQ.data?.vms ?? [];
   const services: Service[] = servicesQ.data?.services ?? [];
   const hosts: HypervisorHost[] = hostsQ.data?.hosts ?? [];
+  const hostInventory: HostInventory[] = hostInventoryQ.data?.hosts ?? [];
+  const banned: BannedIPEntry[] = bannedIPsQ.data?.banned ?? [];
 
   // vmHostMap: vmName → hypervisor hostName (from fleet config)
   const vmHostMap = React.useMemo(() => {
@@ -1483,14 +1539,44 @@ export default function OperationsPage() {
   const formatTime = (d: Date) =>
     d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
+  const handleScanHosts = async () => {
+    addTask({ id: 'host-scan', label: 'Scanning hosts…', status: 'running', startedAt: new Date() });
+    try {
+      const res = await scanHosts();
+      updateTask('host-scan', { status: 'done', detail: `Scanned ${res.hosts.length} hosts` });
+      qc.invalidateQueries({ queryKey: ['fleet-host-inventory'] });
+    } catch (err) {
+      updateTask('host-scan', { status: 'error', detail: (err as Error).message });
+    }
+  };
+
+  const formatCountdown = (seconds: number) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  };
+
   return (
     <div>
       {/* Page header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
         <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700, color: 'var(--vn-text)' }}>Operations Center</h1>
-        <span style={{ fontSize: '0.75rem', color: 'var(--vn-text-subtle)' }}>
-          Last updated: {formatTime(lastUpdated)}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <span style={{ fontSize: '0.75rem', color: 'var(--vn-text-subtle)' }}>
+            Last updated: {formatTime(lastUpdated)}
+          </span>
+          <button
+            onClick={handleScanHosts}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+              fontSize: '0.75rem', padding: '0.3rem 0.75rem',
+              border: '1px solid var(--vn-border)', borderRadius: 'var(--vn-radius)',
+              background: 'transparent', color: 'var(--vn-text-muted)', cursor: 'pointer',
+            }}
+          >
+            🔍 Scan Hosts
+          </button>
+        </div>
       </div>
 
       {statusQ.isLoading ? (
@@ -1514,8 +1600,70 @@ export default function OperationsPage() {
               vmHostMap={vmHostMap}
               domainMap={domainMap}
               services={services}
+              inventoryHosts={hostInventory}
             />
           ))
+      )}
+
+      {/* Auto-Banned IPs */}
+      {(bannedIPsQ.isLoading || banned.length > 0) && (
+        <div style={{
+          border: '1px solid var(--vn-border)',
+          borderRadius: 'var(--vn-radius)',
+          padding: '1rem',
+          background: 'var(--vn-surface)',
+          marginTop: '1.5rem',
+        }}>
+          <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--vn-text)', marginBottom: '0.75rem' }}>
+            Auto-Banned IPs
+          </div>
+          {bannedIPsQ.isLoading ? (
+            <Spinner size={16} label="Loading banned IPs…" />
+          ) : banned.length === 0 ? (
+            <span style={{ fontSize: '0.8rem', color: 'var(--vn-text-muted)' }}>No active auto-bans.</span>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {banned.map((entry) => (
+                <div
+                  key={entry.ip}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    flexWrap: 'wrap', gap: '0.5rem',
+                    padding: '0.5rem 0.75rem',
+                    background: 'var(--vn-surface-2)',
+                    borderRadius: 'var(--vn-radius)',
+                    border: '1px solid var(--vn-border)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                    <code style={{ fontSize: '0.85rem', color: 'var(--vn-danger)', fontWeight: 600 }}>{entry.ip}</code>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--vn-text-muted)', maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {entry.reason.length > 60 ? entry.reason.slice(0, 60) + '…' : entry.reason}
+                    </span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--vn-warning)', fontVariantNumeric: 'tabular-nums' }}>
+                      ⏱ {formatCountdown(entry.remaining_seconds)}
+                    </span>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      try {
+                        await unbanIP(entry.ip);
+                        qc.invalidateQueries({ queryKey: ['intel-banned'] });
+                      } catch { /* ignore */ }
+                    }}
+                    style={{
+                      fontSize: '0.75rem', padding: '0.2rem 0.6rem',
+                      border: '1px solid var(--vn-border)', borderRadius: 'var(--vn-radius)',
+                      background: 'transparent', color: 'var(--vn-text-muted)', cursor: 'pointer',
+                    }}
+                  >
+                    Unban
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

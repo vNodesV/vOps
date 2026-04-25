@@ -77,7 +77,7 @@ type UIConfig struct {
 	Theme string `toml:"theme"`
 }
 
-// IntelConfig controls automatic IP intelligence enrichment.
+// IntelConfig controls automatic IP intelligence enrichment and auto-ban behaviour.
 type IntelConfig struct {
 	// AutoEnrich enables automatic threat intel lookups for new IPs.
 	AutoEnrich bool `toml:"auto_enrich"`
@@ -90,6 +90,22 @@ type IntelConfig struct {
 
 	// Keys holds API keys for each intelligence source.
 	Keys IntelKeys `toml:"keys"`
+
+	// AutoBanEnabled controls whether IPs that exceed AutoBanThreshold rate-limit
+	// events are automatically banned via UFW.
+	AutoBanEnabled bool `toml:"auto_ban_enabled"`
+
+	// AutoBanThreshold is the number of rate-limit events that trigger an auto-ban.
+	// Default: 5.
+	AutoBanThreshold int `toml:"auto_ban_threshold"`
+
+	// BanDurationMinutes is how long (minutes) an auto-ban stays in effect.
+	// Default: 60.
+	BanDurationMinutes int `toml:"ban_duration_minutes"`
+
+	// BanWhitelist is a list of IPs that will never be auto-banned regardless of
+	// how many rate-limit events they generate.
+	BanWhitelist []string `toml:"ban_whitelist"`
 }
 
 // IntelKeys stores API keys for threat intelligence providers.
@@ -178,9 +194,12 @@ func DefaultConfig(home string) Config {
 			ArchivesDir:      filepath.Join(home, "data", "logs", "archives"),
 			WatchIntervalSec: 60,
 			Intel: IntelConfig{
-				AutoEnrich:    true,
-				CacheTTLHours: 24,
-				RateLimitRPM:  10,
+				AutoEnrich:         true,
+				CacheTTLHours:      24,
+				RateLimitRPM:       10,
+				AutoBanEnabled:     true,
+				AutoBanThreshold:   5,
+				BanDurationMinutes: 60,
 			},
 			Server: ServerConfig{
 				ReadTimeoutSec:  30,
@@ -235,6 +254,12 @@ func Load(path string) (Config, error) {
 	}
 	if cfg.VOps.Intel.RateLimitRPM <= 0 {
 		cfg.VOps.Intel.RateLimitRPM = 10
+	}
+	if cfg.VOps.Intel.AutoBanThreshold <= 0 {
+		cfg.VOps.Intel.AutoBanThreshold = 5
+	}
+	if cfg.VOps.Intel.BanDurationMinutes <= 0 {
+		cfg.VOps.Intel.BanDurationMinutes = 60
 	}
 	if cfg.VOps.Server.ReadTimeoutSec <= 0 {
 		cfg.VOps.Server.ReadTimeoutSec = 30

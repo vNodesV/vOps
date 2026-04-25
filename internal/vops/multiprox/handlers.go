@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -205,10 +206,12 @@ func (h *Handlers) HandlePingAll(w http.ResponseWriter, r *http.Request) {
 	var instances []row
 	for rows.Next() {
 		var inst row
-		if scanErr := rows.Scan(&inst.name, &inst.url, &inst.apiKey); scanErr == nil {
-			inst.apiKey, _ = decryptAPIKey(h.key, inst.apiKey)
-			instances = append(instances, inst)
+		if scanErr := rows.Scan(&inst.name, &inst.url, &inst.apiKey); scanErr != nil {
+			log.Printf("[multiprox] HandlePingAll: row scan error: %v", scanErr) // M-1
+			continue
 		}
+		inst.apiKey, _ = decryptAPIKey(h.key, inst.apiKey)
+		instances = append(instances, inst)
 	}
 	rows.Close()
 
@@ -240,8 +243,12 @@ func (h *Handlers) HandlePingAll(w http.ResponseWriter, r *http.Request) {
 				resp.Body.Close()
 			}
 			now := time.Now().UTC().Format(time.RFC3339)
-			h.db.Exec(`UPDATE vprox_instances SET status = ?, last_seen = ? WHERE name = ?`, //nolint:errcheck
-				status, now, inst.name)
+			if _, execErr := h.db.Exec(
+				`UPDATE vprox_instances SET status = ?, last_seen = ? WHERE name = ?`,
+				status, now, inst.name,
+			); execErr != nil {
+				log.Printf("[multiprox] HandlePingAll: db update %s: %v", inst.name, execErr) // M-1
+			}
 			results[i] = result{Name: inst.name, Status: status, LastSeen: now}
 		}()
 	}

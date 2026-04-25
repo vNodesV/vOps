@@ -82,7 +82,7 @@ func (h *Handlers) HandleHostScan(w http.ResponseWriter, r *http.Request) {
 				port = 22
 			}
 
-			client, err := fleetssh.Dial(dialAddr, port, host.User, host.SSHKeyPath, "")
+			client, err := fleetssh.Dial(dialAddr, port, host.User, host.SSHKeyPath, host.KnownHostsPath)
 			if err != nil {
 				res.Error = fmt.Sprintf("SSH: %v", err)
 				if h.debug != nil && h.debug.IsEnabled() {
@@ -256,23 +256,25 @@ func (h *Handlers) HandleHostUpgrade(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var targetHost *struct {
-		Name       string
-		LanIP      string
-		VRackIP    string
-		Port       int
-		User       string
-		SSHKeyPath string
+		Name           string
+		LanIP          string
+		VRackIP        string
+		Port           int
+		User           string
+		SSHKeyPath     string
+		KnownHostsPath string
 	}
 	for _, hst := range cfg.Hosts {
 		if hst.Name == name {
 			targetHost = &struct {
-				Name       string
-				LanIP      string
-				VRackIP    string
-				Port       int
-				User       string
-				SSHKeyPath string
-			}{hst.Name, hst.LanIP, hst.VRackIP, hst.Port, hst.User, hst.SSHKeyPath}
+				Name           string
+				LanIP          string
+				VRackIP        string
+				Port           int
+				User           string
+				SSHKeyPath     string
+				KnownHostsPath string
+			}{hst.Name, hst.LanIP, hst.VRackIP, hst.Port, hst.User, hst.SSHKeyPath, hst.KnownHostsPath}
 			break
 		}
 	}
@@ -314,7 +316,7 @@ func (h *Handlers) HandleHostUpgrade(w http.ResponseWriter, r *http.Request) {
 		port = 22
 	}
 
-	client, err := fleetssh.Dial(dialAddr, port, targetHost.User, targetHost.SSHKeyPath, "")
+	client, err := fleetssh.Dial(dialAddr, port, targetHost.User, targetHost.SSHKeyPath, targetHost.KnownHostsPath)
 	if err != nil {
 		sendEvent("error", fmt.Sprintf("ssh connect failed: %v", err))
 		return

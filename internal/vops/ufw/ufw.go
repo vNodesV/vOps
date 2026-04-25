@@ -96,6 +96,27 @@ func ListBlocked(sudoPass string) ([]string, error) {
 	return parseUFWDenyIPs(string(out)), nil
 }
 
+// BlockInsert adds a high-priority UFW deny rule at position 1 for ip.
+// This ensures the rule fires before any existing ALLOW rules.
+func BlockInsert(ip, sudoPass string) error {
+	if net.ParseIP(ip) == nil {
+		return fmt.Errorf("ufw: invalid IP address: %q", ip)
+	}
+	if !IsAvailable() {
+		return nil
+	}
+	args, stdin := sudoArgs(sudoPass, "/usr/sbin/ufw", "insert", "1", "deny", "from", ip, "to", "any")
+	cmd := exec.Command("sudo", args...)
+	if stdin != "" {
+		cmd.Stdin = strings.NewReader(stdin)
+	}
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("ufw insert 1 deny %s: %w: %s", ip, err, string(out))
+	}
+	return nil
+}
+
 // parseUFWDenyIPs extracts host IPs from "ufw status numbered" output.
 // Lines look like: "[ 3] Anywhere DENY IN  203.0.113.5"
 func parseUFWDenyIPs(output string) []string {

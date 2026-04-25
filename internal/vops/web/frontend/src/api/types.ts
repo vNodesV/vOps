@@ -348,3 +348,11 @@ export interface VProxInstance {
   last_seen?: string;
   created_at?: string;
 }
+
+export interface BannedIPEntry {
+  ip: string;
+  banned_at: string;
+  expires_at: string;
+  reason: string;
+  remaining_seconds: number;
+}

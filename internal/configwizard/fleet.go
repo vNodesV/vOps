@@ -10,10 +10,11 @@ import (
 // fleetSettingsFile mirrors the shape of config/fleet/settings.toml.
 type fleetSettingsFile struct {
 	SSH struct {
-		User       string `toml:"user"`
-		KeyPath    string `toml:"key_path"`
-		Port       int    `toml:"port"`
-		TimeoutSec int    `toml:"timeout_sec"`
+		User           string `toml:"user"`
+		KeyPath        string `toml:"key_path"`
+		KnownHostsPath string `toml:"known_hosts_path"`
+		Port           int    `toml:"port"`
+		TimeoutSec     int    `toml:"timeout_sec"`
 	} `toml:"ssh"`
 	Poll struct {
 		IntervalSec int `toml:"interval_sec"`

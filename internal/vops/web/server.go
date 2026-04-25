@@ -29,11 +29,12 @@ import (
 	"github.com/vNodesV/vOps/internal/fleet"
 	"github.com/vNodesV/vOps/internal/fleet/api"
 	"github.com/vNodesV/vOps/internal/vops/config"
+	"github.com/vNodesV/vOps/internal/vops/ctxkeys"
 	"github.com/vNodesV/vOps/internal/vops/db"
 	"github.com/vNodesV/vOps/internal/vops/ingest"
 	"github.com/vNodesV/vOps/internal/vops/intel"
-	"github.com/vNodesV/vOps/internal/vops/services"
 	"github.com/vNodesV/vOps/internal/vops/multiprox"
+	"github.com/vNodesV/vOps/internal/vops/services"
 	"github.com/vNodesV/vOps/internal/vops/units"
 	"github.com/vNodesV/vOps/internal/vops/vm"
 )
@@ -72,11 +73,21 @@ type Server struct {
 	// Brute-force protection: per-IP failed login tracking.
 	loginMu      sync.Mutex
 	loginAttempts map[string]*loginAttempt
+
+	// Probe host cache (M-5): EndpointSummary is expensive on large DBs; cache
+	// for 30 s to avoid a full scan on every /api/v1/probe call.
+	probeHostCache   []db.EndpointStat
+	probeHostCacheAt time.Time
+	probeHostCacheMu sync.RWMutex
+
+	// In-memory auto-ban store for rate-limit offenders.
+	autoBan *autoBanStore
 }
 
 // loginAttempt tracks failed login attempts for a single source IP.
 type loginAttempt struct {
 	count       int
+	lastAttempt time.Time // time of the most recent failed attempt (M-6)
 	lockedUntil time.Time
 }
 
@@ -111,6 +122,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		loginAttempts: make(map[string]*loginAttempt),
 		debug:         &DebugRing{},
 	}
+	s.autoBan = newAutoBanStore("") // NOPASSWD required; see sudoers config
 	if fleetSvc != nil {
 		s.fleet = api.New(fleetSvc, d.DB)
 		s.fleet.SetDebug(s.debug)
@@ -335,6 +347,14 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 			s.requireSession(http.HandlerFunc(s.vmMgr.HandleShell)))
 	}
 
+	// Intel auto-ban routes.
+	mux.Handle("GET /api/v1/intel/banned",
+		s.requireSession(http.HandlerFunc(s.handleAPIBannedList)))
+	mux.Handle("DELETE /api/v1/intel/banned/{ip}",
+		s.requireSession(http.HandlerFunc(s.handleAPIBannedUnban)))
+	mux.Handle("POST /api/v1/intel/banned/{ip}/unban",
+		s.requireSession(http.HandlerFunc(s.handleAPIBannedUnban)))
+
 	// Services registry routes.
 	mux.Handle("GET /api/v1/services",
 		s.requireSession(http.HandlerFunc(s.svcMgr.HandleList)))
@@ -420,6 +440,14 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		WriteTimeout: writeTimeout,
 	}
 
+	go func() {
+		t := time.NewTicker(2 * time.Minute)
+		defer t.Stop()
+		for range t.C {
+			s.autoBanSweep(defaultAutoBanThreshold, defaultBanDuration)
+		}
+	}()
+
 	return s, nil
 }
 
@@ -445,7 +473,7 @@ func (s *Server) requireSession(next http.Handler) http.Handler {
 		}
 		// Inject the session token as the audit actor so downstream handlers
 		// and vm operations can attribute actions to the authenticated operator.
-		ctx := context.WithValue(r.Context(), "vops-actor", cookie.Value)
+		ctx := context.WithValue(r.Context(), ctxkeys.Actor, cookie.Value)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -633,7 +661,7 @@ func (s *Server) clearLoginAttempts(clientIP string) {
 func (s *Server) requireAPIKey(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.cfg.VOps.APIKey == "" {
-			http.Error(w, "endpoint disabled: api_key not configured in vops.toml", http.StatusServiceUnavailable)
+			http.Error(w, "unauthorized: api_key not configured in vops.toml", http.StatusUnauthorized)
 			return
 		}
 		if r.Header.Get("X-API-Key") != s.cfg.VOps.APIKey {

@@ -439,7 +439,11 @@ func UndefineVM(client sshClient, domainName string, opts UndefineOpts) error {
 		}
 		for _, path := range diskPaths {
 			vol := filepath.Base(path)
-			// Try pool-aware vol-delete first; fall back to direct rm.
+			// L-4: Mixed shellescape/shellquote is intentional.
+			// shellescape: strips unsafe chars and single-quotes domain/pool/vol names
+			//   whose charset is restricted to [a-z0-9_.+-] — safe for single-quoting.
+			// shellquote: properly escapes arbitrary file paths that may contain
+			//   spaces or embedded single quotes — requires the stronger quoting.
 			_, _ = client.Run(fmt.Sprintf(
 				"virsh -c qemu:///system vol-delete %s --pool %s 2>/dev/null || rm -f %s 2>&1",
 				shellescape(vol), shellescape(pool), shellquote(path),
@@ -500,6 +504,11 @@ func SetMemory(client sshClient, domainName string, mib int64, live bool) error 
 // installation instructions.
 func CloneVM(client sshClient, opts CloneOpts) error {
 	// Build virt-clone command.
+	// L-4: Mixed shellescape/shellquote is intentional.
+	// shellescape: domain/snapshot names are restricted to [a-z0-9_.+-]; strip
+	//   any unexpected chars and wrap in single quotes.
+	// shellquote: disk paths may be arbitrary filesystem paths — embedded single
+	//   quotes need proper escaping that shellescape does not provide.
 	args := fmt.Sprintf("--original %s --name %s", shellescape(opts.SourceDomain), shellescape(opts.NewName))
 	if opts.NewDiskPath != "" {
 		args += " --file " + shellquote(opts.NewDiskPath)

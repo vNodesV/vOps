@@ -176,9 +176,24 @@ func (d *DB) GetIPAccount(ip string) (*IPAccount, error) {
 	return a, nil
 }
 
+// validIPAccountSortCols is the allowlist of columns that may appear in ORDER BY
+// for ip_accounts queries.  Any value not in this map is rejected (H-9/M-3).
+var validIPAccountSortCols = map[string]struct{}{
+	"ip": {}, "country": {}, "org": {}, "total_requests": {},
+	"ratelimit_events": {}, "threat_score": {}, "status": {}, "last_seen": {},
+}
+
 // ListIPAccounts returns up to limit accounts starting at offset.
-// sortCol and sortDir must be safe values validated by the caller.
+// sortCol and sortDir are validated against an internal allowlist as
+// defense-in-depth (the caller already validates, but this prevents any
+// future caller from bypassing the guard — H-9/M-3).
 func (d *DB) ListIPAccounts(sortCol, sortDir string, limit, offset int) ([]*IPAccount, error) {
+	if _, ok := validIPAccountSortCols[sortCol]; !ok {
+		sortCol = "last_seen"
+	}
+	if sortDir != "ASC" && sortDir != "DESC" {
+		sortDir = "DESC"
+	}
 	q := fmt.Sprintf(`SELECT
 		ip, first_seen, last_seen, total_requests, ratelimit_events,
 		country, asn, org, hostnames, open_ports, services,
@@ -211,8 +226,15 @@ func (d *DB) ListIPAccounts(sortCol, sortDir string, limit, offset int) ([]*IPAc
 }
 
 // SearchIPAccounts returns accounts whose ip or country match the query string
-// (case-insensitive LIKE). sortCol and sortDir must be safe values validated by the caller.
+// (case-insensitive LIKE). sortCol and sortDir are validated against an internal
+// allowlist as defense-in-depth (H-9/M-3).
 func (d *DB) SearchIPAccounts(query, sortCol, sortDir string, limit, offset int) ([]*IPAccount, error) {
+	if _, ok := validIPAccountSortCols[sortCol]; !ok {
+		sortCol = "last_seen"
+	}
+	if sortDir != "ASC" && sortDir != "DESC" {
+		sortDir = "DESC"
+	}
 	pat := "%" + escapeSQLLike(query) + "%"
 	q := fmt.Sprintf(`SELECT
 		ip, first_seen, last_seen, total_requests, ratelimit_events,
@@ -1009,4 +1031,25 @@ FROM ingested_archives`)
 		&s.LastIngestedAt,
 		&s.LastFilename,
 	)
+}
+
+// ListIPAccountsExceedingRatelimit returns IP accounts with ratelimit_events >= threshold.
+// Only returns ip and ratelimit_events columns for efficiency.
+func (d *DB) ListIPAccountsExceedingRatelimit(threshold int64, limit int) ([]*IPAccount, error) {
+const q = `SELECT ip, ratelimit_events FROM ip_accounts
+           WHERE ratelimit_events >= ? ORDER BY ratelimit_events DESC LIMIT ?`
+rows, err := d.Query(q, threshold, limit)
+if err != nil {
+return nil, fmt.Errorf("list exceeding ratelimit: %w", err)
+}
+defer rows.Close()
+var out []*IPAccount
+for rows.Next() {
+a := &IPAccount{}
+if err := rows.Scan(&a.IP, &a.RatelimitEvents); err != nil {
+return nil, err
+}
+out = append(out, a)
+}
+return out, rows.Err()
 }

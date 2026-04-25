@@ -287,8 +287,9 @@ func (s *Server) reloadFleetRuntime(ctx context.Context) {
 		return
 	}
 	defs := fleetcfg.FleetDefaults{
-		User:    s.cfg.VOps.Push.Defaults.User,
-		KeyPath: s.cfg.VOps.Push.Defaults.KeyPath,
+		User:           s.cfg.VOps.Push.Defaults.User,
+		KeyPath:        s.cfg.VOps.Push.Defaults.KeyPath,
+		KnownHostsPath: s.cfg.VOps.Push.Defaults.KnownHostsPath,
 	}
 	runtimeCfg, err := fleetcfg.LoadRuntimeConfig(s.home, defs, s.cfg.VOps.Push.ChainsDir, s.cfg.VOps.Push.InfraDir)
 	if err != nil {

@@ -163,20 +163,20 @@ func (p *Poller) pollUnit(name, vmName string, rpcPort, apiPort int) UnitStatus 
 
 	// /net_info ───────────────────────────────────────────────────────────
 	ctx2, cancel2 := context.WithTimeout(context.Background(), pollHTTPTimeout)
-	defer cancel2()
 	if ni, niErr := p.fetchNetInfo(ctx2, baseURL); niErr == nil {
 		st.Peers = ni.Result.NPeers
 	}
+	cancel2() // release resources immediately; not deferred (M-4)
 
 	// /cosmos/upgrade/v1beta1/current_plan (REST, best-effort) ────────────
 	if apiPort > 0 {
 		restBase := fmt.Sprintf("http://%s:%d", lanIP, apiPort)
 		ctx3, cancel3 := context.WithTimeout(context.Background(), pollHTTPTimeout)
-		defer cancel3()
 		if up, upErr := p.fetchUpgradePlan(ctx3, restBase); upErr == nil && up.Plan != nil {
 			st.UpgradeName = up.Plan.Name
 			fmt.Sscanf(up.Plan.Height, "%d", &st.UpgradeHeight) //nolint:errcheck
 		}
+		cancel3() // release resources immediately; not deferred (M-4)
 	}
 
 	return st

@@ -207,15 +207,20 @@ func (h *Handlers) HandleDelete(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
 	}
-	_, _ = h.db.Exec("DELETE FROM service_status WHERE service_id=?", id)
-	res, err := h.db.Exec("DELETE FROM services WHERE id=?", id)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	// M-2: check existence before touching related tables to avoid dangling
+	// deletes that would return 200 even when the service does not exist.
+	var count int
+	if scanErr := h.db.QueryRow("SELECT COUNT(1) FROM services WHERE id=?", id).Scan(&count); scanErr != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": scanErr.Error()})
 		return
 	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
+	if count == 0 {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+		return
+	}
+	_, _ = h.db.Exec("DELETE FROM service_status WHERE service_id=?", id)
+	if _, err := h.db.Exec("DELETE FROM services WHERE id=?", id); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"deleted": id})
