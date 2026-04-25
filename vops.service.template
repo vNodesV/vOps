@@ -1,17 +1,17 @@
 [Unit]
-Description=vOps by vNodes[V] — vProx log archive analyzer and IP intelligence server.
+Description=vOps by vNodes[V] — infrastructure management and IP intelligence platform
 After=network.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-Environment=VPROX_HOME=__HOME__/.vProx
+Environment=VOPS_HOME=__HOME__/.vOps
 Environment=GOTRACEBACK=all
-EnvironmentFile=-__HOME__/.vProx/.env
+EnvironmentFile=-__HOME__/.vOps/.env
 ExecStart=/usr/local/bin/vOps start
 Restart=no
 User=__VOPS_USER__
-WorkingDirectory=__HOME__/.vProx
+WorkingDirectory=__HOME__/.vOps
 SyslogIdentifier=vOps
 StandardOutput=journal
 StandardError=journal

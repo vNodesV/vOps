@@ -21,6 +21,7 @@ VOPS_LDFLAGS  := -X main.version=$(VOPS_VERSION) -X main.commit=$(VOPS_COMMIT) -
 VOPS_USER  ?= vops
 
 VPROX_HOME := $(HOME)/.vProx
+VOPS_HOME  := $(HOME)/.vOps
 DATA_DIR := $(VPROX_HOME)/data
 LOG_DIR := $(DATA_DIR)/logs
 CFG_DIR := $(VPROX_HOME)/config
@@ -33,12 +34,13 @@ VOPS_SERVICE := $(SERVICE_DIR)/vOps.service
 GEO_DIR := $(DATA_DIR)/geolocation
 SAMPLES_DIR := $(VPROX_HOME)/.samples
 DIR_LIST := $(DATA_DIR) $(LOG_DIR) $(CFG_DIR) $(CFG_DIR)/chains $(CFG_DIR)/backup \
-            $(CFG_DIR)/vops $(CFG_DIR)/infra $(CFG_DIR)/vprox $(CFG_DIR)/fleet \
-            $(CFG_DIR)/vprox/nodes $(CFG_DIR)/vops/chains \
+            $(CFG_DIR)/vprox $(CFG_DIR)/vprox/nodes \
             $(INTERNAL_DIR) $(ARCHIVE_DIR) $(SERVICE_DIR) $(GEO_DIR) \
+            $(VOPS_HOME)/config/vops $(VOPS_HOME)/config/infra $(VOPS_HOME)/config/fleet \
+            $(VOPS_HOME)/config/vops/chains \
             $(SAMPLES_DIR) $(SAMPLES_DIR)/chains $(SAMPLES_DIR)/backup \
-            $(SAMPLES_DIR)/vops $(SAMPLES_DIR)/infra $(SAMPLES_DIR)/fleet \
-            $(SAMPLES_DIR)/vprox $(SAMPLES_DIR)/vprox/nodes $(SAMPLES_DIR)/vops/chains
+            $(VOPS_HOME)/.samples/vops $(VOPS_HOME)/.samples/infra $(VOPS_HOME)/.samples/fleet \
+            $(SAMPLES_DIR)/vprox $(SAMPLES_DIR)/vprox/nodes $(VOPS_HOME)/.samples/vops/chains
 
 # Sample file revision — format: r{major}_{MMDDYY}_{seq}
 # Increment {seq} for multiple revisions on the same day; reset to 0 on new date.
@@ -62,9 +64,9 @@ GOPATH_BIN := $(GOPATH)/bin
 _TOOLCHAIN_GOROOT := $(shell find $(GOPATH)/pkg/mod/golang.org -maxdepth 1 -name 'toolchain@*' 2>/dev/null | sort -V | tail -1)
 EFFECTIVE_GOROOT  := $(if $(_TOOLCHAIN_GOROOT),$(_TOOLCHAIN_GOROOT),$(GOROOT))
 
-.PHONY: all install clean ufw help \
+.PHONY: all build install clean ufw help \
         validate-go dirs geo config config-vops config-vprox config-modules \
-        build-vprox build-vops release-vops systemd service-vops system-user-vops samples-fleet \
+        build-vprox build-vops reset-services release-vops systemd service-vops system-user-vops samples-fleet \
         bump-patch bump-minor bump-major
 
 all: help
@@ -73,11 +75,13 @@ all: help
 
 help:
 	@echo ""
-	@echo "  vProx / vOps — available targets"
+	@echo "  vOps — build and install targets"
 	@echo ""
-	@echo "  make install          Build + install vProx & vOps: bins, config, aliases, systemd"
-	@echo "  make build-vprox      Build vProx binary → .build/vProx"
+	@echo "  make install          Build + install vOps: binary, config, service"
+	@echo "  make build            Build vOps binary → .build/vOps"
 	@echo "  make build-vops       Build vOps binary → .build/vOps (rebuilds frontend if Node available)"
+	@echo "  make reset-services   Stop + remove stale service units (vProx, vLog) before fresh deploy"
+	@echo "  make build-vprox      [legacy] Build vProx binary → .build/vProx"
 	@echo "  make release-vops     Cross-compile linux/amd64 → vops-linux-amd64, commit + push"
 	@echo "  make clean            Remove local build artifacts"
 	@echo "  make ufw              Passwordless UFW + apt sudoers for vOps"
@@ -90,32 +94,30 @@ help:
 	@echo ""
 	@echo ""
 	@echo "  Paths (install):"
-	@echo "    Binaries:  $(GOPATH_BIN)/vprox  $(GOPATH_BIN)/vops"
-	@echo "    Config:    $(CFG_DIR)/"
+	@echo "    Binary:    $(GOPATH_BIN)/$(VOPS_NAME)"
+	@echo "    Config:    $(VOPS_HOME)/config/"
 	@echo "    Data:      $(DATA_DIR)/"
-	@echo "    Samples:   $(SAMPLES_DIR)/"
+	@echo "    Samples:   $(VOPS_HOME)/.samples/"
 	@echo "  SSH control plane (fleet) is installed automatically."
-	@echo "  Add VMs to:    ~/.vProx/config/infra/{datacenter}.toml"
-	@echo "  Add chains to: ~/.vProx/config/chains/{chain}.toml"
+	@echo "  Add VMs to:    $(VOPS_HOME)/config/infra/{datacenter}.toml"
+	@echo "  Add chains to: $(VPROX_HOME)/config/chains/{chain}.toml"
 	@echo ""
 
-## Full install — build + config + systemd for vProx and vOps.
+## Full install — build + config + systemd for vOps.
 ## Phases: validate-go → dirs → geo → config → env → samples → frontend → build → symlinks → systemd
 ## Each optional step (symlinks, service registration, sudoers) prompts for confirmation.
 
 install: validate-go dirs geo config config-vops config-vprox config-modules env samples-fleet frontend
 	@echo ""
-	@echo "── Building vProx + vOps ────────────────────────────────────────────────"
-	GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(GOPATH_BIN)/$(APP_NAME)" "$(BUILD_SRC)"
+	@echo "── Building vOps ────────────────────────────────────────────────────────"
 	GOROOT="$(EFFECTIVE_GOROOT)" go build -ldflags "$(VOPS_LDFLAGS)" -o "$(GOPATH_BIN)/$(VOPS_NAME)" "$(VOPS_SRC)"
-	@echo "✓ $(APP_NAME)  → $(GOPATH_BIN)/$(APP_NAME)"
 	@echo "✓ $(VOPS_NAME) → $(GOPATH_BIN)/$(VOPS_NAME)"
 	@echo ""
 	@echo "── Lowercase aliases in GOPATH/bin ──────────────────────────────────────"
 	@ln -sf "$(GOPATH_BIN)/$(APP_NAME)"  "$(GOPATH_BIN)/vprox"
 	@ln -sf "$(GOPATH_BIN)/$(VOPS_NAME)" "$(GOPATH_BIN)/vops"
 	@ln -sf "$(GOPATH_BIN)/$(VOPS_NAME)" "$(GOPATH_BIN)/vlog"
-	@echo "✓ vprox → $(APP_NAME)"
+	@echo "✓ vprox → $(APP_NAME)  (compat alias)"
 	@echo "✓ vops  → $(VOPS_NAME)"
 	@echo "✓ vlog  → $(VOPS_NAME)  (compat alias)"
 	@echo ""
@@ -139,20 +141,16 @@ install: validate-go dirs geo config config-vops config-vprox config-modules env
 	@echo "════════════════════════════════════════════════════════"
 	@echo "  ✓ Installation complete"
 	@echo "────────────────────────────────────────────────────────"
-	@echo "  Binaries:"
-	@echo "    $(GOPATH_BIN)/vprox   (vProx reverse proxy)"
-	@echo "    $(GOPATH_BIN)/vops    (vOps dashboard)"
-	@echo "  Config:    $(CFG_DIR)/"
+	@echo "  Binary:    $(GOPATH_BIN)/$(VOPS_NAME)"
+	@echo "  Config:    $(VOPS_HOME)/config/"
 	@echo "  Data:      $(DATA_DIR)/"
-	@echo "  Samples:   $(SAMPLES_DIR)/"
+	@echo "  Samples:   $(VOPS_HOME)/.samples/"
 	@echo "────────────────────────────────────────────────────────"
 	@echo "  Next steps:"
-	@echo "    1. Edit $(CFG_DIR)/vops/vops.toml  — set api_key"
-	@echo "    2. Edit $(CFG_DIR)/chains/*.toml   — add your chains"
-	@echo "    3. Edit $(CFG_DIR)/infra/*.toml    — add VMs (fleet)"
-	@echo "    4. vprox start -d                  — start vProx proxy"
-	@echo "    5. vops start                      — start vOps dashboard"
-	@echo "    6. make ufw                        — UFW block/unblock (optional)"
+	@echo "    1. Edit $(VOPS_HOME)/config/vops/vops.toml  — set api_key"
+	@echo "    2. Edit $(VOPS_HOME)/config/infra/*.toml    — add VMs (fleet)"
+	@echo "    3. vOps start                               — start vOps"
+	@echo "    4. make ufw                                 — UFW block/unblock (optional)"
 	@echo "════════════════════════════════════════════════════════"
 
 ## Validate Go environment
@@ -325,6 +323,9 @@ config-modules:
 		echo "✓ $(CFG_DIR)/modules.toml already exists"; \
 	fi
 
+## Build vOps binary (default build target)
+build: build-vops
+
 ## Build vProx binary to .build/vProx
 build-vprox:
 	@echo "Building $(APP_NAME)..."
@@ -470,6 +471,23 @@ build-vops: frontend
 	@echo "Restarting $(VOPS_NAME) service..."
 	@sudo systemctl start "$(VOPS_NAME)" 2>/dev/null && echo "  ✓ $(VOPS_NAME) started" || echo "  ○ Could not start $(VOPS_NAME) — start manually: sudo service $(VOPS_NAME) start"
 
+## Stop, disable, and remove stale vProx/vLog service units before fresh vOps deploy.
+## vOps.service is only stopped+disabled — the unit file is NOT removed (reinstall with make service-vops).
+
+reset-services:
+	@echo "── Resetting stale service units ────────────────────────────────────────"
+	@for svc in vProx.service vprox.service vLog.service vlog.service vops.service; do \
+		sudo systemctl stop "$$svc" 2>/dev/null || true; \
+		sudo systemctl disable "$$svc" 2>/dev/null || true; \
+		sudo rm -f "/etc/systemd/system/$$svc"; \
+		echo "  ✓ $$svc stopped, disabled, removed"; \
+	done
+	@sudo systemctl stop vOps.service 2>/dev/null || true
+	@sudo systemctl disable vOps.service 2>/dev/null || true
+	@echo "  ✓ vOps.service stopped + disabled (unit preserved for reinstall)"
+	@sudo systemctl daemon-reload
+	@echo "✓ daemon-reload complete — run 'make service-vops' to reinstall vOps.service"
+
 ## Cross-compile vOps for linux/amd64, commit the binary, and push.
 ## Run this on macOS (or any dev machine) to deploy via git pull on the server.
 ## Usage: make release-vops  (optionally: make release-vops VOPS_VERSION=0.2.0)
@@ -488,19 +506,19 @@ release-vops: frontend
 	git push
 	@echo "✓ Pushed — pull on server: git pull && sudo mv vops-linux-amd64 /usr/local/bin/vops && sudo systemctl restart vops"
 
-## Install .samples/vops/vops.sample → ~/.vProx/config/vops/vops.toml (only if absent)
+## Install .samples/vops/vops.sample → $(VOPS_HOME)/config/vops/vops.toml (only if absent)
 
 config-vops: dirs
 	@echo "Installing vOps config..."
-	@mkdir -p "$(CFG_DIR)/vops"
+	@mkdir -p "$(VOPS_HOME)/config/vops"
 	@if [[ -f ".samples/vops/vops.sample" ]]; then \
-		if [[ ! -f "$(CFG_DIR)/vops/vops.toml" ]]; then \
-			cp ".samples/vops/vops.sample" "$(CFG_DIR)/vops/vops.toml"; \
-			echo "✓ Copied vops.sample to $(CFG_DIR)/vops/vops.toml"; \
-			echo "  Edit $(CFG_DIR)/vops/vops.toml to set your API keys."; \
+		if [[ ! -f "$(VOPS_HOME)/config/vops/vops.toml" ]]; then \
+			cp ".samples/vops/vops.sample" "$(VOPS_HOME)/config/vops/vops.toml"; \
+			echo "✓ Copied vops.sample to $(VOPS_HOME)/config/vops/vops.toml"; \
+			echo "  Edit $(VOPS_HOME)/config/vops/vops.toml to set your API keys."; \
 		else \
-			echo "✓ $(CFG_DIR)/vops/vops.toml already exists — checking for missing fields..."; \
-			if ! grep -qE "^[[:space:]]*api_key[[:space:]]*=" "$(CFG_DIR)/vops/vops.toml" || grep -qE "^[[:space:]]*#.*api_key" "$(CFG_DIR)/vops/vops.toml"; then \
+			echo "✓ $(VOPS_HOME)/config/vops/vops.toml already exists — checking for missing fields..."; \
+			if ! grep -qE "^[[:space:]]*api_key[[:space:]]*=" "$(VOPS_HOME)/config/vops/vops.toml" || grep -qE "^[[:space:]]*#.*api_key" "$(VOPS_HOME)/config/vops/vops.toml"; then \
 				echo ""; \
 				echo "┌─────────────────────────────────────────────────────────────────┐"; \
 				echo "│  ⚠  ACTION REQUIRED — vOps API Key not configured               │"; \
@@ -513,7 +531,7 @@ config-vops: dirs
 				echo "│       openssl rand -hex 32                                      │"; \
 				echo "│                                                                 │"; \
 				echo "│  2. Add it to your config:                                      │"; \
-				echo "│       $(CFG_DIR)/vops/vops.toml"; \
+				echo "│       $(VOPS_HOME)/config/vops/vops.toml"; \
 				echo "│     under [vops]:                                               │"; \
 				echo "│       api_key = \"your-generated-key\"                            │"; \
 				echo "│                                                                 │"; \
@@ -521,9 +539,9 @@ config-vops: dirs
 				echo "└─────────────────────────────────────────────────────────────────┘"; \
 				echo ""; \
 			fi; \
-			if ! grep -qE "^[[:space:]]*base_path[[:space:]]*=" "$(CFG_DIR)/vops/vops.toml"; then \
+			if ! grep -qE "^[[:space:]]*base_path[[:space:]]*=" "$(VOPS_HOME)/config/vops/vops.toml"; then \
 				echo "  ℹ  base_path not set — if vOps is served at a sub-path (e.g. /vops)"; \
-				echo "     add to $(CFG_DIR)/vops/vops.toml under [vops]:"; \
+				echo "     add to $(VOPS_HOME)/config/vops/vops.toml under [vops]:"; \
 				echo "       base_path = \"/vops\""; \
 				echo "     See .vscode/vops.apache2 for the matching Apache config."; \
 				echo ""; \
@@ -587,7 +605,7 @@ system-user-vops:
 ## Set up passwordless UFW + apt for vOps (writes /etc/sudoers.d/vops).
 ufw:
 	@SUDOERS_FILE="/etc/sudoers.d/vops"; \
-	SUDOERS_LINE="$(VOPS_USER) ALL=(ALL) NOPASSWD: /usr/sbin/ufw deny from *, /usr/sbin/ufw delete deny from *, /usr/bin/apt-get update, /usr/bin/apt-get upgrade -y"; \
+	SUDOERS_LINE="$(VOPS_USER) ALL=(ALL) NOPASSWD: /usr/sbin/ufw deny from *, /usr/sbin/ufw delete deny from *, /usr/sbin/ufw insert 1 deny from * to any, /usr/bin/apt update, /usr/bin/apt upgrade -y"; \
 	if [[ -f "$$SUDOERS_FILE" ]]; then \
 		if grep -qF "$$SUDOERS_LINE" "$$SUDOERS_FILE"; then \
 			echo "✓ Sudoers rule already configured ($$SUDOERS_FILE)"; \

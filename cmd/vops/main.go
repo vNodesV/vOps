@@ -37,7 +37,7 @@ var (
 // ---------------------------------------------------------------------------
 
 func printHelp() {
-	fmt.Print(`vOps v` + version + ` — vProx log archive analyzer
+	fmt.Print(`vOps v` + version + ` — infrastructure management and IP intelligence platform
 
 Usage:
   vops <command> [flags]
@@ -67,7 +67,7 @@ Runtime flags (start):
   -w, --watch-interval N       Override watch_interval_sec
 
 Global flags:
-      --home PATH              Override $VPROX_HOME (default: ~/.vProx)
+      --home PATH              Override $VOPS_HOME (default: ~/.vOps)
       --config PATH            Override config file path
   -p, --port PORT              Override listen port (default: 8889)
   -q, --quiet                  Suppress stdout output
@@ -79,7 +79,7 @@ Examples:
   vops start
   vops start -d
   vops start --port 9000 --no-watch --no-enrich
-  vops ingest --home /opt/vprox
+  vops ingest --home /opt/vops
   vops status
   vops -A
   vops --list-threats
@@ -124,7 +124,7 @@ func parseFlags(args []string) (flags, []string, error) {
 	var f flags
 
 	// Use a minimal custom parser so we can register short+long aliases
-	// that share the same destination — identical to the vProx pattern.
+	// that share the same destination.
 	fs := newFlagSet()
 
 	// global
@@ -268,7 +268,7 @@ func vopsConfigPath(home string) string {
 	}
 	oldPath := filepath.Join(home, "config", "vops.toml")
 	if _, err := os.Stat(oldPath); err == nil {
-		fmt.Fprintf(os.Stderr, "vops: WARNING: config at %s — move to %s to prevent vProx loading it as a chain\n", oldPath, newPath)
+		fmt.Fprintf(os.Stderr, "vops: WARNING: config at %s — move to %s (legacy location)\n", oldPath, newPath)
 		return oldPath
 	}
 	return newPath // neither exists; Load() will return defaults gracefully
