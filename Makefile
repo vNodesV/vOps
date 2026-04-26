@@ -56,7 +56,9 @@ ENV_FILE := $(VPROX_HOME)/.env
 # Validate Go environment
 GOPATH := $(shell go env GOPATH)
 GOROOT := $(shell go env GOROOT)
-GOPATH_BIN := $(GOPATH)/bin
+# Prefer GOBIN if explicitly set — avoids double-bin when GOPATH already ends in /bin on some servers.
+_RAW_GOBIN := $(shell go env GOBIN 2>/dev/null)
+GOPATH_BIN := $(if $(_RAW_GOBIN),$(_RAW_GOBIN),$(GOPATH)/bin)
 
 # On servers where GOROOT points to a manually installed (potentially broken)
 # Go tree, the module-cache toolchain has a clean stdlib. Prefer it when present.
@@ -115,28 +117,20 @@ install: validate-go dirs geo config config-vops config-vprox config-modules env
 	@echo "✓ $(VOPS_NAME) → $(GOPATH_BIN)/$(VOPS_NAME)"
 	@echo ""
 	@echo "── Lowercase aliases in GOPATH/bin ──────────────────────────────────────"
-	@ln -sf "$(GOPATH_BIN)/$(APP_NAME)"  "$(GOPATH_BIN)/vprox"
 	@ln -sf "$(GOPATH_BIN)/$(VOPS_NAME)" "$(GOPATH_BIN)/vops"
-	@ln -sf "$(GOPATH_BIN)/$(VOPS_NAME)" "$(GOPATH_BIN)/vlog"
-	@echo "✓ vprox → $(APP_NAME)  (compat alias)"
-	@echo "✓ vops  → $(VOPS_NAME)"
-	@echo "✓ vlog  → $(VOPS_NAME)  (compat alias)"
+	@echo "✓ vops  → $(VOPS_NAME)  (lowercase alias)"
 	@echo ""
 	@echo "── /usr/local/bin symlinks (optional, requires sudo) ────────────────────"
-	@read -p "Create /usr/local/bin/{$(APP_NAME),$(VOPS_NAME),vprox,vops,vlog} symlinks? (y/n) " -n 1 -r; echo ""; \
+	@read -p "Create /usr/local/bin/{$(VOPS_NAME),vops} symlinks? (y/n) " -n 1 -r; echo ""; \
 	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-		sudo ln -sf "$(GOPATH_BIN)/$(APP_NAME)"  "/usr/local/bin/$(APP_NAME)"; \
 		sudo ln -sf "$(GOPATH_BIN)/$(VOPS_NAME)" "/usr/local/bin/$(VOPS_NAME)"; \
-		sudo ln -sf "$(GOPATH_BIN)/$(APP_NAME)"  "/usr/local/bin/vprox"; \
 		sudo ln -sf "$(GOPATH_BIN)/$(VOPS_NAME)" "/usr/local/bin/vops"; \
-		sudo ln -sf "$(GOPATH_BIN)/$(VOPS_NAME)" "/usr/local/bin/vlog"; \
-		echo "✓ /usr/local/bin/{$(APP_NAME),$(VOPS_NAME),vprox,vops,vlog} created"; \
+		echo "✓ /usr/local/bin/{$(VOPS_NAME),vops} created"; \
 	else \
 		echo "✓ Skipped — run from $(GOPATH_BIN)/ or add it to PATH."; \
 	fi
 	@echo ""
 	@echo "── Systemd services ─────────────────────────────────────────────────────"
-	@$(MAKE) --no-print-directory systemd
 	@$(MAKE) --no-print-directory service-vops
 	@echo ""
 	@echo "════════════════════════════════════════════════════════"
@@ -389,8 +383,8 @@ systemd:
 	VOPS_LINE="$(USER) ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop $(VOPS_NAME), /usr/bin/systemctl start $(VOPS_NAME), /usr/bin/systemctl restart $(VOPS_NAME)"; \
 	MISSING=0; \
 	if [[ -f "$$SUDOERS_FILE" ]]; then \
-		grep -qF "$$VPROX_LINE" "$$SUDOERS_FILE" || MISSING=1; \
-		grep -qF "$$VOPS_LINE"  "$$SUDOERS_FILE" || MISSING=1; \
+		sudo grep -qF "$$VPROX_LINE" "$$SUDOERS_FILE" || MISSING=1; \
+		sudo grep -qF "$$VOPS_LINE"  "$$SUDOERS_FILE" || MISSING=1; \
 		if [[ "$$MISSING" = "0" ]]; then \
 			echo "✓ Sudoers rules already configured ($$SUDOERS_FILE)"; \
 		else \
