@@ -64,9 +64,10 @@ GOPATH_BIN := $(GOPATH)/bin
 _TOOLCHAIN_GOROOT := $(shell find $(GOPATH)/pkg/mod/golang.org -maxdepth 1 -name 'toolchain@*' 2>/dev/null | sort -V | tail -1)
 EFFECTIVE_GOROOT  := $(if $(_TOOLCHAIN_GOROOT),$(_TOOLCHAIN_GOROOT),$(GOROOT))
 
-.PHONY: all build install clean ufw help \
-        validate-go dirs geo config config-vops config-vprox config-modules \
-        build-vprox build-vops reset-services release-vops systemd service-vops system-user-vops samples-fleet \
+# Public targets only — internal helpers (dirs, geo, config-*, env, frontend, …) are intentionally
+# excluded from .PHONY so they don't pollute tab-completion.
+.PHONY: all help install build build-vops build-vprox release-vops \
+        clean ufw reset-services service-vops system-user-vops \
         bump-patch bump-minor bump-major
 
 all: help
