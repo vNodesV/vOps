@@ -13,13 +13,6 @@ tools: [
   'search/usages',
   'read/problems'
 ]
-agents: [
-  'react19-auditor',
-  'react19-dep-surgeon',
-  'react19-migrator',
-  'react19-test-guardian'
-]
-argument-hint: Just activate to start the React 19 migration.
 ---
 
 # React 19 Commander  Migration Orchestrator

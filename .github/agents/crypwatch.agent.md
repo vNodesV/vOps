@@ -1,0 +1,1 @@
+../../../crypWatch/.github/agents/crypwatch.agent.md

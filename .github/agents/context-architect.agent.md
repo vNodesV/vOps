@@ -1,6 +1,6 @@
 ---
 description: 'An agent that helps plan and execute multi-file changes by identifying relevant context and dependencies'
-model: 'GPT-5'
+model: 'claude-sonnet-4.6'
 tools: ['codebase', 'terminalCommand']
 name: 'Context Architect'
 ---

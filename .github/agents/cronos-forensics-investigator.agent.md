@@ -1,0 +1,1 @@
+../../../crypWatch/.github/agents/cronos-forensics-investigator.agent.md

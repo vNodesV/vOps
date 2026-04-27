@@ -1,6 +1,6 @@
 ---
-name: reviewer
-description: PR reviewer and quality gatekeeper for vProx. Reviews every pull request targeting main for correctness, safety, and maintainability.
+name: 07 Reviewer
+description: PR reviewer and quality gatekeeper for all vNodesV repositories. Reviews every pull request targeting main for correctness, safety, and maintainability.
 ---
 
 # PR Reviewer Agent (vProx)
