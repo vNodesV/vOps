@@ -22,6 +22,7 @@ import (
 	"github.com/vNodesV/vOps/internal/vops/ingest"
 	"github.com/vNodesV/vOps/internal/vops/intel"
 	"github.com/vNodesV/vOps/internal/vops/web"
+	"github.com/vNodesV/vOps/internal/vprox"
 )
 
 // Build-time variables injected via -ldflags "-X main.version=... -X main.commit=... -X main.buildDate=...".
@@ -49,6 +50,7 @@ Commands:
   restart  Restart vOps service (sudo service vOps restart)
   ingest   Run one-shot archive ingest and exit
   status   Show database stats and exit
+  vprox    Manage the embedded vProx proxy server
 
 One-shot flags:
   -A, --list-archives          List ingested archives with event counts
@@ -118,6 +120,12 @@ type flags struct {
 	noWatch       bool
 	noEnrich      bool
 	watchInterval int
+
+	// vprox proxy subcommand
+	vproxStart  bool
+	vproxDaemon bool
+	vproxStop   bool
+	vproxStatus bool
 }
 
 func parseFlags(args []string) (flags, []string, error) {
@@ -167,6 +175,12 @@ func parseFlags(args []string) (flags, []string, error) {
 	fs.boolVar(&f.noEnrich, "E", false, "")
 	fs.intVar(&f.watchInterval, "watch-interval", 0, "")
 	fs.intVar(&f.watchInterval, "w", 0, "")
+
+	// vprox proxy subcommand
+	fs.boolVar(&f.vproxStart, "vprox-start", false, "")
+	fs.boolVar(&f.vproxDaemon, "vprox-daemon", false, "")
+	fs.boolVar(&f.vproxStop, "vprox-stop", false, "")
+	fs.boolVar(&f.vproxStatus, "vprox-status", false, "")
 
 	if err := fs.parse(args); err != nil {
 		return f, nil, err
@@ -239,6 +253,8 @@ func run() int {
 		return cmdIngest(f)
 	case "status":
 		return cmdStatus(f)
+	case "vprox":
+		return cmdVprox(f)
 	default:
 		fmt.Fprintf(os.Stderr, "vops: unknown command %q\n\n", cmd)
 		printHelp()
@@ -810,6 +826,77 @@ func cmdDryRun(f flags) int {
 }
 
 // ---------------------------------------------------------------------------
+// vops vprox — embedded proxy-only mode
+// ---------------------------------------------------------------------------
+
+// cmdVprox handles `vops vprox [flags]`.
+//
+// Flags:
+//
+//	--vprox-start   Start vProx in the foreground (default if no flag given)
+//	--vprox-daemon  Start as background daemon via systemd (sudo service vProx start)
+//	--vprox-stop    Stop the vProx daemon (sudo service vProx stop)
+//	--vprox-status  Print proxy controller state and exit
+func cmdVprox(f flags) int {
+	home := resolveHome(f.home)
+
+	// --vprox-stop
+	if f.vproxStop {
+		return runNamedServiceCommand("vProx", "stop")
+	}
+
+	// --vprox-daemon
+	if f.vproxDaemon {
+		code := runNamedServiceCommand("vProx", "start")
+		if code != 0 {
+			return code
+		}
+		time.Sleep(1500 * time.Millisecond)
+		out, _ := exec.Command("systemctl", "is-active", "vProx").Output()
+		if strings.TrimSpace(string(out)) == "active" {
+			fmt.Fprintln(os.Stdout, "✓ vProx service started successfully.")
+		} else {
+			fmt.Fprintln(os.Stderr, "✗ vProx service did not start. Check: journalctl -u vProx -n 50")
+			return 1
+		}
+		return 0
+	}
+
+	// Build proxy config from flags + environment (same resolution as cmd/vprox/main.go).
+	proxyCfg := vprox.Config{
+		Home:    home,
+		Verbose: f.verbose,
+	}
+
+	// --vprox-status — print current controller state and exit
+	if f.vproxStatus {
+		ctrl := vprox.NewController(proxyCfg)
+		st, _ := ctrl.State()
+		fmt.Fprintf(os.Stdout, "vProx status: %s\n", st)
+		return 0
+	}
+
+	// Default: --vprox-start (or bare `vops vprox`)
+	if !f.quiet {
+		fmt.Fprintf(os.Stdout, "vOps %s — starting vProx proxy server\n", version)
+		fmt.Fprintf(os.Stdout, "  home: %s\n\n", home)
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
+
+	if err := vprox.New(proxyCfg).Start(ctx); err != nil {
+		fmt.Fprintf(os.Stderr, "vops vprox: %v\n", err)
+		return 1
+	}
+
+	if !f.quiet {
+		fmt.Fprintln(os.Stdout, "vProx stopped.")
+	}
+	return 0
+}
+
+// ---------------------------------------------------------------------------
 // Service management (start -d / --daemon)
 // ---------------------------------------------------------------------------
 
@@ -836,6 +923,28 @@ func runServiceCommand(action string) int {
 func serviceIsActive() bool {
 	out, _ := exec.Command("systemctl", "is-active", "vOps").Output()
 	return strings.TrimSpace(string(out)) == "active"
+}
+
+// runNamedServiceCommand runs a service action (start/stop/restart) for
+// any named service unit (e.g. "vProx"). This is used by `vops vprox`
+// so it does not conflict with the vOps service management paths.
+func runNamedServiceCommand(svc, action string) int {
+	sudo, err := exec.LookPath("sudo")
+	args := []string{"service", svc, action}
+	var cmd *exec.Cmd
+	if err == nil {
+		cmd = exec.Command(sudo, args...)
+	} else {
+		cmd = exec.Command("service", svc, action)
+	}
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	if err := cmd.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "vops: service %s %s: %v\n", svc, action, err)
+		return 1
+	}
+	return 0
 }
 
 // printServiceStatus appends the full systemctl status for vOps.
