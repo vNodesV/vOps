@@ -185,6 +185,17 @@ export function AutoBanPanel({ config }: { config: ConfigSnapshot }) {
 
   const saveMut = useMutation({
     mutationFn: () => saveConfig('vops', {
+      // Preserve all other vops settings by re-reading them from the parsed config
+      port:               Number(t['vops.port'])               || 8889,
+      bind_address:       t['vops.bind_address']               ?? '127.0.0.1',
+      base_path:          t['vops.base_path']                  ?? '/vlog/',
+      username:           t['vops.auth.username']              ?? 'admin',
+      auto_enrich:        (t['vops.intel.auto_enrich']         ?? 'true') === 'true',
+      cache_ttl_hours:    Number(t['vops.intel.cache_ttl_hours'])  || 24,
+      rate_limit_rpm:     Number(t['vops.intel.rate_limit_rpm'])   || 10,
+      watch_interval_sec: Number(t['vops.watch_interval_sec'])     || 60,
+      poll_interval_sec:  Number(t['vops.push.poll_interval_sec']) || 60,
+      // Auto-ban fields (overrides)
       auto_ban_enabled:     fields.auto_ban_enabled === 'true',
       auto_ban_threshold:   Number(fields.auto_ban_threshold)   || 5,
       ban_duration_minutes: Number(fields.ban_duration_minutes) || 60,

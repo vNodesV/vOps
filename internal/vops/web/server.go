@@ -242,7 +242,6 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	mux.Handle("GET /api/v1/stats", s.requireSession(http.HandlerFunc(s.handleAPIStats)))
 	mux.Handle("GET /api/v1/chart", s.requireSession(http.HandlerFunc(s.handleAPIChart)))
 	mux.Handle("GET /api/v1/probe", s.requireSession(http.HandlerFunc(s.handleAPIProbe)))
-	mux.Handle("GET /api/v1/fleet/chains/traffic", s.requireSession(http.HandlerFunc(s.handleAPIChainTraffic)))
 
 	// POST /api/v1/fleet/vms/scan is always registered so the UI never gets a
 	// 405 Method Not Allowed from the Go 1.22 mux catch-all GET / pattern.

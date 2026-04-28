@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,32 +27,55 @@ type BannedIP struct {
 
 // autoBanStore holds active auto-bans in memory, protected by a mutex.
 type autoBanStore struct {
-	mu        sync.RWMutex
-	banned    map[string]BannedIP
-	timers    map[string]*time.Timer
-	sudoPass  string // empty = NOPASSWD required
-	whitelist map[string]struct{}
+	mu         sync.RWMutex
+	banned     map[string]BannedIP
+	timers     map[string]*time.Timer
+	sudoPass   string // empty = NOPASSWD required
+	wlIPs      map[string]struct{}
+	wlNetworks []*net.IPNet
 }
 
 func newAutoBanStore(sudoPass string, whitelist []string) *autoBanStore {
-	wl := make(map[string]struct{}, len(whitelist))
-	for _, ip := range whitelist {
-		if net.ParseIP(ip) != nil {
-			wl[ip] = struct{}{}
+	wlIPs := make(map[string]struct{})
+	var wlNetworks []*net.IPNet
+	for _, entry := range whitelist {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		if strings.Contains(entry, "/") {
+			_, network, err := net.ParseCIDR(entry)
+			if err == nil {
+				wlNetworks = append(wlNetworks, network)
+			}
+		} else if net.ParseIP(entry) != nil {
+			wlIPs[entry] = struct{}{}
 		}
 	}
 	return &autoBanStore{
-		banned:    make(map[string]BannedIP),
-		timers:    make(map[string]*time.Timer),
-		sudoPass:  sudoPass,
-		whitelist: wl,
+		banned:     make(map[string]BannedIP),
+		timers:     make(map[string]*time.Timer),
+		sudoPass:   sudoPass,
+		wlIPs:      wlIPs,
+		wlNetworks: wlNetworks,
 	}
 }
 
-// isWhitelisted reports whether ip is in the never-ban list.
+// isWhitelisted reports whether ip is in the never-ban list (plain IP or CIDR).
 func (s *autoBanStore) isWhitelisted(ip string) bool {
-	_, ok := s.whitelist[ip]
-	return ok
+	if _, ok := s.wlIPs[ip]; ok {
+		return true
+	}
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return false
+	}
+	for _, network := range s.wlNetworks {
+		if network.Contains(parsed) {
+			return true
+		}
+	}
+	return false
 }
 
 // BanIP records the ban and fires UFW insert 1 deny. Schedules auto-expiry.

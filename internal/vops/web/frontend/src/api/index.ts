@@ -346,9 +346,6 @@ export const pingAllMultiProxInstances = () =>
 export const updateMultiProx = (name: string, body: { url?: string; api_key?: string; datacenter?: string }) =>
   apiPut<{ ok: string }>(`/api/v1/multiprox/${encodeURIComponent(name)}`, body);
 
-// Fleet chain traffic — removed (host_traffic table unpopulated)
-// export const getFleetChainTraffic = () => ...
-
 // Fleet deployments
 export const deployFleet = (body: { vm: string; chain: string; component: string; script: string; dry_run?: boolean; env?: Record<string, string> }) =>
   apiPost<{ deployment_id: number; status: string }>('/api/v1/fleet/deploy', body);
