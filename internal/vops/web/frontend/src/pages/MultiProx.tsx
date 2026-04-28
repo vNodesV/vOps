@@ -133,6 +133,7 @@ function AddModal({ onClose, onSave }: { onClose: () => void; onSave: () => void
 /* ── Instance row ─────────────────────────────────────────────── */
 function InstanceRow({ inst, onRefresh, onEdit }: { inst: VProxInstance; onRefresh: () => void; onEdit: () => void }) {
   const [pinging, setPinging] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   async function handlePing() {
     setPinging(true);
@@ -145,7 +146,6 @@ function InstanceRow({ inst, onRefresh, onEdit }: { inst: VProxInstance; onRefre
   }
 
   async function handleDelete() {
-    if (!confirm(`Remove ${inst.name}?`)) return;
     await deleteMultiProxInstance(inst.name);
     onRefresh();
   }
@@ -179,7 +179,14 @@ function InstanceRow({ inst, onRefresh, onEdit }: { inst: VProxInstance; onRefre
           </a>
           <button className="btn btn-secondary" onClick={handlePing} disabled={pinging} title="Ping health check">{pinging ? '…' : '⟳ Ping'}</button>
           <button className="btn btn-secondary" onClick={onEdit} title="Edit instance">✎</button>
-          <button className="btn btn-danger" onClick={handleDelete} title="Remove instance">✕</button>
+          {confirmDelete ? (
+            <>
+              <button className="btn btn-danger" onClick={handleDelete} title="Confirm removal">Confirm</button>
+              <button className="btn btn-secondary" onClick={() => setConfirmDelete(false)} title="Cancel">Cancel</button>
+            </>
+          ) : (
+            <button className="btn btn-danger" onClick={() => setConfirmDelete(true)} title="Remove instance">✕</button>
+          )}
         </div>
       </td>
     </tr>

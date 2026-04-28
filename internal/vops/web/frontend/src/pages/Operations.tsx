@@ -338,6 +338,11 @@ function MemModal({ host, domain, vmDomain, onClose }: { host: string; domain: s
           Live resize — changes max memory without reboot.
         </p>
       )}
+      {Number(memMiB) < currentMiB && (
+        <p style={{ fontSize: '0.75rem', color: 'var(--vn-danger)', marginBottom: '0.5rem' }}>
+          ⚠ Reducing memory requires a full reboot to take effect.
+        </p>
+      )}
       {err && <p style={{ color: 'var(--vn-danger)', fontSize: '0.78rem', marginBottom: '0.5rem' }}>{err}</p>}
       {done && <p style={{ color: 'var(--vn-success)', fontSize: '0.78rem', marginBottom: '0.5rem' }}>Memory updated.</p>}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
@@ -501,6 +506,7 @@ function SnapshotModal({ host, domain, onClose }: { host: string; domain: string
   const qc = useQueryClient();
   const [newSnapName, setNewSnapName] = useState('');
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [confirmRevert, setConfirmRevert] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
 
@@ -531,12 +537,12 @@ function SnapshotModal({ host, domain, onClose }: { host: string; domain: string
   };
 
   const doRevert = async (snap: string) => {
-    if (!confirm(`Revert "${domain}" to snapshot "${snap}"? The VM state will be restored.`)) return;
     setBusy(`revert-${snap}`);
     setMsg('');
     try {
       await revertVMSnapshot(host, domain, snap);
       setMsg(`Reverted to "${snap}"`);
+      setConfirmRevert(null);
     } catch (e: unknown) {
       setMsg(`Error: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
@@ -598,7 +604,16 @@ function SnapshotModal({ host, domain, onClose }: { host: string; domain: string
                 <td style={{ ...tdS, color: 'var(--vn-text-muted)', fontSize: '0.75rem' }}>{s.created_at ? new Date(s.created_at).toLocaleString() : '—'}</td>
                 <td style={{ ...tdS, color: 'var(--vn-text-muted)' }}>{s.state || '—'}</td>
                 <td style={tdS}>
-                  {confirmDelete === s.name ? (
+                  {confirmRevert === s.name ? (
+                    <span style={{ display: 'inline-flex', gap: '0.3rem' }}>
+                      <button onClick={() => doRevert(s.name)} disabled={busy === `revert-${s.name}`} style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', cursor: 'pointer', border: 'none', borderRadius: 'var(--vn-radius)', background: 'var(--vn-warning)', color: '#000' }}>
+                        {busy === `revert-${s.name}` ? '…' : 'Confirm Revert'}
+                      </button>
+                      <button onClick={() => setConfirmRevert(null)} style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', cursor: 'pointer', border: '1px solid var(--vn-border)', borderRadius: 'var(--vn-radius)', background: 'var(--vn-surface-2)', color: 'var(--vn-text)' }}>
+                        Cancel
+                      </button>
+                    </span>
+                  ) : confirmDelete === s.name ? (
                     <span style={{ display: 'inline-flex', gap: '0.3rem' }}>
                       <button onClick={() => doDelete(s.name)} disabled={busy === `delete-${s.name}`} style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', cursor: 'pointer', border: 'none', borderRadius: 'var(--vn-radius)', background: 'var(--vn-danger)', color: '#fff' }}>
                         {busy === `delete-${s.name}` ? '…' : 'Confirm'}
@@ -610,11 +625,11 @@ function SnapshotModal({ host, domain, onClose }: { host: string; domain: string
                   ) : (
                     <span style={{ display: 'inline-flex', gap: '0.3rem' }}>
                       <button
-                        onClick={() => doRevert(s.name)}
+                        onClick={() => setConfirmRevert(s.name)}
                         disabled={!!busy}
                         style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', cursor: 'pointer', border: '1px solid var(--vn-border)', borderRadius: 'var(--vn-radius)', background: 'var(--vn-surface)', color: 'var(--vn-text)' }}
                       >
-                        {busy === `revert-${s.name}` ? '…' : 'Revert'}
+                        Revert
                       </button>
                       <button
                         onClick={() => setConfirmDelete(s.name)}
@@ -649,8 +664,7 @@ function ShellModal({ host, vmName, onClose }: { host: string; vmName: string; o
 
   useEffect(() => {
     const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const apiBase = (import.meta as { env: { VITE_API_BASE?: string } }).env.VITE_API_BASE ?? BASE;
-    const wsURL = `${proto}://${window.location.host}${apiBase}/api/v1/vm/shell?vm=${encodeURIComponent(vmName)}`;
+    const wsURL = `${proto}://${window.location.host}${BASE}/api/v1/vm/shell?vm=${encodeURIComponent(vmName)}`;
     const ws = new WebSocket(wsURL);
     wsRef.current = ws;
 

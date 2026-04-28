@@ -97,11 +97,11 @@ export default function AuditPage() {
         <Spinner />
       ) : isError ? (
         <p className="alert alert-danger">
-          Audit log unavailable. Fleet must be configured to enable audit logging.
+          Audit log unavailable. Check that the vOps database is accessible and the server is running.
         </p>
       ) : entries.length === 0 ? (
         <p style={{ color: 'var(--vn-text-muted)', fontSize: '0.875rem' }}>
-          {actorFilter || actionFilter ? 'No entries match your filters.' : 'No audit entries yet.'}
+          {actorFilter || actionFilter ? 'No entries match your filters.' : 'No audit events recorded yet. Events are logged when IPs are blocked/unblocked or VM actions are performed.'}
         </p>
       ) : (
         <div className="card card-flush" style={{ overflow: 'hidden' }}>
