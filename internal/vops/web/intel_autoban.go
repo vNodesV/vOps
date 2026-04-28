@@ -2,18 +2,18 @@ package web
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/vNodesV/vOps/internal/logging"
 	"github.com/vNodesV/vOps/internal/vops/ufw"
 )
 
 const (
-	defaultAutoBanThreshold = 5              // rate-limit events before auto-ban
+	defaultAutoBanThreshold = 5 // rate-limit events before auto-ban
 	defaultBanDuration      = 60 * time.Minute
 )
 
@@ -96,18 +96,18 @@ func (s *autoBanStore) BanIP(ip string, duration time.Duration, reason string) e
 	// where UnbanIP clears the map and removes the UFW rule between our
 	// BlockInsert call and our map write.
 	if err := ufw.BlockInsert(ip, s.sudoPass); err != nil {
-		log.Printf("[autoban] ufw insert failed for %s: %v (continuing)", ip, err)
+		logging.Print("ERR", "autoban", "ufw insert failed", logging.F("ip", ip), logging.F("err", err))
 	}
 	s.banned[ip] = entry
 	t := time.AfterFunc(duration, func() {
 		if err := s.UnbanIP(ip); err != nil {
-			log.Printf("[autoban] timer unban %s failed: %v", ip, err)
+			logging.Print("ERR", "autoban", "timer unban failed", logging.F("ip", ip), logging.F("err", err))
 		}
 	})
 	s.timers[ip] = t
 	s.mu.Unlock()
 
-	log.Printf("[autoban] banned %s for %s: %s", ip, duration, reason)
+	logging.Print("INF", "autoban", "banned", logging.F("ip", ip), logging.F("duration", duration), logging.F("reason", reason))
 	return nil
 }
 
@@ -125,10 +125,10 @@ func (s *autoBanStore) UnbanIP(ip string) error {
 	s.mu.Unlock()
 
 	if err != nil {
-		log.Printf("[autoban] ufw unblock failed for %s: %v", ip, err)
+		logging.Print("ERR", "autoban", "ufw unblock failed", logging.F("ip", ip), logging.F("err", err))
 		return err
 	}
-	log.Printf("[autoban] unbanned %s", ip)
+	logging.Print("INF", "autoban", "unbanned", logging.F("ip", ip))
 	return nil
 }
 
@@ -190,7 +190,7 @@ func (s *Server) handleAPIBannedUnban(w http.ResponseWriter, r *http.Request) {
 func (s *Server) autoBanSweep(threshold int, banDuration time.Duration) {
 	accounts, err := s.db.ListIPAccountsExceedingRatelimit(int64(threshold), 100)
 	if err != nil {
-		log.Printf("[autoban] sweep DB error: %v", err)
+		logging.Print("ERR", "autoban", "sweep DB error", logging.F("err", err))
 		return
 	}
 	for _, acc := range accounts {
@@ -199,7 +199,7 @@ func (s *Server) autoBanSweep(threshold int, banDuration time.Duration) {
 		}
 		reason := fmt.Sprintf("auto-ban: %d rate-limit events (threshold: %d)", acc.RatelimitEvents, threshold)
 		if err := s.autoBan.BanIP(acc.IP, banDuration, reason); err != nil {
-			log.Printf("[autoban] failed to ban %s: %v", acc.IP, err)
+			logging.Print("ERR", "autoban", "failed to ban", logging.F("ip", acc.IP), logging.F("err", err))
 		}
 	}
 }

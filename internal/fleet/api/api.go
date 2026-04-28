@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -25,6 +24,7 @@ import (
 	fleetssh "github.com/vNodesV/vOps/internal/fleet/ssh"
 	"github.com/vNodesV/vOps/internal/fleet/state"
 	"github.com/vNodesV/vOps/internal/fleet/status"
+	"github.com/vNodesV/vOps/internal/logging"
 	opsdb "github.com/vNodesV/vOps/internal/vops/db"
 )
 
@@ -654,7 +654,7 @@ func (h *Handlers) HandleDeployments(w http.ResponseWriter, r *http.Request) {
 	chain := r.URL.Query().Get("chain")
 	deps, err := h.svc.DB().ListDeployments(chain)
 	if err != nil {
-		log.Printf("[fleet/api] list deployments: %v", err)
+		logging.Print("ERR", "fleet/api", "list deployments failed", logging.F("err", err))
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -692,7 +692,7 @@ func (h *Handlers) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 
 	id, err := h.svc.DB().InsertDeployment(req.Chain, req.Component, req.VM)
 	if err != nil {
-		log.Printf("[fleet/api] insert deployment: %v", err)
+		logging.Print("ERR", "fleet/api", "insert deployment failed", logging.F("err", err))
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -706,7 +706,7 @@ func (h *Handlers) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 			status = "failed"
 		}
 		if err := h.svc.DB().UpdateDeployment(id, status, result.Output); err != nil {
-			log.Printf("[fleet/api] update deployment %d: %v", id, err)
+			logging.Print("ERR", "fleet/api", "update deployment failed", logging.F("id", id), logging.F("err", err))
 		}
 	}(*vm, id)
 
@@ -728,7 +728,7 @@ func (h *Handlers) HandleRegisteredChains(w http.ResponseWriter, r *http.Request
 	case http.MethodGet:
 		chains, err := h.svc.DB().ListRegisteredChains()
 		if err != nil {
-			log.Printf("[fleet/api] list registered: %v", err)
+			logging.Print("ERR", "fleet/api", "list registered chains failed", logging.F("err", err))
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
@@ -745,7 +745,7 @@ func (h *Handlers) HandleRegisteredChains(w http.ResponseWriter, r *http.Request
 			return
 		}
 		if err := h.svc.DB().AddRegisteredChain(req.Chain, req.RPCURL, req.RESTURL, req.Note); err != nil {
-			log.Printf("[fleet/api] add registered chain: %v", err)
+			logging.Print("ERR", "fleet/api", "add registered chain failed", logging.F("err", err))
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
@@ -768,7 +768,7 @@ func (h *Handlers) HandleRegisteredChainDelete(w http.ResponseWriter, r *http.Re
 			http.Error(w, "chain not registered", http.StatusNotFound)
 			return
 		}
-		log.Printf("[fleet/api] remove registered chain: %v", err)
+		logging.Print("ERR", "fleet/api", "remove registered chain failed", logging.F("err", err))
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -815,7 +815,7 @@ func (h *Handlers) HandleVMRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.svc.RegisterVM(vm)
-	log.Printf("[fleet/api] VM %q registered from %s (type=%s)", req.Name, req.Host, req.Type)
+	logging.Print("INF", "fleet/api", "VM registered", logging.F("name", req.Name), logging.F("host", req.Host), logging.F("type", req.Type))
 	writeJSON(w, http.StatusOK, map[string]string{"status": "registered", "name": req.Name})
 }
 
@@ -992,6 +992,6 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	if err := json.NewEncoder(w).Encode(v); err != nil {
-		log.Printf("[fleet/api] encode response: %v", err)
+		logging.Print("ERR", "fleet/api", "encode response failed", logging.F("err", err))
 	}
 }

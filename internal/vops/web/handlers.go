@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"math/rand"
 	"net"
 	"net/http"
@@ -16,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vNodesV/vOps/internal/logging"
 	"github.com/vNodesV/vOps/internal/vops/ctxkeys"
 	"github.com/vNodesV/vOps/internal/vops/db"
 	"github.com/vNodesV/vOps/internal/vops/intel"
@@ -29,7 +29,7 @@ import (
 func (s *Server) handleAPIIngest(w http.ResponseWriter, _ *http.Request) {
 	processed, err := s.ingester.IngestAll()
 	if err != nil {
-		log.Printf("[web] internal error: %v", err)
+		logging.Print("ERR", "web", "internal error", logging.F("err", err))
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
@@ -66,7 +66,7 @@ func (s *Server) handleAPIBackupAndIngest(w http.ResponseWriter, r *http.Request
 
 	out, err := exec.CommandContext(ctx, bin, "--new-backup").CombinedOutput() //nolint:gosec
 	if err != nil {
-		log.Printf("[web] vprox --new-backup failed: %v — output: %s", err, out)
+		logging.Print("ERR", "web", "backup failed", logging.F("err", err), logging.F("output", string(out)))
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"error":  fmt.Sprintf("backup failed: %v", err),
 			"output": string(out),
@@ -76,7 +76,7 @@ func (s *Server) handleAPIBackupAndIngest(w http.ResponseWriter, r *http.Request
 
 	processed, err := s.ingester.IngestAll()
 	if err != nil {
-		log.Printf("[web] ingest after backup failed: %v", err)
+		logging.Print("ERR", "web", "ingest after backup failed", logging.F("err", err))
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "ingest failed after backup"})
 		return
 	}
@@ -91,14 +91,14 @@ func (s *Server) handleAPIBackupAndIngest(w http.ResponseWriter, r *http.Request
 
 // accountSortCols maps safe frontend column names to DB column names.
 var accountSortCols = map[string]string{
-	"IP":               "ip",
-	"Country":          "country",
-	"Org":              "org",
-	"TotalRequests":    "total_requests",
-	"RatelimitEvents":  "ratelimit_events",
-	"ThreatScore":      "threat_score",
-	"Status":           "status",
-	"LastSeen":         "last_seen",
+	"IP":              "ip",
+	"Country":         "country",
+	"Org":             "org",
+	"TotalRequests":   "total_requests",
+	"RatelimitEvents": "ratelimit_events",
+	"ThreatScore":     "threat_score",
+	"Status":          "status",
+	"LastSeen":        "last_seen",
 }
 
 func (s *Server) handleAPIAccountList(w http.ResponseWriter, r *http.Request) {
@@ -125,7 +125,7 @@ func (s *Server) handleAPIAccountList(w http.ResponseWriter, r *http.Request) {
 		accounts, err = s.db.ListIPAccounts(sortCol, sortDir, limit, offset)
 	}
 	if err != nil {
-		log.Printf("[web] internal error: %v", err)
+		logging.Print("ERR", "web", "internal error", logging.F("err", err))
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
@@ -141,7 +141,7 @@ func (s *Server) handleAPIAccountDetail(w http.ResponseWriter, r *http.Request) 
 
 	account, err := s.db.GetIPAccount(ip)
 	if err != nil {
-		log.Printf("[web] internal error: %v", err)
+		logging.Print("ERR", "web", "internal error", logging.F("err", err))
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
@@ -218,7 +218,7 @@ func (s *Server) handleAPIEnrich(w http.ResponseWriter, r *http.Request) {
 	// Use context.Background() so provider saves complete even if the Apache
 	// proxy closes the HTTP connection mid-stream.
 	if _, err := s.enricher.EnrichStream(context.Background(), ip, true, emit); err != nil {
-		log.Printf("[web] enrich %s: %v", ip, err)
+		logging.Print("ERR", "web", "enrich failed", logging.F("ip", ip), logging.F("err", err))
 	}
 }
 
@@ -287,7 +287,7 @@ func (s *Server) handleAPIosint(w http.ResponseWriter, r *http.Request) {
 	// Use context.Background() so the OSINT scan completes and saves even if
 	// Apache closes the proxy connection mid-stream.
 	if _, err := s.enricher.OSINTStream(context.Background(), ip, emit); err != nil {
-		log.Printf("[web] osint %s: %v", ip, err)
+		logging.Print("ERR", "web", "osint failed", logging.F("ip", ip), logging.F("err", err))
 	}
 }
 
@@ -367,25 +367,24 @@ func (s *Server) handleAPIInvestigate(w http.ResponseWriter, r *http.Request) {
 	// Phase 1: TI enrichment (0-50%). Use context.Background() so saves complete
 	// even if the Apache proxy times out and cancels the HTTP connection context.
 	if _, err := s.enricher.EnrichStream(context.Background(), ip, true, emitPhase("ti")); err != nil {
-		log.Printf("[web] investigate enrich %s: %v", ip, err)
+		logging.Print("ERR", "web", "investigate enrich failed", logging.F("ip", ip), logging.F("err", err))
 	}
 
 	// Phase 2: OSINT scan (50-100%).
 	if _, err := s.enricher.OSINTStream(context.Background(), ip, emitPhase("osint")); err != nil {
-		log.Printf("[web] investigate osint %s: %v", ip, err)
+		logging.Print("ERR", "web", "investigate osint failed", logging.F("ip", ip), logging.F("err", err))
 	}
 }
 
 func (s *Server) handleAPIStats(w http.ResponseWriter, _ *http.Request) {
 	stats, err := s.db.Stats()
 	if err != nil {
-		log.Printf("[web] internal error: %v", err)
+		logging.Print("ERR", "web", "internal error", logging.F("err", err))
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
 	writeJSON(w, http.StatusOK, stats)
 }
-
 
 func (s *Server) handleAPIChart(w http.ResponseWriter, r *http.Request) {
 	chartType := r.URL.Query().Get("type")
@@ -400,7 +399,7 @@ func (s *Server) handleAPIChart(w http.ResponseWriter, r *http.Request) {
 	case "ips_over_time":
 		series, err := s.db.IPsOverTimeMulti(days)
 		if err != nil {
-			log.Printf("[web] internal error: %v", err)
+			logging.Print("ERR", "web", "internal error", logging.F("err", err))
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 			return
 		}
@@ -409,7 +408,7 @@ func (s *Server) handleAPIChart(w http.ResponseWriter, r *http.Request) {
 	case "requests_over_time":
 		series, err := s.db.RequestsOverTimeMulti(days)
 		if err != nil {
-			log.Printf("[web] internal error: %v", err)
+			logging.Print("ERR", "web", "internal error", logging.F("err", err))
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 			return
 		}
@@ -418,7 +417,7 @@ func (s *Server) handleAPIChart(w http.ResponseWriter, r *http.Request) {
 	case "endpoint_summary":
 		stats, err := s.db.EndpointSummary(30)
 		if err != nil {
-			log.Printf("[web] internal error: %v", err)
+			logging.Print("ERR", "web", "internal error", logging.F("err", err))
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 			return
 		}
@@ -451,7 +450,7 @@ func (s *Server) handleAPIChart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("[web] internal error: %v", err)
+		logging.Print("ERR", "web", "internal error", logging.F("err", err))
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
@@ -658,7 +657,7 @@ func (s *Server) handleAPIProbe(w http.ResponseWriter, r *http.Request) {
 		var err error
 		stats, err = s.db.EndpointSummary(500)
 		if err != nil {
-			log.Printf("[web] internal error: %v", err)
+			logging.Print("ERR", "web", "internal error", logging.F("err", err))
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 			return
 		}
@@ -835,14 +834,14 @@ func (s *Server) handleAPIBlock(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.db.BlockIP(ip, reason); err != nil {
-		log.Printf("[web] internal error: %v", err)
+		logging.Print("ERR", "web", "internal error", logging.F("err", err))
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
 
 	ufwOK := true
 	if err := ufw.Block(ip, ""); err != nil {
-		log.Printf("[web] ufw block %s: %v", ip, err)
+		logging.Print("ERR", "web", "ufw block failed", logging.F("ip", ip), logging.F("err", err))
 		ufwOK = false
 	}
 
@@ -873,14 +872,14 @@ func (s *Server) handleAPIUnblock(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.db.UnblockIP(ip); err != nil {
-		log.Printf("[web] internal error: %v", err)
+		logging.Print("ERR", "web", "internal error", logging.F("err", err))
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
 
 	ufwOK := true
 	if err := ufw.Unblock(ip, ""); err != nil {
-		log.Printf("[web] ufw unblock %s: %v", ip, err)
+		logging.Print("ERR", "web", "ufw unblock failed", logging.F("ip", ip), logging.F("err", err))
 		ufwOK = false
 	}
 
@@ -899,6 +898,7 @@ func (s *Server) handleAPIUnblock(w http.ResponseWriter, r *http.Request) {
 		Result:     "ok",
 	})
 }
+
 // ---------------------------------------------------------------------------
 
 // handleAPIUFWSync reads current UFW DENY rules and imports any unknown IPs
@@ -913,7 +913,7 @@ func (s *Server) handleAPIUFWSync(w http.ResponseWriter, r *http.Request) {
 
 	ips, err := ufw.ListBlocked(body.SudoPassword)
 	if err != nil {
-		log.Printf("[web] ufw sync: %v", err)
+		logging.Print("ERR", "web", "ufw sync failed", logging.F("err", err))
 		// Provide actionable guidance when sudo permission is missing.
 		note := err.Error()
 		if strings.Contains(note, "password") || strings.Contains(note, "askpass") {
@@ -937,12 +937,12 @@ func (s *Server) handleAPIUFWSync(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if err := s.db.BlockIP(ip, "ufw sync"); err != nil {
-			log.Printf("[web] ufw sync block %s: %v", ip, err)
+			logging.Print("ERR", "web", "ufw sync block failed", logging.F("ip", ip), logging.F("err", err))
 		} else {
 			imported++
 		}
 	}
-	log.Printf("[web] ufw sync: imported %d / %d IPs", imported, len(ips))
+	logging.Print("INF", "web", "ufw sync imported", logging.F("imported", imported), logging.F("total", len(ips)))
 	writeJSON(w, http.StatusOK, map[string]any{
 		"total":    len(ips),
 		"imported": imported,
@@ -957,7 +957,7 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(v); err != nil {
-		log.Printf("[web] json encode: %v", err)
+		logging.Print("ERR", "web", "json encode failed", logging.F("err", err))
 	}
 }
 
