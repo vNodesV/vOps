@@ -32,7 +32,7 @@ func vopsSecretDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	dir := filepath.Join(home, ".vprox", "secret")
+	dir := filepath.Join(home, ".vOps", "secret")
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return "", err
 	}

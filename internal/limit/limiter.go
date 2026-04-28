@@ -221,11 +221,14 @@ func New(defaults RateSpec, overrides map[string]RateSpec, opts ...Option) *IPLi
 }
 
 func defaultLogPath() string {
-	if v := strings.TrimSpace(os.Getenv("VPROX_HOME")); v != "" {
+	if v := strings.TrimSpace(os.Getenv("VOPS_HOME")); v != "" {
+		return filepath.Join(v, "data", "logs", "rate-limit.jsonl")
+	}
+	if v := strings.TrimSpace(os.Getenv("VPROX_HOME")); v != "" { // legacy
 		return filepath.Join(v, "data", "logs", "rate-limit.jsonl")
 	}
 	if h, err := os.UserHomeDir(); err == nil && h != "" {
-		return filepath.Join(h, ".vProx", "data", "logs", "rate-limit.jsonl")
+		return filepath.Join(h, ".vOps", "data", "logs", "rate-limit.jsonl")
 	}
 	return "logs/rate-limit.jsonl"
 }

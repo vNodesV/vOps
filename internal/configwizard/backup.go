@@ -43,7 +43,7 @@ func runBackup(home string) error {
 	b.CheckIntervalMin = readInt("check_interval_min (how often to evaluate triggers)", defCheckMin, 1, 1440)
 
 	section("Destination")
-	fmt.Println("  Default: $VPROX_HOME/data/logs/archives")
+	fmt.Println("  Default: $VOPS_HOME/data/logs/archives")
 	b.Destination = readString("destination (override archive dir; empty = default)", ex.Backup.Destination, false)
 	b.Compression = stringDefault(ex.Backup.Compression, "tar.gz")
 
@@ -52,19 +52,19 @@ func runBackup(home string) error {
 	if len(defLogs) == 0 {
 		defLogs = []string{"main.log"}
 	}
-	b.Files.Logs = readStringList("files.logs (relative to $VPROX_HOME/data/logs/)", defLogs)
+	b.Files.Logs = readStringList("files.logs (relative to $VOPS_HOME/data/logs/)", defLogs)
 
 	defData := ex.Backup.Files.Data
 	if len(defData) == 0 {
 		defData = []string{"access-counts.json"}
 	}
-	b.Files.Data = readStringList("files.data (relative to $VPROX_HOME/data/)", defData)
+	b.Files.Data = readStringList("files.data (relative to $VOPS_HOME/data/)", defData)
 
 	defConfig := ex.Backup.Files.Config
 	if len(defConfig) == 0 {
 		defConfig = []string{"chains/ports.toml"}
 	}
-	b.Files.Config = readStringList("files.config (relative to $VPROX_HOME/config/)", defConfig)
+	b.Files.Config = readStringList("files.config (relative to $VOPS_HOME/config/)", defConfig)
 
 	return writeConfig(configPath(home, "backup", "backup.toml"), cfg)
 }

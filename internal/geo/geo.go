@@ -102,11 +102,15 @@ func initDB() {
 	startCacheSweeper()
 
 	// Prepend user-home paths so they take priority over system-wide fallbacks.
-	// `make geo` extracts the MMDB to $VPROX_HOME/data/geolocation/.
-	if home := os.Getenv("VPROX_HOME"); home != "" {
-		ip2lPaths = append([]string{filepath.Join(home, "data", "geolocation", "ip2location.mmdb")}, ip2lPaths...)
+	// `make geo` extracts the MMDB to $VOPS_HOME/data/geolocation/.
+	vopsHome := os.Getenv("VOPS_HOME")
+	if vopsHome == "" {
+		vopsHome = os.Getenv("VPROX_HOME") // legacy fallback
+	}
+	if vopsHome != "" {
+		ip2lPaths = append([]string{filepath.Join(vopsHome, "data", "geolocation", "ip2location.mmdb")}, ip2lPaths...)
 	} else if home := os.Getenv("HOME"); home != "" {
-		ip2lPaths = append([]string{filepath.Join(home, ".vProx", "data", "geolocation", "ip2location.mmdb")}, ip2lPaths...)
+		ip2lPaths = append([]string{filepath.Join(home, ".vOps", "data", "geolocation", "ip2location.mmdb")}, ip2lPaths...)
 	}
 
 	// 1) IP2Location MMDB

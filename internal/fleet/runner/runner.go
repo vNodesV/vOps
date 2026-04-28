@@ -12,8 +12,8 @@ import (
 	fleetssh "github.com/vNodesV/vOps/internal/fleet/ssh"
 )
 
-// scriptBase is the path on remote VMs where vProx scripts are cloned.
-const scriptBase = "~/vProx/scripts"
+// scriptBase is the path on remote VMs where vOps scripts are cloned.
+const scriptBase = "~/vOps/scripts"
 
 // safeSegment matches only alphanumeric characters, hyphens, and underscores
 // — safe for use as path segments and bash positional arguments.

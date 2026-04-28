@@ -70,8 +70,8 @@ func runVOps(home string) error {
 	v.Push.PollIntervalSec = readInt("push.poll_interval_sec", defPoll, 10, 3600)
 
 	section("Group E — Paths (optional overrides)")
-	v.DBPath = readString("db_path (default: $VPROX_HOME/data/vops.db)", ex.VOps.DBPath, false)
-	v.ArchivesDir = readString("archives_dir (default: $VPROX_HOME/data/logs/archives)", ex.VOps.ArchivesDir, false)
+	v.DBPath = readString("db_path (default: $VOPS_HOME/data/vops.db)", ex.VOps.DBPath, false)
+	v.ArchivesDir = readString("archives_dir (default: $VOPS_HOME/data/logs/archives)", ex.VOps.ArchivesDir, false)
 	v.VProxBin = readString("vprox_bin (default: vprox)", stringDefault(ex.VOps.VProxBin, "vprox"), false)
 
 	return writeConfig(configPath(home, "vops", "vops.toml"), cfg)
