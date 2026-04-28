@@ -20,27 +20,29 @@ VOPS_LDFLAGS  := -X main.version=$(VOPS_VERSION) -X main.commit=$(VOPS_COMMIT) -
 # Run `make system-user-vops` once to create this user before enabling the service.
 VOPS_USER  ?= vops
 
-VPROX_HOME := $(HOME)/.vProx
 VOPS_HOME  := $(HOME)/.vOps
-DATA_DIR := $(VPROX_HOME)/data
-LOG_DIR := $(DATA_DIR)/logs
-CFG_DIR := $(VPROX_HOME)/config
-CHAINS_DIR := $(VPROX_HOME)/chains
-INTERNAL_DIR := $(VPROX_HOME)/internal
-ARCHIVE_DIR := $(LOG_DIR)/archives
-SERVICE_DIR := $(VPROX_HOME)/service
-SERVICE_PATH := $(SERVICE_DIR)/vProx.service
+# VPROX_HOME retained for reference only — no active paths should use it.
+# Existing ~/.vProx data can be migrated with: cp -r ~/.vProx/data ~/.vOps/data
+VPROX_HOME := $(HOME)/.vProx
+DATA_DIR     := $(VOPS_HOME)/data
+LOG_DIR      := $(VOPS_HOME)/data/logs
+CFG_DIR      := $(VOPS_HOME)/config
+CHAINS_DIR   := $(VOPS_HOME)/chains
+INTERNAL_DIR := $(VOPS_HOME)/internal
+ARCHIVE_DIR  := $(VOPS_HOME)/data/logs/archives
+SERVICE_DIR  := $(VOPS_HOME)/service
+SERVICE_PATH := $(SERVICE_DIR)/vOps.service
 VOPS_SERVICE := $(SERVICE_DIR)/vOps.service
-GEO_DIR := $(DATA_DIR)/geolocation
-SAMPLES_DIR := $(VPROX_HOME)/.samples
+GEO_DIR      := $(VOPS_HOME)/data/geolocation
+SAMPLES_DIR  := $(VOPS_HOME)/.samples
 DIR_LIST := $(DATA_DIR) $(LOG_DIR) $(CFG_DIR) $(CFG_DIR)/chains $(CFG_DIR)/backup \
             $(CFG_DIR)/vprox $(CFG_DIR)/vprox/nodes \
             $(INTERNAL_DIR) $(ARCHIVE_DIR) $(SERVICE_DIR) $(GEO_DIR) \
-            $(VOPS_HOME)/config/vops $(VOPS_HOME)/config/infra $(VOPS_HOME)/config/fleet \
-            $(VOPS_HOME)/config/vops/chains \
+            $(CFG_DIR)/vops $(CFG_DIR)/infra $(CFG_DIR)/fleet \
+            $(CFG_DIR)/vops/chains \
             $(SAMPLES_DIR) $(SAMPLES_DIR)/chains $(SAMPLES_DIR)/backup \
-            $(VOPS_HOME)/.samples/vops $(VOPS_HOME)/.samples/infra $(VOPS_HOME)/.samples/fleet \
-            $(SAMPLES_DIR)/vprox $(SAMPLES_DIR)/vprox/nodes $(VOPS_HOME)/.samples/vops/chains
+            $(SAMPLES_DIR)/vops $(SAMPLES_DIR)/infra $(SAMPLES_DIR)/fleet \
+            $(SAMPLES_DIR)/vprox $(SAMPLES_DIR)/vprox/nodes $(SAMPLES_DIR)/vops/chains
 
 # Sample file revision — format: r{major}_{MMDDYY}_{seq}
 # Increment {seq} for multiple revisions on the same day; reset to 0 on new date.
@@ -51,7 +53,7 @@ SAMPLE_REV := r5_031126_0
 GEO_DB_SRC := assets/_geo/ip2location.mmdb.gz
 GEO_DB_DST := $(GEO_DIR)/ip2location.mmdb
 
-ENV_FILE := $(VPROX_HOME)/._env
+ENV_FILE := $(VOPS_HOME)/._env
 
 # Validate Go environment
 GOPATH := $(shell go env GOPATH)
@@ -105,7 +107,7 @@ help:
 	@echo "    Samples:   $(VOPS_HOME)/.samples/"
 	@echo "  SSH control plane (fleet) is installed automatically."
 	@echo "  Add VMs to:    $(VOPS_HOME)/config/infra/{datacenter}.toml"
-	@echo "  Add chains to: $(VPROX_HOME)/config/chains/{chain}.toml"
+	@echo "  Add chains to: $(CFG_DIR)/chains/{chain}.toml"
 	@echo ""
 
 ## Full install — build + config + service for vOps.
@@ -169,7 +171,7 @@ _validate-go:
 	@echo "✓ GOPATH: $(GOPATH)"
 	@echo "✓ Go version: $$(go version)"
 
-## Create required folders under $HOME/.vProx
+## Create required folders under $HOME/.vOps
 
 _dirs:
 	@echo "Inspecting directory structure..."
@@ -275,7 +277,7 @@ _config-vprox: _dirs
 		echo "NOTE: .samples/vprox/settings.sample not found in repo; skipping"; \
 	fi
 
-## Overwrite ALL sample files in SAMPLES_DIR (~/.vProx/.samples/) — safe to run anytime; never touches live _config.
+## Overwrite ALL sample files in SAMPLES_DIR (~/.vOps/.samples/) — safe to run anytime; never touches live _config.
 ## When a sample already exists, it is archived to SAMPLES_DIR/archives/<old_rev>/<subfolder>/
 ## before the new version is written, so every prior revision is recoverable.
 _samples-fleet:
