@@ -170,7 +170,7 @@ function ConfigTab({ configured }: { configured: boolean }) {
   const [saved, setSaved] = useState(false);
   const [saveErr, setSaveErr] = useState('');
 
-  const { isLoading } = useQuery({
+  const { isLoading, data: proxyToml } = useQuery({
     queryKey: ['proxy-config'],
     queryFn: getProxyConfig,
     enabled: configured,
@@ -178,21 +178,10 @@ function ConfigTab({ configured }: { configured: boolean }) {
     refetchOnWindowFocus: false,
   });
 
-  // Populate textarea once loaded.
-  useQuery({
-    queryKey: ['proxy-config'],
-    queryFn: getProxyConfig,
-    enabled: configured,
-    retry: false,
-    refetchOnWindowFocus: false,
-    select: (data) => data,
-  });
-
-  // Use a separate state loader to populate textarea.
+  // Sync textarea when query data arrives (including cache hits).
   useEffect(() => {
-    if (!configured) return;
-    getProxyConfig().then(setToml).catch(() => {});
-  }, [configured]);
+    if (proxyToml !== undefined) setToml(proxyToml);
+  }, [proxyToml]);
 
   if (!configured) return <NotConfiguredCard />;
 
@@ -213,7 +202,7 @@ function ConfigTab({ configured }: { configured: boolean }) {
       <div>
         <h3 className="text-sm font-semibold" style={{ color: 'var(--vn-text)' }}>vProx Settings</h3>
         <p className="text-xs mt-0.5" style={{ color: 'var(--vn-text-muted)' }}>
-          Edit <code>$VPROX_HOME/config/vprox/settings.toml</code>. Changes take effect on next proxy restart.
+          Edit <code>$VOPS_HOME/config/vprox/settings.toml</code>. Changes take effect on next proxy restart.
         </p>
       </div>
       {isLoading ? (
@@ -298,7 +287,7 @@ function LogsTab({ configured }: { configured: boolean }) {
   return (
     <div className="card space-y-2">
       <p className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>
-        Last 100 lines from <code>$VPROX_HOME/data/logs/main.log</code>
+        Last 100 lines from <code>$VOPS_HOME/data/logs/main.log</code>
       </p>
       <pre
         className="text-xs font-mono rounded p-3 overflow-auto"

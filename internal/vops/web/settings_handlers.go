@@ -325,7 +325,7 @@ func (s *Server) handleAPISettingsSave(step string) http.HandlerFunc {
 }
 
 // handleAPISettingsPreferences persists UI preferences (theme) to vops.toml,
-// updates the in-memory config, and sets a vprox_theme cookie for flash-free load.
+// updates the in-memory config, and sets a vops_theme cookie for flash-free load.
 func (s *Server) handleAPISettingsPreferences(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 4*1024)
 	var req struct {
@@ -372,7 +372,7 @@ func (s *Server) handleAPISettingsPreferences(w http.ResponseWriter, r *http.Req
 
 	// Set a cookie for flash-free theme on page reload.
 	http.SetCookie(w, &http.Cookie{
-		Name:     "vprox_theme",
+		Name:     "vops_theme",
 		Value:    req.Theme,
 		Path:     "/",
 		SameSite: http.SameSiteStrictMode,

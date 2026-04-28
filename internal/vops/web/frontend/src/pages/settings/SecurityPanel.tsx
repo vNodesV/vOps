@@ -58,7 +58,7 @@ export function SecurityPanel() {
       >
         <FieldDoc
           label="Key location"
-          hint="Private key is stored at ~/.vprox/secret/vops_ssh_key (mode 0600). Public key has .pub suffix."
+          hint="Private key is stored at ~/.vOps/secret/vops_ssh_key (mode 0600). Public key has .pub suffix."
         />
         {sshQ.isLoading ? (
           <Spinner size={16} label="Loading SSH key" />

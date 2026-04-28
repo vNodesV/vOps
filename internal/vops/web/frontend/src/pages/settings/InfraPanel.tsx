@@ -368,7 +368,7 @@ export function FleetSSHPanel({ config }: { config: ConfigSnapshot }) {
       <div className="grid grid-cols-2 gap-3">
         <LabeledInput label="SSH User" value={fields.ssh_user} onChange={set('ssh_user')} placeholder="ubuntu" />
         <LabeledInput label="SSH Port" value={fields.ssh_port} onChange={set('ssh_port')} placeholder="22" />
-        <LabeledInput label="SSH Key Path" value={fields.ssh_key_path} onChange={set('ssh_key_path')} placeholder="/home/ubuntu/.vprox/secret/vops_ssh_key" wide />
+        <LabeledInput label="SSH Key Path" value={fields.ssh_key_path} onChange={set('ssh_key_path')} placeholder="/home/ubuntu/.vOps/secret/vops_ssh_key" wide />
         <LabeledInput label="Known Hosts File" value={fields.known_hosts_path} onChange={set('known_hosts_path')} placeholder="~/.ssh/known_hosts" wide />
         <LabeledInput label="Connection Timeout (sec)" value={fields.ssh_timeout_sec} onChange={set('ssh_timeout_sec')} placeholder="15" />
         <LabeledInput label="Poll Interval (sec)" value={fields.poll_interval_sec} onChange={set('poll_interval_sec')} placeholder="60" />
@@ -559,7 +559,7 @@ export function DatacenterCard({ entry, onSaved }: { entry: InfraEntry; onSaved:
         </p>
         <div className="grid grid-cols-2 gap-2">
           <LabeledInput label="VM SSH User" value={vprox.user} onChange={setVproxField('user')} placeholder="vnodesv" />
-          <LabeledInput label="VM SSH Key Path" value={vprox.ssh_key_path} onChange={setVproxField('ssh_key_path')} placeholder="/home/vnodesv/.vprox/secret/vops_ssh_key" wide />
+          <LabeledInput label="VM SSH Key Path" value={vprox.ssh_key_path} onChange={setVproxField('ssh_key_path')} placeholder="/home/vnodesv/.vOps/secret/vops_ssh_key" wide />
         </div>
       </div>
 
@@ -735,7 +735,7 @@ export function NewDatacenterForm({ onSaved }: { onSaved: () => void }) {
       <p className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>vOps → VM Credentials (default SSH creds for VM connections)</p>
       <div className="grid grid-cols-2 gap-2">
         <LabeledInput label="VM SSH User" value={vprox.user} onChange={setVproxField('user')} placeholder="vnodesv" />
-        <LabeledInput label="VM SSH Key Path" value={vprox.ssh_key_path} onChange={setVproxField('ssh_key_path')} placeholder="/home/vnodesv/.vprox/secret/vops_ssh_key" wide />
+        <LabeledInput label="VM SSH Key Path" value={vprox.ssh_key_path} onChange={setVproxField('ssh_key_path')} placeholder="/home/vnodesv/.vOps/secret/vops_ssh_key" wide />
       </div>
       <SaveBar
         onSave={() => saveMut.mutate()}
