@@ -43,28 +43,27 @@ import (
 //go:embed static dist
 var webFS embed.FS
 
-
 // Server is the vOps HTTP server. It owns the ServeMux and references
 // to the database and enrichment subsystems.
 type Server struct {
-	db       *db.DB
-	enricher *intel.Enricher
-	ingester *ingest.Ingester
-	cfg      config.Config
-	home     string
-	cfgPath  string // resolved path to vops.toml (may be legacy or new layout)
-	version   string // binary version string, set at startup
-	commit    string // git commit SHA (short), set at startup
-	buildDate string // build date (YYYY-MM-DD), set at startup
-	httpSrv  *http.Server
-	fleet    *api.Handlers    // nil when fleet module is not configured
-	fleetSvc *fleet.Service
-	vmMgr    *vm.Handlers     // nil when no hypervisor hosts are configured
-	svcMgr      *services.Handlers
-	unitsMgr    *units.Handlers
+	db           *db.DB
+	enricher     *intel.Enricher
+	ingester     *ingest.Ingester
+	cfg          config.Config
+	home         string
+	cfgPath      string // resolved path to vops.toml (may be legacy or new layout)
+	version      string // binary version string, set at startup
+	commit       string // git commit SHA (short), set at startup
+	buildDate    string // build date (YYYY-MM-DD), set at startup
+	httpSrv      *http.Server
+	fleet        *api.Handlers // nil when fleet module is not configured
+	fleetSvc     *fleet.Service
+	vmMgr        *vm.Handlers // nil when no hypervisor hosts are configured
+	svcMgr       *services.Handlers
+	unitsMgr     *units.Handlers
 	multiproxMgr *multiprox.Handlers
-	unitsPoller *units.Poller
-	debug    *DebugRing       // SSH command debug recorder
+	unitsPoller  *units.Poller
+	debug        *DebugRing // SSH command debug recorder
 
 	// Session state for dashboard login.
 	sessions   map[string]time.Time // token → expiry
@@ -72,7 +71,7 @@ type Server struct {
 	sessionKey []byte // 32-byte HMAC key, generated at startup
 
 	// Brute-force protection: per-IP failed login tracking.
-	loginMu      sync.Mutex
+	loginMu       sync.Mutex
 	loginAttempts map[string]*loginAttempt
 
 	// Probe host cache (M-5): EndpointSummary is expensive on large DBs; cache
@@ -479,6 +478,22 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		}()
 	}
 
+	// Background session sweep — removes orphaned expired tokens every hour.
+	go func() {
+		t := time.NewTicker(1 * time.Hour)
+		defer t.Stop()
+		for range t.C {
+			now := time.Now()
+			s.sessionMu.Lock()
+			for token, expiry := range s.sessions {
+				if now.After(expiry) {
+					delete(s.sessions, token)
+				}
+			}
+			s.sessionMu.Unlock()
+		}
+	}()
+
 	return s, nil
 }
 
@@ -643,9 +658,15 @@ func (s *Server) checkLoginLock(clientIP string) (locked bool, retryAfter int) {
 	now := time.Now()
 	// Prune stale entries.
 	for ip, att := range s.loginAttempts {
-		if now.Sub(att.lockedUntil) > staleCutoff && att.lockedUntil.IsZero() {
-			delete(s.loginAttempts, ip)
-		} else if !att.lockedUntil.IsZero() && now.Sub(att.lockedUntil) > staleCutoff {
+		if att.lockedUntil.IsZero() {
+			// Not locked — prune if no failure recorded in the last 30 min.
+			if now.Sub(att.lastAttempt) > staleCutoff {
+				delete(s.loginAttempts, ip)
+			}
+			continue
+		}
+		// Locked — prune once the lock has been expired for > 30 min.
+		if now.Sub(att.lockedUntil) > staleCutoff {
 			delete(s.loginAttempts, ip)
 		}
 	}
@@ -679,6 +700,7 @@ func (s *Server) recordLoginFailure(clientIP string) {
 		s.loginAttempts[clientIP] = att
 	}
 	att.count++
+	att.lastAttempt = time.Now()
 	if att.count >= maxAttempts {
 		att.lockedUntil = time.Now().Add(lockDuration)
 		att.count = 0

@@ -154,7 +154,7 @@ func (s *Server) handleAPIGenSSHKey(w http.ResponseWriter, _ *http.Request) {
 
 	log.Printf("[vops] SSH key pair generated → %s", privPath)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"public_key":      strings.TrimSpace(string(pubBytes)),
+		"public_key":       strings.TrimSpace(string(pubBytes)),
 		"private_key_path": privPath,
 	})
 }
@@ -371,13 +371,16 @@ func (s *Server) handleAPISettingsPreferences(w http.ResponseWriter, r *http.Req
 	s.cfg.VOps.UI.Theme = req.Theme
 
 	// Set a cookie for flash-free theme on page reload.
+	// Secure is only set when the connection is already over TLS; on plain HTTP
+	// (local dev / internal network) the flag would cause browsers to silently
+	// drop the cookie and break theme persistence.
 	http.SetCookie(w, &http.Cookie{
 		Name:     "vops_theme",
 		Value:    req.Theme,
 		Path:     "/",
 		SameSite: http.SameSiteStrictMode,
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   r.TLS != nil,
 	})
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "theme": req.Theme})
@@ -404,30 +407,30 @@ func (s *Server) handleAPISettingsDone(w http.ResponseWriter, _ *http.Request) {
 // handleAPIGenAPIKey generates a cryptographically random 32-byte hex API key.
 // GET /settings/api/gen-api-key → {"key": "vops_<64 hex chars>"}
 func (s *Server) handleAPIGenAPIKey(w http.ResponseWriter, _ *http.Request) {
-b := make([]byte, 32)
-if _, err := rand.Read(b); err != nil {
-writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate key"})
-return
-}
-writeJSON(w, http.StatusOK, map[string]string{"key": "vops_" + hex.EncodeToString(b)})
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate key"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"key": "vops_" + hex.EncodeToString(b)})
 }
 
 // handleAPIHashPassword hashes a plaintext password with bcrypt cost=12.
 // POST /settings/api/hash-password  body: {"password":"..."}
 // → {"hash": "$2a$12$..."}
 func (s *Server) handleAPIHashPassword(w http.ResponseWriter, r *http.Request) {
-r.Body = http.MaxBytesReader(w, r.Body, 4096)
-var req struct {
-Password string `json:"password"`
-}
-if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Password) == "" {
-writeJSON(w, http.StatusBadRequest, map[string]string{"error": "password is required"})
-return
-}
-hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
-if err != nil {
-writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "bcrypt failed"})
-return
-}
-writeJSON(w, http.StatusOK, map[string]string{"hash": string(hash)})
+	r.Body = http.MaxBytesReader(w, r.Body, 4096)
+	var req struct {
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Password) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "password is required"})
+		return
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "bcrypt failed"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"hash": string(hash)})
 }

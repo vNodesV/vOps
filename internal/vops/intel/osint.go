@@ -375,7 +375,7 @@ func checkCosmosRPC(ctx context.Context, client *http.Client, baseURL string) (m
 
 // checkIPInfo queries ip-api.com (free, no key, 45 req/min) for geo/org data.
 func checkIPInfo(ctx context.Context, client *http.Client, ip string) (*ipAPIResponse, error) {
-	url := "http://ip-api.com/json/" + ip + "?fields=status,country,countryCode,org,as,query"
+	url := "https://ip-api.com/json/" + ip + "?fields=status,country,countryCode,org,as,query"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err

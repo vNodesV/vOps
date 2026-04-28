@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -97,13 +98,23 @@ func parseVirshIP(out string) string {
 	return ""
 }
 
+// reSafeVMName matches characters that are unsafe in a libvirt domain name.
+// Any character outside [a-zA-Z0-9_.-] is stripped before interpolation into
+// a shell command string.  Mirrors the unexported shellescape in vm/virsh.go.
+var reSafeVMName = regexp.MustCompile(`[^a-zA-Z0-9_.\-]`)
+
+// safeVMName sanitises a libvirt domain name for safe shell interpolation.
+func safeVMName(s string) string {
+	return "'" + reSafeVMName.ReplaceAllString(s, "") + "'"
+}
+
 // probeVMIP tries three virsh domifaddr sources in order (agent → arp → lease)
 // and returns the first IPv4 address found.  agent is tried first because
 // qemu-guest-agent is now installed on all VMs; arp covers bridged VMs without
 // agent; lease covers libvirt-managed NAT networks.
 func (h *Handlers) probeVMIP(hc *fleetssh.Client, dialAddr, vmName string) string {
 	for _, src := range []string{"agent", "arp", "lease"} {
-		cmd := "virsh -c qemu:///system domifaddr " + vmName + " --source " + src + " 2>&1"
+		cmd := "virsh -c qemu:///system domifaddr " + safeVMName(vmName) + " --source " + src + " 2>&1"
 		out, err := h.debugRun(hc, "hypervisor-scan", dialAddr, cmd)
 		if err != nil {
 			continue
@@ -226,7 +237,7 @@ func (h *Handlers) collectVirtTopMetrics(hc *fleetssh.Client, dialAddr string) m
 // "virsh qemu-agent-command guest-get-osinfo".  Runs on the hypervisor — no
 // SSH tunnel into the VM required.
 func (h *Handlers) probeGuestOSInfo(hc *fleetssh.Client, dialAddr, vmName string) string {
-	cmd := `virsh -c qemu:///system qemu-agent-command ` + vmName +
+	cmd := `virsh -c qemu:///system qemu-agent-command ` + safeVMName(vmName) +
 		` '{"execute":"guest-get-osinfo"}' 2>&1`
 	out, err := h.debugRun(hc, "hypervisor-scan", dialAddr, cmd)
 	if err != nil {
@@ -482,8 +493,6 @@ func (h *Handlers) HandleHypervisorScan(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-
-
 // ── POST /api/v1/fleet/vms/register ──────────────────────────────────────────
 
 // registerVMRequest is the JSON body accepted by HandleRegisterDiscoveredVM.
@@ -569,7 +578,6 @@ func (h *Handlers) HandleRegisterDiscoveredVM(w http.ResponseWriter, r *http.Req
 
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "already_registered": false, "file": targetFile})
 }
-
 
 // Query param: hours (default 24, max 48).
 func (h *Handlers) HandleVMHistory(w http.ResponseWriter, r *http.Request) {
@@ -859,9 +867,13 @@ func (h *Handlers) HandleVMUpgrade(w http.ResponseWriter, r *http.Request) {
 	var client *fleetssh.Client
 	if jp := h.svc.Config().ResolveProxyJump(vm); jp != nil {
 		jumpAddr := jp.LanIP
-		if jumpAddr == "" { jumpAddr = jp.Name }
+		if jumpAddr == "" {
+			jumpAddr = jp.Name
+		}
 		jumpPort := jp.Port
-		if jumpPort == 0 { jumpPort = 22 }
+		if jumpPort == 0 {
+			jumpPort = 22
+		}
 		client, err = fleetssh.DialViaProxy(jumpAddr, jumpPort, jp.User, jp.SSHKeyPath, "", vm.Host, vm.Port, vm.User, vm.KeyPath, vm.KnownHostsPath)
 	} else {
 		client, err = fleetssh.Dial(vm.Host, vm.Port, vm.User, vm.KeyPath, vm.KnownHostsPath)

@@ -105,6 +105,10 @@ func (r *Runner) Deploy(vm config.VM, chain, component, script string, dryRun bo
 }
 
 // RunCmd executes an arbitrary command on vm (for diagnostics / one-offs).
+//
+// Deprecated: RunCmd accepts an unrestricted command string and bypasses the
+// allowlist enforced by Deploy. Do not add new callers.
+// Future: replace with an explicit allowlist or remove entirely.
 func (r *Runner) RunCmd(vm config.VM, cmd string) Result {
 	c, err := dialVM(vm)
 	if err != nil {

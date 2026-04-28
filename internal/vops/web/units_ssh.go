@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	fleetssh "github.com/vNodesV/vOps/internal/fleet/ssh"
 )
@@ -53,6 +54,8 @@ func (s *Server) handleUnitLogStream(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// Remove the global write deadline — log streaming must run indefinitely.
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
 	sendEvent := func(step, msg string) {
 		b, _ := json.Marshal(map[string]string{"step": step, "msg": msg})
 		fmt.Fprintf(w, "data: %s\n\n", b)
@@ -185,6 +188,8 @@ func (s *Server) handleUnitDeploy(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// Remove the global write deadline — deploy streaming must run indefinitely.
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
 	sendEvent := func(step, msg string) {
 		b, _ := json.Marshal(map[string]string{"step": step, "msg": msg})
 		fmt.Fprintf(w, "data: %s\n\n", b)
