@@ -351,4 +351,3 @@ func (h *Handlers) HandleHostUpgrade(w http.ResponseWriter, r *http.Request) {
 	sendEvent("upgrade:done", "Upgrade complete")
 	sendEvent("complete", "Upgrade complete on host "+targetHost.Name)
 }
-

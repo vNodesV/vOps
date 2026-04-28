@@ -140,7 +140,8 @@ func (s *Server) handleProxyConfig(w http.ResponseWriter, r *http.Request) {
 // If the log file is not readable (in-process proxy, no file yet, etc.) the
 // stream emits a single "live_not_available" event so the UI can display a
 // friendly message instead of a spinner.
-func (s *Server) handleProxyLogs(w http.ResponseWriter, r *http.Request) {	w.Header().Set("Content-Type", "text/event-stream")
+func (s *Server) handleProxyLogs(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no") // disable nginx buffering

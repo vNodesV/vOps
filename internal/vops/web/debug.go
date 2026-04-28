@@ -17,8 +17,8 @@ const debugRingSize = 200
 type DebugEvent struct {
 	ID         int64  `json:"id"`
 	Time       string `json:"time"`
-	Source     string `json:"source"`      // e.g. "hypervisor-scan", "host-scan", "vm-action"
-	Host       string `json:"host"`        // dial address used
+	Source     string `json:"source"` // e.g. "hypervisor-scan", "host-scan", "vm-action"
+	Host       string `json:"host"`   // dial address used
 	Command    string `json:"command"`
 	Output     string `json:"output,omitempty"`
 	Error      string `json:"error,omitempty"`
