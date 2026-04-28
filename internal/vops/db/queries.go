@@ -845,8 +845,9 @@ WHERE day >= date('now', ?) ORDER BY day`
 	}
 	defer rows.Close()
 
-	var labels []string
-	var newVals, totalVals []float64
+	labels := make([]string, 0)
+	newVals := make([]float64, 0)
+	totalVals := make([]float64, 0)
 	for rows.Next() {
 		var day string
 		var n, total int64
@@ -926,8 +927,9 @@ WHERE day >= date('now', ?) ORDER BY day`
 	}
 	defer rows.Close()
 
-	var labels []string
-	var newVals, totalVals []float64
+	labels := make([]string, 0)
+	newVals := make([]float64, 0)
+	totalVals := make([]float64, 0)
 	for rows.Next() {
 		var day string
 		var n, total int64

@@ -70,10 +70,10 @@ function BlockIcon() {
 /* ── Transform ChartSeries to Recharts data ──────────────────── */
 
 function toRechartsData(cs: ChartSeries): Array<Record<string, string | number>> {
-  return cs.labels.map((label, i) => {
+  return (cs.labels ?? []).map((label, i) => {
     const point: Record<string, string | number> = { label };
-    for (const s of cs.series) {
-      point[s.name] = s.values[i] ?? 0;
+    for (const s of cs.series ?? []) {
+      point[s.name] = (s.values ?? [])[i] ?? 0;
     }
     return point;
   });
@@ -89,7 +89,7 @@ function ChartPanel({ title, queryKey, chartType }: { title: string; queryKey: s
   });
 
   if (isLoading) return <Spinner label={`Loading ${title}`} />;
-  if (isError || !data || !('labels' in data)) {
+  if (isError || !data || !('labels' in data) || !Array.isArray((data as ChartSeries).labels)) {
     return (
       <div className="flex items-center justify-center h-[250px] text-sm" style={{ color: 'var(--vn-text-muted)' }}>
         No chart data available
@@ -127,7 +127,7 @@ function ChartPanel({ title, queryKey, chartType }: { title: string; queryKey: s
               fontSize: 12,
             }}
           />
-          {data.series.map((s) => (
+          {(data.series ?? []).map((s) => (
             <Line
               key={s.name}
               type="monotone"
