@@ -13,7 +13,18 @@ import (
 
 // Config is the top-level structure for vops.toml.
 type Config struct {
-	VOps VOpsSection `toml:"vops"`
+	VOps  VOpsSection  `toml:"vops"`
+	Vprox VproxSection `toml:"vprox"`
+}
+
+// VproxSection holds suite-mode settings for the embedded vProx proxy server.
+// When config_path is non-empty, `vops start` will co-launch vProx alongside
+// the management panel under a shared errgroup context.
+type VproxSection struct {
+	// ConfigPath is the path to the vProx configuration directory.
+	// When empty (default), vProx is NOT started in suite mode.
+	// Example: config_path = "/opt/vOps/config/vprox"
+	ConfigPath string `toml:"config_path"`
 }
 
 // VOpsSection holds all vOps settings.

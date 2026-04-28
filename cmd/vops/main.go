@@ -15,6 +15,8 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/vNodesV/vOps/internal/fleet"
 	fleetcfg "github.com/vNodesV/vOps/internal/fleet/config"
 	"github.com/vNodesV/vOps/internal/vops/config"
@@ -450,30 +452,55 @@ func cmdStart(f flags) int {
 		return 1
 	}
 
-	serverErr := make(chan error, 1)
-	go func() {
-		if err := server.Start(); err != nil && err != http.ErrServerClosed {
-			serverErr <- err
+	// Suite mode: co-launch vProx when config_path is configured in [vprox].
+	// Both subsystems run under a shared errgroup context so that a fatal
+	// error in either causes the other to shut down cleanly.
+	var proxyCtrl *vprox.Controller
+	if cfg.Vprox.ConfigPath != "" {
+		proxyCfg := vprox.Config{
+			Home:    cfg.Vprox.ConfigPath,
+			Verbose: f.verbose,
 		}
-		close(serverErr)
-	}()
+		proxyCtrl = vprox.NewController(proxyCfg)
+		if !f.quiet {
+			fmt.Fprintf(os.Stdout, "  proxy:    suite mode (config: %s)\n", cfg.Vprox.ConfigPath)
+		}
+	}
+	_ = proxyCtrl // used in errgroup below
 
-	if !f.quiet {
-		fmt.Fprintf(os.Stdout, "Listening on :%d\n", cfg.VOps.Port)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
+
+	eg, egCtx := errgroup.WithContext(ctx)
+
+	// Launch vOps management panel.
+	eg.Go(func() error {
+		if !f.quiet {
+			fmt.Fprintf(os.Stdout, "Listening on :%d\n", cfg.VOps.Port)
+		}
+		if err := server.Start(); err != nil && err != http.ErrServerClosed {
+			return fmt.Errorf("vops panel: %w", err)
+		}
+		return nil
+	})
+
+	// Launch vProx proxy (suite mode only).
+	if proxyCtrl != nil {
+		eg.Go(func() error {
+			return proxyCtrl.Start(egCtx)
+		})
 	}
 
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
+	// Shutdown coordinator: cancel the errgroup context when parent ctx is done
+	// (signal received), then wait for all goroutines.
+	eg.Go(func() error {
+		<-egCtx.Done()
+		return nil
+	})
 
-	select {
-	case sig := <-sigCh:
-		if !f.quiet {
-			fmt.Fprintf(os.Stdout, "\nReceived %s, shutting down...\n", sig)
-		}
-	case err := <-serverErr:
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "vops: server error: %v\n", err)
-		}
+	// Wait for all goroutines. First non-nil error wins.
+	if err := eg.Wait(); err != nil {
+		fmt.Fprintf(os.Stderr, "vops: %v\n", err)
 	}
 
 	if watcher != nil {
@@ -481,6 +508,9 @@ func cmdStart(f flags) int {
 	}
 	if enricher != nil {
 		enricher.Stop()
+	}
+	if proxyCtrl != nil {
+		proxyCtrl.Stop()
 	}
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)

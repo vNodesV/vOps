@@ -127,3 +127,11 @@ read_timeout_sec = 30
 # Maximum seconds to write a complete HTTP response.
 # Default: 30
 write_timeout_sec = 30
+
+# [vprox] — Embedded vProx proxy suite mode.
+# When config_path is non-empty, vops start will co-launch the vProx
+# reverse proxy alongside the management panel under a shared context.
+# Leave empty (default) to run the management panel standalone.
+[vprox]
+# config_path = "/opt/vOps/config/vprox"
+config_path = ""
