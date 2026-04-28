@@ -3,7 +3,9 @@ package vprox
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"sync"
+	"time"
 )
 
 // Status represents the running state of a Controller-managed Server.
@@ -36,9 +38,10 @@ func (s Status) String() string {
 type Controller struct {
 	cfg Config
 
-	mu     sync.Mutex
-	status Status
-	lastErr error
+	mu        sync.Mutex
+	status    Status
+	lastErr   error
+	startedAt time.Time // zero until first successful Start
 
 	server *Server
 	cancel context.CancelFunc
@@ -74,6 +77,7 @@ func (c *Controller) Start(parentCtx context.Context) error {
 	c.done = done
 	c.status = StatusStarting
 	c.lastErr = nil
+	c.startedAt = time.Now()
 
 	go func() {
 		defer close(done)
@@ -135,6 +139,41 @@ func (c *Controller) State() (Status, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.status, c.lastErr
+}
+
+// UptimeSec returns seconds since the controller last called Start.
+// Returns 0 if the server has never been started or is currently stopped/errored.
+func (c *Controller) UptimeSec() int64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.status != StatusRunning && c.status != StatusStarting {
+		return 0
+	}
+	if c.startedAt.IsZero() {
+		return 0
+	}
+	return int64(time.Since(c.startedAt).Seconds())
+}
+
+// ConfigFilePath returns the path to the vProx settings TOML file
+// (i.e. $VPROX_HOME/config/vprox/settings.toml).
+func (c *Controller) ConfigFilePath() string {
+	return filepath.Join(c.cfg.Home, "config", "vprox", "settings.toml")
+}
+
+// Home returns the vProx home directory configured for this controller.
+func (c *Controller) Home() string { return c.cfg.Home }
+
+// LogFilePath returns the expected path to the main vProx log file
+// (i.e. $VPROX_HOME/data/logs/main.log), honouring the LogFile override if set.
+func (c *Controller) LogFilePath() string {
+	if c.cfg.LogFile != "" {
+		if filepath.IsAbs(c.cfg.LogFile) {
+			return c.cfg.LogFile
+		}
+		return filepath.Join(c.cfg.Home, "data", "logs", c.cfg.LogFile)
+	}
+	return filepath.Join(c.cfg.Home, "data", "logs", "main.log")
 }
 
 // Wait blocks until the server goroutine exits.

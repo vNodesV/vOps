@@ -468,6 +468,10 @@ func cmdStart(f flags) int {
 	}
 	_ = proxyCtrl // used in errgroup below
 
+	// Wire the proxy controller into the web server so the /api/v1/proxy/*
+	// endpoints can control and query the embedded vProx instance.
+	server.SetProxyController(proxyCtrl)
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 

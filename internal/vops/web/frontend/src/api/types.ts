@@ -356,3 +356,10 @@ export interface BannedIPEntry {
   reason: string;
   remaining_seconds: number;
 }
+
+// Embedded vProx proxy management
+export interface ProxyStatus {
+  status: 'running' | 'stopped' | 'starting' | 'error' | 'not_configured';
+  error: string;
+  uptime_sec: number;
+}

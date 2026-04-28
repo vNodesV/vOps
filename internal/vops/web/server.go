@@ -37,6 +37,7 @@ import (
 	"github.com/vNodesV/vOps/internal/vops/services"
 	"github.com/vNodesV/vOps/internal/vops/units"
 	"github.com/vNodesV/vOps/internal/vops/vm"
+	"github.com/vNodesV/vOps/internal/vprox"
 )
 
 //go:embed static dist
@@ -82,6 +83,10 @@ type Server struct {
 
 	// In-memory auto-ban store for rate-limit offenders.
 	autoBan *autoBanStore
+
+	// Embedded vProx controller — nil when vProx is not configured.
+	// Injected after construction via SetProxyController.
+	proxyCtrl *vprox.Controller
 }
 
 // loginAttempt tracks failed login attempts for a single source IP.
@@ -430,6 +435,22 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	mux.Handle("POST /api/v1/multiprox/{name}/update",
 		s.requireSession(http.HandlerFunc(s.multiproxMgr.HandleUpdate)))
 
+	// Embedded vProx proxy management routes.
+	mux.Handle("GET /api/v1/proxy/status",
+		s.requireSession(http.HandlerFunc(s.handleProxyStatus)))
+	mux.Handle("POST /api/v1/proxy/start",
+		s.requireSession(http.HandlerFunc(s.handleProxyStart)))
+	mux.Handle("POST /api/v1/proxy/stop",
+		s.requireSession(http.HandlerFunc(s.handleProxyStop)))
+	mux.Handle("POST /api/v1/proxy/restart",
+		s.requireSession(http.HandlerFunc(s.handleProxyRestart)))
+	mux.Handle("GET /api/v1/proxy/config",
+		s.requireSession(http.HandlerFunc(s.handleProxyConfig)))
+	mux.Handle("POST /api/v1/proxy/config",
+		s.requireSession(http.HandlerFunc(s.handleProxyConfig)))
+	mux.Handle("GET /api/v1/proxy/logs",
+		s.requireSession(http.HandlerFunc(s.handleProxyLogs)))
+
 	readTimeout := time.Duration(cfg.VOps.Server.ReadTimeoutSec) * time.Second
 	writeTimeout := time.Duration(cfg.VOps.Server.WriteTimeoutSec) * time.Second
 
@@ -459,6 +480,14 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	}
 
 	return s, nil
+}
+
+// SetProxyController injects an optional vProx controller into the web server.
+// Call this after New() and before Start(). Passing nil is a no-op.
+func (s *Server) SetProxyController(c *vprox.Controller) {
+	if c != nil {
+		s.proxyCtrl = c
+	}
 }
 
 // Start begins listening on the configured port. It blocks until the

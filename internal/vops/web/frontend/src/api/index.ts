@@ -366,3 +366,40 @@ export const unbanIP = (ip: string) =>
   apiFetch<{ ok: boolean }>(`/api/v1/intel/banned/${encodeURIComponent(ip)}/unban`, {
     method: 'POST',
   });
+
+// Embedded vProx proxy management
+export const getProxyStatus = () =>
+  apiFetch<import('./types').ProxyStatus>('/api/v1/proxy/status');
+
+export const proxyStart = () =>
+  apiPost<{ status: string }>('/api/v1/proxy/start', {});
+
+export const proxyStop = () =>
+  apiPost<{ status: string }>('/api/v1/proxy/stop', {});
+
+export const proxyRestart = () =>
+  apiPost<{ status: string }>('/api/v1/proxy/restart', {});
+
+export const getProxyConfig = () =>
+  fetch(
+    (document.querySelector<HTMLMetaElement>('meta[name="vops-base"]')?.content ?? '').replace(/\/$/, '') +
+      '/api/v1/proxy/config',
+    { credentials: 'include' },
+  ).then((r) => {
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.text();
+  });
+
+export const saveProxyConfig = (toml: string) =>
+  fetch(
+    (document.querySelector<HTMLMetaElement>('meta[name="vops-base"]')?.content ?? '').replace(/\/$/, '') +
+      '/api/v1/proxy/config',
+    {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'text/plain' },
+      body: toml,
+    },
+  ).then((r) => {
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  });

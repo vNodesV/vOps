@@ -16,10 +16,10 @@ import AccountDetail from './pages/AccountDetail';
 import LoginPage from './pages/Login';
 import SettingsPage from './pages/settings';
 import OperationsPage from './pages/Operations';
-import ServicesPage from './pages/CosmosNodes';
 import TopologyPage from './pages/Topology';
 import MultiProxPage from './pages/MultiProx';
 import AuditPage from './pages/Audit';
+import ProxyPage from './pages/proxy';
 import DebugPanel from './components/DebugPanel';
 import { logout, getDebugMode, setDebugMode } from './api';
 import { BASE } from './api/client';
@@ -83,9 +83,9 @@ function Shell({ children }: { children: React.ReactNode }) {
 
   const primaryLinks = [
     { to: '/', label: 'Dashboard', end: true },
+    { to: '/proxy', label: 'Proxy', end: false },
     { to: '/accounts', label: 'IP Accounts', end: false },
     { to: '/ops', label: 'Operations Center', end: false },
-    { to: '/services', label: 'Cosmos Nodes', end: false },
   ];
 
   const moreLinks = [
@@ -266,7 +266,8 @@ export default function App() {
               <Route path="/accounts/:ip" element={<AccountDetail />} />
               <Route path="/vms" element={<Navigate to="/ops" replace />} />
               <Route path="/ops" element={<OperationsPage />} />
-              <Route path="/services" element={<ServicesPage />} />
+              <Route path="/proxy" element={<ProxyPage />} />
+              <Route path="/services" element={<Navigate to="/settings" replace />} />
               <Route path="/topology" element={<TopologyPage />} />
               <Route path="/multiprox" element={<MultiProxPage />} />
               <Route path="/audit" element={<AuditPage />} />
