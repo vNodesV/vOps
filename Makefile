@@ -47,11 +47,11 @@ DIR_LIST := $(DATA_DIR) $(LOG_DIR) $(CFG_DIR) $(CFG_DIR)/chains $(CFG_DIR)/backu
 # Injected into the "# rev: {{SAMPLE_REV}}" placeholder in every .sample file at install/refresh time.
 SAMPLE_REV := r5_031126_0
 
-# GeoLocation database — bundled in assets/geo/, extracted to user data dir
-GEO_DB_SRC := assets/geo/ip2location.mmdb.gz
+# GeoLocation database — bundled in assets/_geo/, extracted to user data dir
+GEO_DB_SRC := assets/_geo/ip2location.mmdb.gz
 GEO_DB_DST := $(GEO_DIR)/ip2location.mmdb
 
-ENV_FILE := $(VPROX_HOME)/.env
+ENV_FILE := $(VPROX_HOME)/._env
 
 # Validate Go environment
 GOPATH := $(shell go env GOPATH)
@@ -69,9 +69,9 @@ _GO_VERSION       := $(shell go version | awk '{print $$3}')
 _TOOLCHAIN_GOROOT := $(shell find $(GOPATH)/pkg/mod/golang.org -maxdepth 1 -name "toolchain@v0.0.1-$(_GO_VERSION).*" 2>/dev/null | head -1)
 EFFECTIVE_GOROOT  := $(if $(_TOOLCHAIN_GOROOT),$(_TOOLCHAIN_GOROOT),$(GOROOT))
 
-# Public targets only — internal helpers (dirs, geo, config-*, env, frontend, …) are intentionally
+# Public targets only — internal helpers (_dirs, _geo, config-*, _env, _frontend, …) are intentionally
 # excluded from .PHONY so they don't pollute tab-completion.
-.PHONY: all help install build build-vops build-vprox release-vops \
+.PHONY: all help install build build-vops release-vops \
         clean ufw reset-services service-vops system-user-vops \
         bump-patch bump-minor bump-major
 
@@ -87,8 +87,7 @@ help:
 	@echo "  make build            Build vOps binary → .build/vOps"
 	@echo "  make build-vops       Build vOps binary → .build/vOps (rebuilds frontend if Node available)"
 	@echo "  make reset-services   Stop + remove stale service units (vProx, vLog) before fresh deploy"
-	@echo "  make build-vprox      [legacy — scheduled for removal in v1.4.0] Build standalone vProx binary → .build/vProx"
-	@echo "  make release-vops     Cross-compile linux/amd64 → vops-linux-amd64, commit + push"
+		@echo "  make release-vops     Cross-compile linux/amd64 → vops-linux-amd64, commit + push"
 	@echo "  make clean            Remove local build artifacts"
 	@echo "  make ufw              Passwordless UFW + apt sudoers for vOps"
 	@echo ""
@@ -109,11 +108,11 @@ help:
 	@echo "  Add chains to: $(VPROX_HOME)/config/chains/{chain}.toml"
 	@echo ""
 
-## Full install — build + config + systemd for vOps.
-## Phases: validate-go → dirs → geo → config → env → samples → frontend → build → symlinks → systemd
+## Full install — build + config + service for vOps.
+## Phases: validate-go → dirs → geo → config → env → samples → frontend → build → symlinks → service
 ## Each optional step (symlinks, service registration, sudoers) prompts for confirmation.
 
-install: validate-go dirs geo config config-vops config-vprox config-modules env samples-fleet frontend
+install: _validate-go _dirs _geo _config _config-vops _config-vprox _config-modules _env _samples-fleet _frontend
 	@echo ""
 	@echo "── Building vOps ────────────────────────────────────────────────────────"
 	GOROOT="$(EFFECTIVE_GOROOT)" go build -ldflags "$(VOPS_LDFLAGS)" -o "$(GOPATH_BIN)/$(VOPS_NAME)" "$(VOPS_SRC)"
@@ -153,7 +152,7 @@ install: validate-go dirs geo config config-vops config-vprox config-modules env
 
 ## Validate Go environment
 
-validate-go:
+_validate-go:
 	@echo "Validating Go environment..."
 	@if [[ -z "$(GOROOT)" ]]; then \
 		echo "ERROR: GOROOT is not set. Please ensure Go is properly installed."; \
@@ -172,7 +171,7 @@ validate-go:
 
 ## Create required folders under $HOME/.vProx
 
-dirs:
+_dirs:
 	@echo "Inspecting directory structure..."
 	@for dir in $(DIR_LIST); do \
 		if [[ ! -d "$$dir" ]]; then \
@@ -186,7 +185,7 @@ dirs:
 
 ## Install GEO DB — decompress from bundled .gz
 
-geo:
+_geo:
 	@echo "Installing GeoLocation database..."
 	@if [[ ! -f "$(GEO_DB_SRC)" ]]; then \
 		echo "WARNING: GEO DB not found at $(GEO_DB_SRC)"; \
@@ -197,9 +196,9 @@ geo:
 		echo "✓ Installed GEO DB to $(GEO_DB_DST)"; \
 	fi
 
-## Create .env if missing
+## Create ._env if missing
 
-env:
+_env:
 	@echo "Setting up environment configuration..."
 	@if [[ ! -f "$(ENV_FILE)" ]]; then \
 		echo "# Geolocation database paths" > "$(ENV_FILE)"; \
@@ -224,9 +223,9 @@ env:
 		echo "✓ $(ENV_FILE) already exists"; \
 	fi
 
-## Install live config defaults (services.toml → ports.toml fallback, backup.toml) — samples handled by samples-fleet
+## Install live _config defaults (services.toml → ports.toml fallback, backup.toml) — samples handled by _samples-fleet
 
-config: dirs config-modules
+_config: _dirs _config-modules
 	@if [[ ! -f "$(CFG_DIR)/chains/services.toml" && ! -f "$(CFG_DIR)/chains/ports.toml" && ! -f "$(CFG_DIR)/ports.toml" ]]; then \
 		echo "Creating default services.toml..."; \
 		if [[ -f ".samples/chains/services.sample" ]]; then \
@@ -247,7 +246,7 @@ config: dirs config-modules
 			echo "✓ Created $(CFG_DIR)/chains/ports.toml (minimal fallback)"; \
 		fi \
 	else \
-		echo "✓ Port/service config already exists (services.toml or ports.toml)"; \
+		echo "✓ Port/service _config already exists (services.toml or ports.toml)"; \
 	fi
 	@if [[ ! -f "$(CFG_DIR)/backup/backup.toml" ]]; then \
 		if [[ -f ".samples/backup/backup.sample" ]]; then \
@@ -262,7 +261,7 @@ config: dirs config-modules
 
 ## Install proxy settings reference (settings.toml) — only sample, never overwrites live
 
-config-vprox: dirs
+_config-vprox: _dirs
 	@mkdir -p "$(CFG_DIR)/vprox"
 	@if [[ -f ".samples/vprox/settings.sample" ]]; then \
 		sed "s/{{SAMPLE_REV}}/$(SAMPLE_REV)/" ".samples/vprox/settings.sample" > "$(CFG_DIR)/vprox/settings.sample"; \
@@ -276,10 +275,10 @@ config-vprox: dirs
 		echo "NOTE: .samples/vprox/settings.sample not found in repo; skipping"; \
 	fi
 
-## Overwrite ALL sample files in SAMPLES_DIR (~/.vProx/.samples/) — safe to run anytime; never touches live config.
+## Overwrite ALL sample files in SAMPLES_DIR (~/.vProx/.samples/) — safe to run anytime; never touches live _config.
 ## When a sample already exists, it is archived to SAMPLES_DIR/archives/<old_rev>/<subfolder>/
 ## before the new version is written, so every prior revision is recoverable.
-samples-fleet:
+_samples-fleet:
 	@mkdir -p \
 		"$(SAMPLES_DIR)/chains"       "$(SAMPLES_DIR)/backup" \
 		"$(SAMPLES_DIR)/vops"         "$(SAMPLES_DIR)/infra" \
@@ -312,7 +311,7 @@ samples-fleet:
 
 ## Install modules registry stub
 
-config-modules:
+_config-modules:
 	@if [[ ! -f "$(CFG_DIR)/modules.toml" ]]; then \
 		printf '# modules.toml — managed module registry\n# Use: vprox mod add <chain> <component>\n' \
 			> "$(CFG_DIR)/modules.toml"; \
@@ -327,7 +326,7 @@ build: build-vops
 ## Build vProx binary to .build/vProx
 ## LEGACY — scheduled for removal in v1.4.0.
 ## Use `vops vprox --start` (suite mode) or `vops vprox --daemon` instead.
-build-vprox:
+_build-vprox:
 	@echo "Building $(APP_NAME)..."
 	mkdir -p "$(BUILD_DIR)"
 	GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(BUILD_OUT)" "$(BUILD_SRC)"
@@ -341,124 +340,33 @@ clean:
 	rm -rf "$(BUILD_DIR)" "./$(APP_NAME)"
 	@echo "✓ Clean"
 
-## Create or update systemd service file
-
-systemd:
-	@echo "Rendering local systemd service file..."
-	@mkdir -p "$(SERVICE_DIR)"
-	@TMP_RENDERED="$$(mktemp)"; \
-	sed "s|__HOME__|$(HOME)|g; s|__USER__|$(USER)|g" vprox.service.template > "$$TMP_RENDERED"; \
-	if [[ -f "$(SERVICE_PATH)" ]]; then \
-		if cmp -s "$$TMP_RENDERED" "$(SERVICE_PATH)"; then \
-			echo "✓ Local vProx.service already up to date"; \
-		else \
-			echo "⚠ Local vProx.service differs from template; applying update..."; \
-			cp "$$TMP_RENDERED" "$(SERVICE_PATH)"; \
-			echo "✓ Updated $(SERVICE_PATH)"; \
-			echo "⚠ This version generated a new service file. Review it and replace the current system service if needed."; \
-		fi; \
-	else \
-		echo "Creating new local systemd service file..."; \
-		cp "$$TMP_RENDERED" "$(SERVICE_PATH)"; \
-		echo "✓ Created $(SERVICE_PATH)"; \
-	fi; \
-	rm -f "$$TMP_RENDERED"
-	@echo ""
-	@echo "The next step installs the generated service in /etc/systemd/system and requires sudo."
-	@read -p "Do you want to install the systemd service now? (y/n) " -n 1 -r; echo ""; \
-	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-		if sudo cp "$(SERVICE_PATH)" "/etc/systemd/system/vProx.service" && \
-		   sudo systemctl daemon-reload && \
-		   sudo systemctl enable vProx.service; \
-		then \
-			echo "✓ vProx.service installed."; \
-			echo "  Start with: vProx start -d  (or: sudo service vProx start)"; \
-		else \
-			echo "✗ Failed to install vProx.service. Check 'sudo systemctl status vProx.service'."; \
-		fi; \
-	else \
-		echo "✓ Skipped systemd service installation. You can install manually with:"; \
-		echo "  sudo cp $(SERVICE_PATH) /etc/systemd/system/vProx.service"; \
-		echo "  sudo systemctl daemon-reload"; \
-		echo "  sudo systemctl enable vProx.service"; \
-	fi;
-	@echo ""
-	@SUDOERS_FILE="/etc/sudoers.d/vprox"; \
-	VPROX_LINE="$(USER) ALL=(ALL) NOPASSWD: /usr/sbin/service vProx start, /usr/sbin/service vProx stop, /usr/sbin/service vProx restart"; \
-	VOPS_LINE="$(USER) ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop $(VOPS_NAME), /usr/bin/systemctl start $(VOPS_NAME), /usr/bin/systemctl restart $(VOPS_NAME)"; \
-	MISSING=0; \
-	if [[ -f "$$SUDOERS_FILE" ]]; then \
-		sudo grep -qF "$$VPROX_LINE" "$$SUDOERS_FILE" || MISSING=1; \
-		sudo grep -qF "$$VOPS_LINE"  "$$SUDOERS_FILE" || MISSING=1; \
-		if [[ "$$MISSING" = "0" ]]; then \
-			echo "✓ Sudoers rules already configured ($$SUDOERS_FILE)"; \
-		else \
-			echo "⚠ $$SUDOERS_FILE exists but is missing rules. Current content:"; \
-			sudo cat "$$SUDOERS_FILE"; \
-			echo "  Desired content:"; \
-			printf "    %s\n    %s\n" "$$VPROX_LINE" "$$VOPS_LINE"; \
-			echo ""; \
-			read -p "Overwrite with updated rules? (y/n) " -n 1 -r; echo ""; \
-			if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-				printf "%s\n%s\n" "$$VPROX_LINE" "$$VOPS_LINE" | sudo tee "$$SUDOERS_FILE" > /dev/null; \
-				sudo chmod 0440 "$$SUDOERS_FILE"; \
-				echo "✓ Updated $$SUDOERS_FILE"; \
-			else \
-				echo "✓ Skipped sudoers update"; \
-			fi; \
-		fi; \
-	else \
-		echo "Setting up passwordless service management for $(USER)..."; \
-		echo "  Grants NOPASSWD: vProx start|stop|restart + $(VOPS_NAME) systemctl stop|start|restart"; \
-		read -p "Create sudoers rules? (y/n) " -n 1 -r; echo ""; \
-		if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-			printf "%s\n%s\n" "$$VPROX_LINE" "$$VOPS_LINE" | sudo tee "$$SUDOERS_FILE" > /dev/null; \
-			sudo chmod 0440 "$$SUDOERS_FILE"; \
-			echo "✓ Created $$SUDOERS_FILE"; \
-		else \
-			echo "✓ Skipped. Create manually:"; \
-			echo "  printf '%s\\n%s\\n' '$$VPROX_LINE' '$$VOPS_LINE' | sudo tee $$SUDOERS_FILE"; \
-			echo "  sudo chmod 0440 $$SUDOERS_FILE"; \
-		fi; \
-	fi
-	@if [[ -f "/etc/sudoers.d/vlog" ]]; then \
-		echo ""; \
-		echo "⚠ Stale file /etc/sudoers.d/vlog found (old vLog era — superseded by vops)."; \
-		echo "  Content:"; sudo cat /etc/sudoers.d/vlog; \
-		read -p "Remove /etc/sudoers.d/vlog? (y/n) " -n 1 -r; echo ""; \
-		if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-			sudo rm /etc/sudoers.d/vlog; \
-			echo "✓ Removed /etc/sudoers.d/vlog"; \
-		fi; \
-	fi
-
 ## ─── vOps targets ────────────────────────────────────────────────────────────
 
 ## Build vOps binary to .build/vOps  (does NOT rebuild vProx)
 
-## Build the React + Vite frontend SPA (output goes to internal/vops/web/dist/)
-frontend:
-	@echo "Building vOps frontend (React + Vite)..."
+## Build the React + Vite _frontend SPA (output goes to internal/vops/web/dist/)
+_frontend:
+	@echo "Building vOps _frontend (React + Vite)..."
 	@HAVE_NODE=0; \
 	if command -v node >/dev/null 2>&1; then HAVE_NODE=1; \
 	elif [ -s "$$HOME/.nvm/nvm.sh" ]; then \
 		export NVM_DIR="$$HOME/.nvm" && . "$$NVM_DIR/nvm.sh" && HAVE_NODE=1; \
 	fi; \
 	if [ "$$HAVE_NODE" = "0" ]; then \
-		echo "  ℹ  Node.js not found — skipping frontend build (using committed dist/)"; \
+		echo "  ℹ  Node.js not found — skipping _frontend build (using committed dist/)"; \
 	else \
-		cd internal/vops/web/frontend && npm install && npm audit fix && npm run build; \
+		cd internal/vops/web/_frontend && npm install && npm audit fix && npm run build; \
 		echo "✓ Frontend built → internal/vops/web/dist/"; \
 	fi
 
-build-vops: frontend
+build-vops: _frontend
 	@echo "Building $(VOPS_NAME) (service keeps running during compile)..."
 	mkdir -p "$(BUILD_DIR)"
 	GOROOT="$(EFFECTIVE_GOROOT)" go build -ldflags "$(VOPS_LDFLAGS)" -o "$(VOPS_BUILD)" "$(VOPS_SRC)"
 	@echo "✓ Build complete — Binary: $(VOPS_BUILD)"
 	@VOPS_SC_LINE="$(USER) ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop $(VOPS_NAME), /usr/bin/systemctl start $(VOPS_NAME), /usr/bin/systemctl restart $(VOPS_NAME)"; \
 	if ! ([[ -f "/etc/sudoers.d/vprox" ]] && grep -qF "$$VOPS_SC_LINE" /etc/sudoers.d/vprox); then \
-		echo "  ⚠ Passwordless systemctl not configured — run 'make systemd' to avoid password prompt."; \
+		echo "  ⚠ Passwordless systemctl not configured — run 'make service-vops' to configure sudoers."; \
 	fi
 	@echo "Stopping $(VOPS_NAME) service for swap..."
 	@sudo systemctl stop "$(VOPS_NAME)" 2>/dev/null && echo "  ✓ $(VOPS_NAME) stopped" || echo "  ○ $(VOPS_NAME) was not running"
@@ -492,7 +400,7 @@ reset-services:
 ## Run this on macOS (or any dev machine) to deploy via git pull on the server.
 ## Usage: make release-vops  (optionally: make release-vops VOPS_VERSION=0.2.0)
 
-release-vops: frontend
+release-vops: _frontend
 	@echo "Cross-compiling vOps $(VOPS_VERSION) for linux/amd64..."
 	mkdir -p "$(BUILD_DIR)"
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOROOT="$(EFFECTIVE_GOROOT)" \
@@ -508,8 +416,8 @@ release-vops: frontend
 
 ## Install .samples/vops/vops.sample → $(VOPS_HOME)/config/vops/vops.toml (only if absent)
 
-config-vops: dirs
-	@echo "Installing vOps config..."
+_config-vops: _dirs
+	@echo "Installing vOps _config..."
 	@mkdir -p "$(VOPS_HOME)/config/vops"
 	@if [[ -f ".samples/vops/vops.sample" ]]; then \
 		if [[ ! -f "$(VOPS_HOME)/config/vops/vops.toml" ]]; then \
@@ -530,7 +438,7 @@ config-vops: dirs
 				echo "│  1. Generate your key:                                          │"; \
 				echo "│       openssl rand -hex 32                                      │"; \
 				echo "│                                                                 │"; \
-				echo "│  2. Add it to your config:                                      │"; \
+				echo "│  2. Add it to your _config:                                      │"; \
 				echo "│       $(VOPS_HOME)/config/vops/vops.toml"; \
 				echo "│     under [vops]:                                               │"; \
 				echo "│       api_key = \"your-generated-key\"                            │"; \
@@ -543,7 +451,7 @@ config-vops: dirs
 				echo "  ℹ  base_path not set — if vOps is served at a sub-path (e.g. /vops)"; \
 				echo "     add to $(VOPS_HOME)/config/vops/vops.toml under [vops]:"; \
 				echo "       base_path = \"/vops\""; \
-				echo "     See .vscode/vops.apache2 for the matching Apache config."; \
+				echo "     See .vscode/vops.apache2 for the matching Apache _config."; \
 				echo ""; \
 			fi; \
 		fi; \
