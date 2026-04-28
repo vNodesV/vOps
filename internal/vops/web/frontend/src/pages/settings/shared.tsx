@@ -313,7 +313,11 @@ export function parseTOML(raw: string): Record<string, string> {
   for (const line of (raw || '').split('\n')) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#')) continue;
-    if (trimmed.startsWith('[[')) continue;
+    // [[array]] section headers — treat like [section] so fields inside are accessible
+    if (trimmed.startsWith('[[') && trimmed.endsWith(']]')) {
+      section = trimmed.slice(2, -2).trim();
+      continue;
+    }
     if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
       section = trimmed.slice(1, -1).trim();
       continue;
@@ -329,6 +333,11 @@ export function parseTOML(raw: string): Record<string, string> {
       if (hi > 0) val = val.slice(0, hi).trim();
     }
     result[section ? `${section}.${key}` : key] = val;
+    // For dotted keys (e.g. rate_limit.rps), also store without the section prefix
+    // so panels can look up keys directly by their dotted form.
+    if (key.includes('.') && section) {
+      result[key] = val;
+    }
   }
   return result;
 }

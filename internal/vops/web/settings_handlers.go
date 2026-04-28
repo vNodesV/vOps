@@ -335,8 +335,8 @@ func (s *Server) handleAPISettingsPreferences(w http.ResponseWriter, r *http.Req
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
 		return
 	}
-	if req.Theme != "vnodes" && req.Theme != "dark-blue" && req.Theme != "light-blue" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unknown theme: must be vnodes, dark-blue, or light-blue"})
+	if req.Theme != "axiom" && req.Theme != "vthemedgr" && req.Theme != "vthemedbl" && req.Theme != "vthemedlite" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unknown theme: must be axiom, vthemedgr, vthemedbl, or vthemedlite"})
 		return
 	}
 

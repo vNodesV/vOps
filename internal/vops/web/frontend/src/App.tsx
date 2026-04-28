@@ -16,7 +16,7 @@ import AccountDetail from './pages/AccountDetail';
 import LoginPage from './pages/Login';
 import SettingsPage from './pages/settings';
 import OperationsPage from './pages/Operations';
-import ServicesPage from './pages/Services';
+import ServicesPage from './pages/CosmosNodes';
 import TopologyPage from './pages/Topology';
 import MultiProxPage from './pages/MultiProx';
 import AuditPage from './pages/Audit';
@@ -66,10 +66,10 @@ function Shell({ children }: { children: React.ReactNode }) {
   const handleThemeChange = (id: string) => {
     setCurrentTheme(id);
     applyTheme(id);
-    fetch(BASE + '/api/v1/settings/config', {
+    fetch(BASE + '/settings/api/config/preferences', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ section: 'preferences', data: { theme: id } }),
+      body: JSON.stringify({ theme: id }),
       credentials: 'include',
     }).catch(() => {});
   };
@@ -85,7 +85,7 @@ function Shell({ children }: { children: React.ReactNode }) {
     { to: '/', label: 'Dashboard', end: true },
     { to: '/accounts', label: 'IP Accounts', end: false },
     { to: '/ops', label: 'Operations Center', end: false },
-    { to: '/services', label: 'Services', end: false },
+    { to: '/services', label: 'Cosmos Nodes', end: false },
   ];
 
   const moreLinks = [
