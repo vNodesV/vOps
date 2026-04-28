@@ -61,9 +61,12 @@ _RAW_GOBIN := $(shell go env GOBIN 2>/dev/null)
 GOPATH_BIN := $(if $(_RAW_GOBIN),$(_RAW_GOBIN),$(GOPATH)/bin)
 
 # On servers where GOROOT points to a manually installed (potentially broken)
-# Go tree, the module-cache toolchain has a clean stdlib. Prefer it when present.
+# Go tree, the module-cache toolchain has a clean stdlib. Prefer it when present,
+# but ONLY if its version matches the active `go` binary — prevents stdlib mismatch
+# when multiple toolchains are cached (e.g. 1.25.7 active, 1.26.2 cached → reject).
 # Falls back to the current GOROOT transparently (no persistent state is changed).
-_TOOLCHAIN_GOROOT := $(shell find $(GOPATH)/pkg/mod/golang.org -maxdepth 1 -name 'toolchain@*' 2>/dev/null | sort -V | tail -1)
+_GO_VERSION       := $(shell go version | awk '{print $$3}')
+_TOOLCHAIN_GOROOT := $(shell find $(GOPATH)/pkg/mod/golang.org -maxdepth 1 -name "toolchain@v0.0.1-$(_GO_VERSION).*" 2>/dev/null | head -1)
 EFFECTIVE_GOROOT  := $(if $(_TOOLCHAIN_GOROOT),$(_TOOLCHAIN_GOROOT),$(GOROOT))
 
 # Public targets only — internal helpers (dirs, geo, config-*, env, frontend, …) are intentionally
