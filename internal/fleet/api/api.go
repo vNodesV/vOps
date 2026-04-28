@@ -288,10 +288,10 @@ func (h *Handlers) HandleHypervisorScan(w http.ResponseWriter, r *http.Request) 
 			}
 
 			port := host.Port
-		if port == 0 {
-			port = 22
-		}
-		hc, err := fleetssh.Dial(dialAddr, port, user, sshKey, "")
+			if port == 0 {
+				port = 22
+			}
+			hc, err := fleetssh.Dial(dialAddr, port, user, sshKey, host.KnownHostsPath)
 			if err != nil {
 				if h.debug != nil && h.debug.IsEnabled() {
 					h.debug.Emit("hypervisor-scan", dialAddr, "ssh dial", "", err.Error(), 0)

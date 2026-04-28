@@ -62,12 +62,22 @@ func LoadRuntimeConfig(home string, defaults FleetDefaults, legacyChainsDir, inf
 
 	EnrichVMsFromVOpsChains(merged.VMs, vopsChainsDir)
 
-	// Apply defaults.KnownHostsPath to any VM that doesn't have one set.
-	if defaults.KnownHostsPath != "" {
-		for i := range merged.VMs {
-			if merged.VMs[i].KnownHostsPath == "" {
-				merged.VMs[i].KnownHostsPath = defaults.KnownHostsPath
-			}
+	// Apply defaults to any VM that doesn't have credentials set.
+	for i := range merged.VMs {
+		if merged.VMs[i].KnownHostsPath == "" {
+			merged.VMs[i].KnownHostsPath = defaults.KnownHostsPath
+		}
+	}
+
+	// Apply defaults to hypervisor Hosts as well — same credential sources used by
+	// HandleHypervisorScan. Without this, host.SSHKeyPath is "" when not set
+	// explicitly in the TOML, causing fleetssh.Dial to fail at os.ReadFile("").
+	for i := range merged.Hosts {
+		if merged.Hosts[i].SSHKeyPath == "" && defaults.KeyPath != "" {
+			merged.Hosts[i].SSHKeyPath = defaults.KeyPath
+		}
+		if merged.Hosts[i].KnownHostsPath == "" && defaults.KnownHostsPath != "" {
+			merged.Hosts[i].KnownHostsPath = defaults.KnownHostsPath
 		}
 	}
 
