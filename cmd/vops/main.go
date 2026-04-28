@@ -495,10 +495,22 @@ func cmdStart(f flags) int {
 		})
 	}
 
-	// Shutdown coordinator: cancel the errgroup context when parent ctx is done
-	// (signal received), then wait for all goroutines.
+	// Shutdown coordinator: when a signal fires, gracefully stop all subsystems.
+	// server.Shutdown() MUST be called here (not after eg.Wait()) — it is what
+	// unblocks server.Start()/ListenAndServe so that eg.Wait() can return.
 	eg.Go(func() error {
 		<-egCtx.Done()
+		if watcher != nil {
+			watcher.Stop()
+		}
+		if enricher != nil {
+			enricher.Stop()
+		}
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			return fmt.Errorf("http shutdown: %w", err)
+		}
 		return nil
 	})
 
@@ -507,20 +519,9 @@ func cmdStart(f flags) int {
 		fmt.Fprintf(os.Stderr, "vops: %v\n", err)
 	}
 
-	if watcher != nil {
-		watcher.Stop()
-	}
-	if enricher != nil {
-		enricher.Stop()
-	}
+	// proxyCtrl context was already cancelled; Stop() is a safety-net no-op.
 	if proxyCtrl != nil {
 		proxyCtrl.Stop()
-	}
-
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		fmt.Fprintf(os.Stderr, "vops: shutdown error: %v\n", err)
 	}
 
 	database.Close()

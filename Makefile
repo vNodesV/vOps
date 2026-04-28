@@ -16,9 +16,10 @@ VOPS_VERSION  := $(shell cat cmd/vops/VERSION 2>/dev/null || echo "dev")
 VOPS_COMMIT   := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 VOPS_BUILT    := $(shell date -u +%Y-%m-%d)
 VOPS_LDFLAGS  := -X main.version=$(VOPS_VERSION) -X main.commit=$(VOPS_COMMIT) -X main.buildDate=$(VOPS_BUILT)
-# System user that owns the vOps service (overridable: make service-vops VOPS_USER=myuser).
-# Run `make system-user-vops` once to create this user before enabling the service.
-VOPS_USER  ?= vops
+# Service user: defaults to the installing user.
+# Override for a dedicated service account: make service-vops VOPS_USER=vops
+# (run `make system-user-vops` first to create the vops system user).
+VOPS_USER  ?= $(USER)
 
 VOPS_HOME  := $(HOME)/.vOps
 # VPROX_HOME retained for reference only — no active paths should use it.
@@ -262,6 +263,7 @@ _config: _dirs _config-modules
 	fi
 
 ## Install proxy settings reference (settings.toml) — only sample, never overwrites live
+## Migrates automatically from the legacy $(VPROX_HOME)/config/vprox/settings.toml path.
 
 _config-vprox: _dirs
 	@mkdir -p "$(CFG_DIR)/vprox"
@@ -269,7 +271,12 @@ _config-vprox: _dirs
 		sed "s/{{SAMPLE_REV}}/$(SAMPLE_REV)/" ".samples/vprox/settings.sample" > "$(CFG_DIR)/vprox/settings.sample"; \
 		echo "✓ Installed proxy settings sample → $(CFG_DIR)/vprox/settings.sample"; \
 		if [[ ! -f "$(CFG_DIR)/vprox/settings.toml" ]]; then \
-			echo "  Copy to activate: cp $(CFG_DIR)/vprox/settings.sample $(CFG_DIR)/vprox/settings.toml"; \
+			if [[ -f "$(VPROX_HOME)/config/vprox/settings.toml" ]]; then \
+				cp "$(VPROX_HOME)/config/vprox/settings.toml" "$(CFG_DIR)/vprox/settings.toml"; \
+				echo "✓ Migrated settings.toml from $(VPROX_HOME)/config/vprox/ → $(CFG_DIR)/vprox/"; \
+			else \
+				echo "  Copy to activate: cp $(CFG_DIR)/vprox/settings.sample $(CFG_DIR)/vprox/settings.toml"; \
+			fi; \
 		else \
 			echo "✓ $(CFG_DIR)/vprox/settings.toml already exists"; \
 		fi \
@@ -357,7 +364,7 @@ _frontend:
 	if [ "$$HAVE_NODE" = "0" ]; then \
 		echo "  ℹ  Node.js not found — skipping _frontend build (using committed dist/)"; \
 	else \
-		cd internal/vops/web/_frontend && npm install && npm audit fix && npm run build; \
+		cd internal/vops/web/frontend && npm install && npm audit fix && npm run build; \
 		echo "✓ Frontend built → internal/vops/web/dist/"; \
 	fi
 
@@ -417,15 +424,21 @@ release-vops: _frontend
 	@echo "✓ Pushed — pull on server: git pull && sudo mv vops-linux-amd64 /usr/local/bin/vops && sudo systemctl restart vops"
 
 ## Install .samples/vops/vops.sample → $(VOPS_HOME)/config/vops/vops.toml (only if absent)
+## Migrates automatically from the legacy $(VPROX_HOME)/config/vops/vops.toml path.
 
 _config-vops: _dirs
 	@echo "Installing vOps _config..."
 	@mkdir -p "$(VOPS_HOME)/config/vops"
 	@if [[ -f ".samples/vops/vops.sample" ]]; then \
 		if [[ ! -f "$(VOPS_HOME)/config/vops/vops.toml" ]]; then \
-			cp ".samples/vops/vops.sample" "$(VOPS_HOME)/config/vops/vops.toml"; \
-			echo "✓ Copied vops.sample to $(VOPS_HOME)/config/vops/vops.toml"; \
-			echo "  Edit $(VOPS_HOME)/config/vops/vops.toml to set your API keys."; \
+			if [[ -f "$(VPROX_HOME)/config/vops/vops.toml" ]]; then \
+				cp "$(VPROX_HOME)/config/vops/vops.toml" "$(VOPS_HOME)/config/vops/vops.toml"; \
+				echo "✓ Migrated vops.toml from $(VPROX_HOME)/config/vops/ → $(VOPS_HOME)/config/vops/"; \
+			else \
+				cp ".samples/vops/vops.sample" "$(VOPS_HOME)/config/vops/vops.toml"; \
+				echo "✓ Copied vops.sample to $(VOPS_HOME)/config/vops/vops.toml"; \
+				echo "  Edit $(VOPS_HOME)/config/vops/vops.toml to set your API keys."; \
+			fi; \
 		else \
 			echo "✓ $(VOPS_HOME)/config/vops/vops.toml already exists — checking for missing fields..."; \
 			if ! grep -qE "^[[:space:]]*api_key[[:space:]]*=" "$(VOPS_HOME)/config/vops/vops.toml" || grep -qE "^[[:space:]]*#.*api_key" "$(VOPS_HOME)/config/vops/vops.toml"; then \
