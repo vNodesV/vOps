@@ -322,14 +322,26 @@ func isValidTheme(t string) bool {
 	return t == "vthemedgr" || t == "vthemedbl" || t == "vthemedlite"
 }
 
-// FindHome returns the vProx home directory.
-// Priority: $VPROX_HOME → $HOME/.vProx → ".vProx" (cwd fallback).
+// FindHome returns the vOps home directory.
+// Priority: $VOPS_HOME → $VPROX_HOME (legacy) → ~/.vOps → ~/.vProx (legacy) → ".vOps"
 func FindHome() string {
+	if v := strings.TrimSpace(os.Getenv("VOPS_HOME")); v != "" {
+		return v
+	}
 	if v := strings.TrimSpace(os.Getenv("VPROX_HOME")); v != "" {
 		return v
 	}
 	if h, err := os.UserHomeDir(); err == nil && h != "" {
-		return filepath.Join(h, ".vProx")
+		newHome := filepath.Join(h, ".vOps")
+		if _, err := os.Stat(newHome); err == nil {
+			return newHome
+		}
+		// Legacy fallback: keep existing installs working after migration.
+		legacyHome := filepath.Join(h, ".vProx")
+		if _, err := os.Stat(legacyHome); err == nil {
+			return legacyHome
+		}
+		return newHome
 	}
-	return ".vProx"
+	return ".vOps"
 }
