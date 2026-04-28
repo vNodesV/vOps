@@ -87,7 +87,7 @@ help:
 	@echo "  make build            Build vOps binary → .build/vOps"
 	@echo "  make build-vops       Build vOps binary → .build/vOps (rebuilds frontend if Node available)"
 	@echo "  make reset-services   Stop + remove stale service units (vProx, vLog) before fresh deploy"
-	@echo "  make build-vprox      [legacy] Build vProx binary → .build/vProx"
+	@echo "  make build-vprox      [legacy — scheduled for removal in v1.4.0] Build standalone vProx binary → .build/vProx"
 	@echo "  make release-vops     Cross-compile linux/amd64 → vops-linux-amd64, commit + push"
 	@echo "  make clean            Remove local build artifacts"
 	@echo "  make ufw              Passwordless UFW + apt sudoers for vOps"
@@ -325,6 +325,8 @@ config-modules:
 build: build-vops
 
 ## Build vProx binary to .build/vProx
+## LEGACY — scheduled for removal in v1.4.0.
+## Use `vops vprox --start` (suite mode) or `vops vprox --daemon` instead.
 build-vprox:
 	@echo "Building $(APP_NAME)..."
 	mkdir -p "$(BUILD_DIR)"
