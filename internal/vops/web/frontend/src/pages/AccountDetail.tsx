@@ -105,6 +105,7 @@ export default function AccountDetailPage() {
   const threatFlags = parseJSON<string[]>(account.ThreatFlags, []);
   const tags = parseJSON<string[]>(account.Tags, []);
   const isBlocked = account.Status === 'blocked';
+  const shodanPorts: number[] = parseJSON<{ ports?: number[] }>(account.ShodanData, {}).ports ?? [];
 
   const detailRows: Array<{ label: string; value: string | number | null }> = [
     { label: 'IP Address', value: account.IP },
@@ -177,7 +178,7 @@ export default function AccountDetailPage() {
             <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--vn-text-muted)' }}>
               Port Scan
             </h3>
-            <PortGrid openPorts={account.OpenPorts} />
+            <PortGrid openPorts={account.OpenPorts} extraPorts={shodanPorts} />
           </div>
 
           {/* Threat Flags */}

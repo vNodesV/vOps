@@ -7,10 +7,10 @@ import {
   updateUnit,
   getUnitStatusHistory,
 } from '../api';
+import { BASE } from '../api/client';
 import { openSSEStream } from '../api/sse';
 import type { CosmosUnit, CosmosUnitWithStatus, NodeType, NetworkType, UnitStatus } from '../api/types';
-
-const BASE = (import.meta.env.VITE_API_BASE ?? '') as string;
+import { fmtDate, timeAgo } from '../lib/time';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -18,26 +18,26 @@ const NODE_TYPES: NodeType[] = ['validator', 'node', 'api', 'rpc', 'relayer', 'o
 const NETWORK_TYPES: NetworkType[] = ['mainnet', 'testnet', 'devnet'];
 
 const NODE_TYPE_COLORS: Record<NodeType, { bg: string; text: string }> = {
-  validator: { bg: '#4c1d95', text: '#c4b5fd' },
-  node:      { bg: '#1e3a5f', text: '#93c5fd' },
-  api:       { bg: '#14532d', text: '#86efac' },
-  rpc:       { bg: '#164e63', text: '#67e8f9' },
-  relayer:   { bg: '#713f12', text: '#fcd34d' },
-  other:     { bg: '#1f2937', text: '#9ca3af' },
+  validator: { bg: 'var(--vn-primary-dim)',  text: 'var(--vn-primary)' },
+  node:      { bg: 'var(--vn-info-dim)',      text: 'var(--vn-info)' },
+  api:       { bg: 'var(--vn-success-dim)',   text: 'var(--vn-success)' },
+  rpc:       { bg: 'var(--vn-info-dim)',      text: 'var(--vn-info)' },
+  relayer:   { bg: 'var(--vn-warning-dim)',   text: 'var(--vn-warning)' },
+  other:     { bg: 'var(--vn-surface-2)',     text: 'var(--vn-text-muted)' },
 };
 
 const NET_COLORS: Record<NetworkType, string> = {
-  mainnet: '#4ade80',
-  testnet: '#fbbf24',
-  devnet:  '#f87171',
+  mainnet: 'var(--vn-success)',
+  testnet: 'var(--vn-warning)',
+  devnet:  'var(--vn-danger)',
 };
 
 const STATE_COLORS: Record<string, string> = {
-  running:  '#4ade80',
-  stopped:  '#f87171',
-  unknown:  '#9ca3af',
-  syncing:  '#fbbf24',
-  deployed: '#60a5fa',
+  running:  'var(--vn-success)',
+  stopped:  'var(--vn-danger)',
+  unknown:  'var(--vn-text-muted)',
+  syncing:  'var(--vn-warning)',
+  deployed: 'var(--vn-info)',
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -48,17 +48,7 @@ function fmtHeight(h: number): string {
 }
 
 function fmtTime(ts: string): string {
-  if (!ts) return '—';
-  try { return new Date(ts).toLocaleString(); } catch { return ts; }
-}
-
-function timeAgo(ts: string): string {
-  if (!ts) return '—';
-  const diff = Date.now() - new Date(ts).getTime();
-  const s = Math.floor(diff / 1000);
-  if (s < 60) return `${s}s ago`;
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  return `${Math.floor(s / 3600)}h ago`;
+  return fmtDate(ts);
 }
 
 // ── AddUnitModal ──────────────────────────────────────────────────────────────

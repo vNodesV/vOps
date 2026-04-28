@@ -5,7 +5,7 @@ interface ThreatScoreProps {
 function getLevel(score: number): { label: string; color: string } {
   if (score <= 0) return { label: 'Clean', color: 'var(--vn-success)' };
   if (score <= 30) return { label: 'Low', color: 'var(--vn-warning)' };
-  if (score <= 60) return { label: 'Medium', color: 'var(--vn-warning-medium)' };
+  if (score <= 60) return { label: 'Medium', color: 'var(--vn-warning)' };
   return { label: 'Critical', color: 'var(--vn-danger)' };
 }
 

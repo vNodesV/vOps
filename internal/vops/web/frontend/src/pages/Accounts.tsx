@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { getAccounts, syncUFW } from '../api';
@@ -198,10 +198,6 @@ export default function AccountsPage() {
   const effectiveLimit = limit || totalItems;
   const totalPages = Math.max(1, Math.ceil(totalItems / effectiveLimit));
 
-  const displayedAccounts = useMemo(() => {
-    if (!accounts) return [];
-    return accounts;
-  }, [accounts]);
 
   const rangeStart = totalItems > 0 ? offset + 1 : 0;
   const rangeEnd = Math.min(offset + effectiveLimit, totalItems);
@@ -277,7 +273,7 @@ export default function AccountsPage() {
             Failed to load accounts: {(error as Error).message}
           </p>
         </div>
-      ) : displayedAccounts.length === 0 ? (
+      ) : (accounts ?? []).length === 0 ? (
         <div className="card text-center">
           <p className="text-sm" style={{ color: 'var(--vn-text-muted)' }}>
             {search ? `No accounts matching "${search}".` : 'No IP accounts recorded yet. Ingest archives to populate data.'}
@@ -307,7 +303,7 @@ export default function AccountsPage() {
                 </tr>
               </thead>
               <tbody>
-                {displayedAccounts.map((acct) => (
+                {(accounts ?? []).map((acct) => (
                   <tr
                     key={acct.IP}
                     className="transition-colors cursor-pointer"

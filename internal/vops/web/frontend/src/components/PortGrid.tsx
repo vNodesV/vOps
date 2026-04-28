@@ -1,5 +1,6 @@
 interface PortGridProps {
-  openPorts: string; // JSON array string, e.g. "[80, 443]"
+  openPorts: string;   // JSON array string, e.g. "[80, 443]"
+  extraPorts?: number[]; // non-standard open ports from Shodan / external scan
 }
 
 const STANDARD_PORTS: Array<{ port: number; label: string }> = [
@@ -12,6 +13,8 @@ const STANDARD_PORTS: Array<{ port: number; label: string }> = [
   { port: 9090, label: 'gRPC' },
 ];
 
+const STANDARD_PORT_NUMBERS = new Set(STANDARD_PORTS.map((p) => p.port));
+
 function parsePorts(raw: string): number[] {
   if (!raw) return [];
   try {
@@ -23,8 +26,11 @@ function parsePorts(raw: string): number[] {
   return [];
 }
 
-export default function PortGrid({ openPorts }: PortGridProps) {
+export default function PortGrid({ openPorts, extraPorts }: PortGridProps) {
   const open = new Set(parsePorts(openPorts));
+
+  // Non-standard ports discovered externally (e.g. Shodan)
+  const nonStandard = (extraPorts ?? []).filter((p) => !STANDARD_PORT_NUMBERS.has(p));
 
   return (
     <div className="flex flex-wrap gap-2" role="list" aria-label="Port status">
@@ -52,6 +58,27 @@ export default function PortGrid({ openPorts }: PortGridProps) {
           </div>
         );
       })}
+      {nonStandard.map((port) => (
+        <div
+          key={`extra-${port}`}
+          role="listitem"
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium"
+          style={{
+            backgroundColor: 'var(--vn-warning)' + '1a',
+            color: 'var(--vn-warning)',
+            border: '1px solid ' + 'var(--vn-warning)' + '40',
+          }}
+          aria-label={`Port ${port}: non-standard open port`}
+          title="Non-standard open port detected"
+        >
+          <span
+            className="w-1.5 h-1.5 rounded-full"
+            style={{ backgroundColor: 'var(--vn-warning)' }}
+            aria-hidden="true"
+          />
+          {port}
+        </div>
+      ))}
     </div>
   );
 }
