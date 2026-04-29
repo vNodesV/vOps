@@ -7,7 +7,6 @@ Wants=network-online.target
 Type=simple
 Environment=VOPS_HOME=__HOME__/.vOps
 Environment=GOTRACEBACK=all
-EnvironmentFile=-__HOME__/.vOps/.env
 ExecStart=/usr/local/bin/vOps start
 Restart=no
 User=__VOPS_USER__

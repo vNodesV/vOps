@@ -8,7 +8,6 @@ Type=simple
 Environment=VPROX_HOME=__HOME__/.vOps
 Environment=IP2LOCATION_MMDB=__HOME__/.vOps/data/geolocation/ip2location.mmdb
 Environment=GOTRACEBACK=all
-EnvironmentFile=-__HOME__/.vOps/.env
 ExecStart=/usr/local/bin/vProx start
 Restart=no
 User=__USER__

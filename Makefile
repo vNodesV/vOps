@@ -204,7 +204,10 @@ _geo:
 		echo "✓ Installed GEO DB to $(GEO_DB_DST)"; \
 	fi
 
-## Create ._env if missing
+## Create ._env reference file if missing.
+## NOTE: This file is NOT loaded by the systemd services — service environment
+## is set entirely via Environment= directives in the service unit file.
+## ._env serves as a human-readable reference of all supported env var overrides.
 
 _env:
 	@echo "Setting up environment configuration..."
