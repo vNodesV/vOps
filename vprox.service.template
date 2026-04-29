@@ -5,14 +5,14 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-Environment=VPROX_HOME=__HOME__/.vProx
-Environment=IP2LOCATION_MMDB=__HOME__/.vProx/data/geolocation/ip2location.mmdb
+Environment=VPROX_HOME=__HOME__/.vOps
+Environment=IP2LOCATION_MMDB=__HOME__/.vOps/data/geolocation/ip2location.mmdb
 Environment=GOTRACEBACK=all
-EnvironmentFile=-__HOME__/.vProx/.env
+EnvironmentFile=-__HOME__/.vOps/.env
 ExecStart=/usr/local/bin/vProx start
 Restart=no
 User=__USER__
-WorkingDirectory=__HOME__/.vProx
+WorkingDirectory=__HOME__/.vOps
 SyslogIdentifier=vProx
 StandardOutput=journal
 StandardError=journal
