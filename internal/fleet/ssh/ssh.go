@@ -5,6 +5,9 @@ package ssh
 
 import (
 	"bufio"
+	"crypto/hmac"
+	"crypto/sha1" //nolint:gosec // SHA1 required for RFC 4253 SSH known_hosts HMAC format
+	"encoding/base64"
 	"fmt"
 	"io"
 	"log"
@@ -61,6 +64,7 @@ func Dial(host string, port int, user, keyPath, knownHostsPath string) (*Client,
 	}
 
 	var hostKeyCallback ssh.HostKeyCallback
+	var hostKeyAlgos []string
 	// When no explicit path is set, fall back to the user's default known_hosts file.
 	// This silently enables host-key verification for any host the user has already
 	// connected to manually — the common case for fleet VMs.
@@ -78,16 +82,25 @@ func Dial(host string, port int, user, keyPath, knownHostsPath string) (*Client,
 			return nil, fmt.Errorf("fleet/ssh: load known_hosts %s: %w", knownHostsPath, khErr)
 		}
 		hostKeyCallback = cb
+		// Constrain the client to only offer host-key algorithms present in
+		// known_hosts for this specific host.  Without this, Go's SSH library
+		// may negotiate ecdsa or rsa while known_hosts only has ed25519 (or
+		// vice-versa), causing a "key mismatch" error even though the right
+		// key exists in the file under a different algorithm name.
+		if algos := hostKeyAlgosFromFile(knownHostsPath, fmt.Sprintf("%s:%d", host, port)); len(algos) > 0 {
+			hostKeyAlgos = algos
+		}
 	} else {
 		log.Printf("[fleet/ssh] WARNING: host key verification disabled for %s — set known_hosts_path in vops.toml [vops.push.defaults] or run: ssh-keyscan -H %s >> ~/.ssh/known_hosts", host, host)
 		hostKeyCallback = ssh.InsecureIgnoreHostKey() //nolint:gosec // explicit config absent and no default known_hosts found
 	}
 
 	cfg := &ssh.ClientConfig{
-		User:            user,
-		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
-		HostKeyCallback: hostKeyCallback,
-		Timeout:         15 * time.Second,
+		User:              user,
+		Auth:              []ssh.AuthMethod{ssh.PublicKeys(signer)},
+		HostKeyCallback:   hostKeyCallback,
+		HostKeyAlgorithms: hostKeyAlgos,
+		Timeout:           15 * time.Second,
 	}
 
 	addr := fmt.Sprintf("%s:%d", host, port)
@@ -272,6 +285,7 @@ func newClientOverConn(conn net.Conn, targetAddr, user, keyPath, knownHostsPath 
 	}
 
 	var hostKeyCallback ssh.HostKeyCallback
+	var hostKeyAlgos []string
 	if knownHostsPath == "" {
 		if h, err := os.UserHomeDir(); err == nil {
 			if p := h + "/.ssh/known_hosts"; fileExists(p) {
@@ -286,6 +300,9 @@ func newClientOverConn(conn net.Conn, targetAddr, user, keyPath, knownHostsPath 
 			return nil, fmt.Errorf("fleet/ssh: load known_hosts %s: %w", knownHostsPath, khErr)
 		}
 		hostKeyCallback = cb
+		if algos := hostKeyAlgosFromFile(knownHostsPath, targetAddr); len(algos) > 0 {
+			hostKeyAlgos = algos
+		}
 	} else {
 		host, _, _ := net.SplitHostPort(targetAddr)
 		if host == "" {
@@ -296,10 +313,11 @@ func newClientOverConn(conn net.Conn, targetAddr, user, keyPath, knownHostsPath 
 	}
 
 	cfg := &ssh.ClientConfig{
-		User:            user,
-		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
-		HostKeyCallback: hostKeyCallback,
-		Timeout:         15 * time.Second,
+		User:              user,
+		Auth:              []ssh.AuthMethod{ssh.PublicKeys(signer)},
+		HostKeyCallback:   hostKeyCallback,
+		HostKeyAlgorithms: hostKeyAlgos,
+		Timeout:           15 * time.Second,
 	}
 
 	ncc, chans, reqs, err := ssh.NewClientConn(conn, targetAddr, cfg)
@@ -348,4 +366,135 @@ func DialViaProxy(
 	// Attach jump client as parent so target.Close() cleans up both.
 	target.parent = jumpClient
 	return target, nil
+}
+
+// hostKeyAlgosFromFile parses knownHostsPath and returns all SSH host-key
+// algorithm types stored for addr ("host:port" form).  The result is used to
+// set HostKeyAlgorithms in the SSH ClientConfig so the handshake only
+// negotiates algorithms actually present in the file — preventing the
+// "key mismatch" error that occurs when Go's SSH library proposes ecdsa while
+// the file only contains an ed25519 entry (or vice-versa).
+//
+// Both plaintext and hashed (|1|salt|hash) known_hosts patterns are handled.
+func hostKeyAlgosFromFile(knownHostsPath, addr string) []string {
+	norm := knownhosts.Normalize(addr)
+	host, _, err := net.SplitHostPort(norm)
+	if err != nil {
+		host = norm
+	}
+
+	f, err := os.Open(knownHostsPath) //nolint:gosec // operator-controlled path
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+
+	seen := make(map[string]bool)
+	var algos []string
+
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		fields := strings.Fields(line)
+		var patterns, keyType string
+		switch fields[0] {
+		case "@cert-authority", "@revoked":
+			if len(fields) < 4 {
+				continue
+			}
+			patterns, keyType = fields[1], fields[2]
+		default:
+			if len(fields) < 3 {
+				continue
+			}
+			patterns, keyType = fields[0], fields[1]
+		}
+
+		if knownHostPatternsMatch(patterns, host, norm) && !seen[keyType] {
+			seen[keyType] = true
+			algos = append(algos, keyType)
+		}
+	}
+	return algos
+}
+
+// knownHostPatternsMatch returns true if any comma-separated pattern in the
+// patterns field of a known_hosts line matches host or normalizedAddr.
+// Handles both hashed (|1|salt|hash) and plaintext/wildcard patterns.
+func knownHostPatternsMatch(patterns, host, normalizedAddr string) bool {
+	for _, pat := range strings.Split(patterns, ",") {
+		pat = strings.TrimSpace(pat)
+		if pat == "" {
+			continue
+		}
+		negate := strings.HasPrefix(pat, "!")
+		if negate {
+			pat = pat[1:]
+		}
+		var matched bool
+		if strings.HasPrefix(pat, "|1|") {
+			matched = knownHostHashMatches(pat, host) || knownHostHashMatches(pat, normalizedAddr)
+		} else {
+			matched = pat == host || pat == normalizedAddr || knownHostWildcard(pat, host)
+		}
+		if negate && matched {
+			return false
+		}
+		if !negate && matched {
+			return true
+		}
+	}
+	return false
+}
+
+// knownHostHashMatches verifies a hashed known_hosts pattern |1|salt|hash
+// against hostname using HMAC-SHA1 (RFC 4253 §4).
+func knownHostHashMatches(pattern, hostname string) bool {
+	parts := strings.SplitN(pattern, "|", 4)
+	if len(parts) != 4 || parts[1] != "1" {
+		return false
+	}
+	salt, err1 := base64.StdEncoding.DecodeString(parts[2])
+	want, err2 := base64.StdEncoding.DecodeString(parts[3])
+	if err1 != nil || err2 != nil {
+		return false
+	}
+	mac := hmac.New(sha1.New, salt) //nolint:gosec // SHA1 is mandated by the SSH known_hosts RFC
+	mac.Write([]byte(hostname))
+	return hmac.Equal(mac.Sum(nil), want)
+}
+
+// knownHostWildcard performs SSH wildcard matching: * matches any sequence,
+// ? matches any single character.
+func knownHostWildcard(pattern, s string) bool {
+	for len(pattern) > 0 {
+		switch pattern[0] {
+		case '*':
+			pattern = pattern[1:]
+			if len(pattern) == 0 {
+				return true
+			}
+			for i := range len(s) + 1 {
+				if knownHostWildcard(pattern, s[i:]) {
+					return true
+				}
+			}
+			return false
+		case '?':
+			if len(s) == 0 {
+				return false
+			}
+			pattern, s = pattern[1:], s[1:]
+		default:
+			if len(s) == 0 || pattern[0] != s[0] {
+				return false
+			}
+			pattern, s = pattern[1:], s[1:]
+		}
+	}
+	return len(s) == 0
 }
