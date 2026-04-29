@@ -33,7 +33,8 @@ INTERNAL_DIR := $(VOPS_HOME)/internal
 ARCHIVE_DIR  := $(VOPS_HOME)/data/logs/archives
 SERVICE_DIR  := $(VOPS_HOME)/service
 SERVICE_PATH := $(SERVICE_DIR)/vOps.service
-VOPS_SERVICE := $(SERVICE_DIR)/vOps.service
+VOPS_SERVICE  := $(SERVICE_DIR)/vOps.service
+VPROX_SERVICE := $(SERVICE_DIR)/vProx.service
 GEO_DIR      := $(VOPS_HOME)/data/geolocation
 SAMPLES_DIR  := $(VOPS_HOME)/.samples
 DIR_LIST := $(DATA_DIR) $(LOG_DIR) $(CFG_DIR) $(CFG_DIR)/chains $(CFG_DIR)/backup \
@@ -75,7 +76,7 @@ EFFECTIVE_GOROOT  := $(if $(_TOOLCHAIN_GOROOT),$(_TOOLCHAIN_GOROOT),$(GOROOT))
 # Public targets only — internal helpers (_dirs, _geo, config-*, _env, _frontend, …) are intentionally
 # excluded from .PHONY so they don't pollute tab-completion.
 .PHONY: all help install build build-vops release-vops \
-        clean ufw reset-services service-vops system-user-vops \
+        clean ufw reset-services service-vops service-vprox system-user-vops \
         bump-patch bump-minor bump-major
 
 all: help
@@ -89,6 +90,8 @@ help:
 	@echo "  make install          Build + install vOps: binary, config, service"
 	@echo "  make build            Build vOps binary → .build/vOps"
 	@echo "  make build-vops       Build vOps binary → .build/vOps (rebuilds frontend if Node available)"
+	@echo "  make service-vops     Render + optionally install vOps.service from template"
+	@echo "  make service-vprox    Render + optionally install vProx.service from template"
 	@echo "  make reset-services   Stop + remove stale service units (vProx, vLog) before fresh deploy"
 		@echo "  make release-vops     Cross-compile linux/amd64 → vops-linux-amd64, commit + push"
 	@echo "  make clean            Remove local build artifacts"
@@ -108,7 +111,8 @@ help:
 	@echo "    Samples:   $(VOPS_HOME)/.samples/"
 	@echo "  SSH control plane (fleet) is installed automatically."
 	@echo "  Add VMs to:    $(VOPS_HOME)/config/infra/{datacenter}.toml"
-	@echo "  Add chains to: $(CFG_DIR)/chains/{chain}.toml"
+	@echo "  Add chains to: $(CFG_DIR)/vprox/{chain}.toml  (vProx chain configs)"
+	@echo "                 $(CFG_DIR)/chains/{chain}.toml  (vOps chain profiles)"
 	@echo ""
 
 ## Full install — build + config + service for vOps.
@@ -137,6 +141,7 @@ install: _validate-go _dirs _geo _config _config-vops _config-vprox _config-modu
 	@echo ""
 	@echo "── Systemd services ─────────────────────────────────────────────────────"
 	@$(MAKE) --no-print-directory service-vops
+	@$(MAKE) --no-print-directory service-vprox
 	@echo ""
 	@echo "════════════════════════════════════════════════════════"
 	@echo "  ✓ Installation complete"
@@ -385,6 +390,27 @@ build-vops: _frontend
 		echo "  ✓ Updated → /usr/local/bin/$(VOPS_NAME)"; \
 	fi
 	@echo "  Copied → $(GOPATH_BIN)/$(VOPS_NAME)"
+	@echo "── Syncing service files ────────────────────────────────────────────────"
+	@reload=0; \
+	for entry in "vops.service.template:vOps.service" "vprox.service.template:vProx.service"; do \
+		tpl="$${entry%%:*}"; svc="$${entry##*:}"; sys="/etc/systemd/system/$$svc"; \
+		if [[ -f "$$sys" ]]; then \
+			rnd=$$(mktemp); \
+			sed "s|__HOME__|$(HOME)|g; s|__USER__|$(USER)|g; s|__VOPS_USER__|$(VOPS_USER)|g" "$$tpl" > "$$rnd"; \
+			if ! cmp -s "$$rnd" "$$sys"; then \
+				sudo cp "$$rnd" "$$sys"; echo "  ✓ $$svc updated (drifted from template)"; reload=1; \
+			else \
+				echo "  ✓ $$svc up to date"; \
+			fi; \
+			rm -f "$$rnd"; \
+		fi; \
+	done; \
+	if [[ "$$reload" = "1" ]]; then \
+		sudo systemctl daemon-reload && echo "  ✓ daemon-reload"; \
+		if sudo systemctl is-active --quiet vProx 2>/dev/null; then \
+			sudo systemctl restart vProx 2>/dev/null && echo "  ✓ vProx restarted (service config changed)"; \
+		fi; \
+	fi
 	@echo "Restarting $(VOPS_NAME) service..."
 	@sudo systemctl start "$(VOPS_NAME)" 2>/dev/null && echo "  ✓ $(VOPS_NAME) started" || echo "  ○ Could not start $(VOPS_NAME) — start manually: sudo service $(VOPS_NAME) start"
 
@@ -512,6 +538,44 @@ service-vops:
 	fi
 
 ## ─── UFW passwordless setup for vOps ─────────────────────────────────────────
+
+## Create and optionally install vProx systemd service.
+## Renders vprox.service.template → $(VPROX_SERVICE), then prompts to install to /etc/systemd/system/.
+
+service-vprox:
+	@echo "Rendering vProx systemd service file..."
+	@mkdir -p "$(SERVICE_DIR)"
+	@TMP_RENDERED="$$(mktemp)"; \
+	sed "s|__HOME__|$(HOME)|g; s|__USER__|$(USER)|g" vprox.service.template > "$$TMP_RENDERED"; \
+	if [[ -f "$(VPROX_SERVICE)" ]]; then \
+		if cmp -s "$$TMP_RENDERED" "$(VPROX_SERVICE)"; then \
+			echo "✓ Local vProx.service already up to date"; \
+		else \
+			echo "⚠ vProx.service differs; applying update..."; \
+			cp "$$TMP_RENDERED" "$(VPROX_SERVICE)"; \
+			echo "✓ Updated $(VPROX_SERVICE)"; \
+		fi; \
+	else \
+		cp "$$TMP_RENDERED" "$(VPROX_SERVICE)"; \
+		echo "✓ Created $(VPROX_SERVICE)"; \
+	fi; \
+	rm -f "$$TMP_RENDERED"
+	@echo ""
+	@read -p "Install vProx.service to /etc/systemd/system? (y/n) " -n 1 -r; echo ""; \
+	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+		if sudo cp "$(VPROX_SERVICE)" "/etc/systemd/system/vProx.service" && \
+		   sudo systemctl daemon-reload && \
+		   sudo systemctl enable vProx.service; \
+		then \
+			echo "✓ vProx.service installed. Start with: sudo service vProx start"; \
+		else \
+			echo "✗ Failed. Check: sudo systemctl status vProx.service"; \
+		fi; \
+	else \
+		echo "✓ Skipped. Install manually:"; \
+		echo "  sudo cp $(VPROX_SERVICE) /etc/systemd/system/vProx.service"; \
+		echo "  sudo systemctl daemon-reload && sudo systemctl enable vProx.service"; \
+	fi
 
 ## Create dedicated vops system user (nologin) for running the vOps service.
 ## Run once on the server before enabling the systemd service with User=vops.
