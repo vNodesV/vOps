@@ -54,6 +54,14 @@ Commands:
   status   Show database stats and exit
   vprox    Manage the embedded vProx proxy server
 
+vprox subcommands:
+  vprox start              Start vProx in the foreground
+  vprox start -d           Start vProx as a daemon (systemd)
+  vprox stop               Stop the vProx daemon
+  vprox restart            Restart the vProx daemon
+  vprox status             Show service state and basic stats
+  vprox view               Tail vProx service logs (journalctl -f)
+
 One-shot flags:
   -A, --list-archives          List ingested archives with event counts
   -a, --list-accounts          List IP accounts (top 50, by last_seen)
@@ -85,11 +93,32 @@ Examples:
   vops start --port 9000 --no-watch --no-enrich
   vops ingest --home /opt/vops
   vops status
+  vops vprox start
+  vops vprox start -d
+  vops vprox stop
+  vops vprox status
+  vops vprox view
   vops -A
   vops --list-threats
   vops -e 1.2.3.4
   vops -x all
   vops --validate
+`)
+}
+
+func printVproxHelp() {
+	fmt.Print(`Usage:
+  vops vprox <subcommand> [flags]
+
+Subcommands:
+  start              Start vProx in the foreground (blocks until Ctrl-C)
+  start -d|--daemon  Start vProx as a background systemd daemon
+  stop               Stop the vProx systemd service
+  restart            Restart the vProx systemd service
+  status             Show service state, uptime, and config paths
+  view               Follow vProx service logs (journalctl -u vProx -f)
+
+Global flags apply: --home, --verbose, --quiet
 `)
 }
 
@@ -124,10 +153,12 @@ type flags struct {
 	watchInterval int
 
 	// vprox proxy subcommand
-	vproxStart  bool
-	vproxDaemon bool
-	vproxStop   bool
-	vproxStatus bool
+	vproxStart   bool
+	vproxDaemon  bool
+	vproxStop    bool
+	vproxRestart bool
+	vproxStatus  bool
+	vproxView    bool
 }
 
 func parseFlags(args []string) (flags, []string, error) {
@@ -182,7 +213,9 @@ func parseFlags(args []string) (flags, []string, error) {
 	fs.boolVar(&f.vproxStart, "vprox-start", false, "")
 	fs.boolVar(&f.vproxDaemon, "vprox-daemon", false, "")
 	fs.boolVar(&f.vproxStop, "vprox-stop", false, "")
+	fs.boolVar(&f.vproxRestart, "vprox-restart", false, "")
 	fs.boolVar(&f.vproxStatus, "vprox-status", false, "")
+	fs.boolVar(&f.vproxView, "vprox-view", false, "")
 
 	if err := fs.parse(args); err != nil {
 		return f, nil, err
@@ -256,7 +289,7 @@ func run() int {
 	case "status":
 		return cmdStatus(f)
 	case "vprox":
-		return cmdVprox(f)
+		return cmdVprox(f, rest[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "vops: unknown command %q\n\n", cmd)
 		printHelp()
@@ -861,27 +894,76 @@ func cmdDryRun(f flags) int {
 }
 
 // ---------------------------------------------------------------------------
-// vops vprox — embedded proxy-only mode
+// vops vprox — proxy server management subcommands
 // ---------------------------------------------------------------------------
 
-// cmdVprox handles `vops vprox [flags]`.
+// cmdVprox handles `vops vprox <subcommand> [flags]`.
 //
-// Flags:
+// Subcommands:
 //
-//	--vprox-start   Start vProx in the foreground (default if no flag given)
-//	--vprox-daemon  Start as background daemon via systemd (sudo service vProx start)
-//	--vprox-stop    Stop the vProx daemon (sudo service vProx stop)
-//	--vprox-status  Print proxy controller state and exit
-func cmdVprox(f flags) int {
-	home := resolveHome(f.home)
-
-	// --vprox-stop
-	if f.vproxStop {
-		return runNamedServiceCommand("vProx", "stop")
+//	start              Start vProx in the foreground (blocks)
+//	start -d|--daemon  Start as a systemd background daemon
+//	stop               Stop the vProx systemd service
+//	restart            Restart the vProx systemd service
+//	status             Print service state, uptime, and key paths
+//	view               Tail vProx service logs (journalctl -u vProx -f)
+func cmdVprox(f flags, args []string) int {
+	// Strip flag tokens from subcommand args so bare `vops vprox start --daemon`
+	// is treated the same as `vops vprox start -d`.
+	subcmd := ""
+	for _, a := range args {
+		if !strings.HasPrefix(a, "-") {
+			subcmd = a
+			break
+		}
 	}
 
-	// --vprox-daemon
-	if f.vproxDaemon {
+	// Backward-compat: honour legacy --vprox-* flags when no subcommand given.
+	switch {
+	case subcmd == "" && f.vproxStop:
+		subcmd = "stop"
+	case subcmd == "" && f.vproxRestart:
+		subcmd = "restart"
+	case subcmd == "" && f.vproxStatus:
+		subcmd = "status"
+	case subcmd == "" && f.vproxView:
+		subcmd = "view"
+	}
+
+	// -d / --daemon anywhere in the arg list enables daemon mode for `start`.
+	daemonMode := f.daemon || f.vproxDaemon
+	for _, a := range args {
+		if a == "-d" || a == "--daemon" {
+			daemonMode = true
+		}
+	}
+
+	switch subcmd {
+	case "start", "":
+		return cmdVproxStart(f, daemonMode)
+	case "stop":
+		return runNamedServiceCommand("vProx", "stop")
+	case "restart":
+		return runNamedServiceCommand("vProx", "restart")
+	case "status":
+		return cmdVproxStatus(f)
+	case "view":
+		return cmdVproxView()
+	case "help", "--help", "-h":
+		printVproxHelp()
+		return 0
+	default:
+		fmt.Fprintf(os.Stderr, "vops vprox: unknown subcommand %q\n\n", subcmd)
+		printVproxHelp()
+		return 1
+	}
+}
+
+// cmdVproxStart starts vProx either in the foreground or as a systemd daemon.
+func cmdVproxStart(f flags, daemon bool) int {
+	home := resolveHome(f.home)
+
+	if daemon {
 		code := runNamedServiceCommand("vProx", "start")
 		if code != 0 {
 			return code
@@ -889,39 +971,30 @@ func cmdVprox(f flags) int {
 		time.Sleep(1500 * time.Millisecond)
 		out, _ := exec.Command("systemctl", "is-active", "vProx").Output()
 		if strings.TrimSpace(string(out)) == "active" {
-			fmt.Fprintln(os.Stdout, "✓ vProx service started successfully.")
+			fmt.Fprintln(os.Stdout, "✓ vProx daemon started successfully.")
 		} else {
-			fmt.Fprintln(os.Stderr, "✗ vProx service did not start. Check: journalctl -u vProx -n 50")
+			fmt.Fprintln(os.Stderr, "✗ vProx daemon did not start. Check: journalctl -u vProx -n 50")
 			return 1
 		}
 		return 0
 	}
 
-	// Build proxy config from flags + environment (same resolution as cmd/vprox/main.go).
-	proxyCfg := vprox.Config{
-		Home:    home,
-		Verbose: f.verbose,
-	}
-
-	// --vprox-status — print current controller state and exit
-	if f.vproxStatus {
-		ctrl := vprox.NewController(proxyCfg)
-		st, _ := ctrl.State()
-		fmt.Fprintf(os.Stdout, "vProx status: %s\n", st)
-		return 0
-	}
-
-	// Default: --vprox-start (or bare `vops vprox`)
+	// Foreground mode — blocks until SIGINT/SIGTERM.
 	if !f.quiet {
 		fmt.Fprintf(os.Stdout, "vOps %s — starting vProx proxy server\n", version)
 		fmt.Fprintf(os.Stdout, "  home: %s\n\n", home)
+	}
+
+	proxyCfg := vprox.Config{
+		Home:    home,
+		Verbose: f.verbose,
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
 	if err := vprox.New(proxyCfg).Start(ctx); err != nil {
-		fmt.Fprintf(os.Stderr, "vops vprox: %v\n", err)
+		fmt.Fprintf(os.Stderr, "vops vprox start: %v\n", err)
 		return 1
 	}
 
@@ -929,6 +1002,93 @@ func cmdVprox(f flags) int {
 		fmt.Fprintln(os.Stdout, "vProx stopped.")
 	}
 	return 0
+}
+
+// cmdVproxStatus prints service state, uptime, and key configuration paths.
+func cmdVproxStatus(f flags) int {
+	home := resolveHome(f.home)
+	proxyCfg := vprox.Config{Home: home, Verbose: f.verbose}
+	ctrl := vprox.NewController(proxyCfg)
+
+	// systemd state.
+	svcActive, _ := exec.Command("systemctl", "is-active", "vProx").Output()
+	svcActiveStr := strings.TrimSpace(string(svcActive))
+
+	// Uptime from systemd (ActiveEnterTimestamp).
+	var uptimeStr string
+	if svcActiveStr == "active" {
+		prop, err := exec.Command("systemctl", "show", "vProx", "--property=ActiveEnterTimestamp", "--value").Output()
+		if err == nil {
+			ts := strings.TrimSpace(string(prop))
+			if t, err := time.Parse("Mon 2006-01-02 15:04:05 MST", ts); err == nil {
+				uptimeStr = formatDuration(time.Since(t))
+			}
+		}
+	}
+
+	// In-process controller state (relevant when running embedded in suite mode).
+	ctrlState, ctrlErr := ctrl.State()
+
+	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tw, "vProx service status")
+	fmt.Fprintln(tw, "────────────────────────────────────────")
+	fmt.Fprintf(tw, "  Service (systemd):\t%s\n", svcActiveStr)
+	if uptimeStr != "" {
+		fmt.Fprintf(tw, "  Uptime:\t%s\n", uptimeStr)
+	}
+	fmt.Fprintf(tw, "  Controller state:\t%s\n", ctrlState)
+	if ctrlErr != nil {
+		fmt.Fprintf(tw, "  Last error:\t%v\n", ctrlErr)
+	}
+	fmt.Fprintf(tw, "  Home:\t%s\n", ctrl.Home())
+	fmt.Fprintf(tw, "  Config file:\t%s\n", ctrl.ConfigFilePath())
+	fmt.Fprintf(tw, "  Log file:\t%s\n", ctrl.LogFilePath())
+	tw.Flush()
+
+	// Append a brief systemctl status block if available.
+	statusOut, err := exec.Command("systemctl", "status", "vProx", "--no-pager", "-l", "--lines=5").CombinedOutput()
+	if err == nil && len(statusOut) > 0 {
+		fmt.Fprintf(os.Stdout, "\n%s", string(statusOut))
+	}
+	return 0
+}
+
+// cmdVproxView follows the vProx service logs via journalctl.
+func cmdVproxView() int {
+	jctl, err := exec.LookPath("journalctl")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "vops vprox view: journalctl not found — is this a systemd host?")
+		return 1
+	}
+	cmd := exec.Command(jctl, "-u", "vProx", "-f", "--output=cat", "-n", "50")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	if err := cmd.Run(); err != nil {
+		// Ctrl-C produces an exit error — treat as clean exit.
+		if strings.Contains(err.Error(), "signal") || strings.Contains(err.Error(), "interrupt") {
+			return 0
+		}
+		fmt.Fprintf(os.Stderr, "vops vprox view: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
+// formatDuration returns a human-readable duration string (e.g. "2d 3h 14m").
+func formatDuration(d time.Duration) string {
+	d = d.Round(time.Minute)
+	days := int(d.Hours()) / 24
+	hours := int(d.Hours()) % 24
+	mins := int(d.Minutes()) % 60
+	switch {
+	case days > 0:
+		return fmt.Sprintf("%dd %dh %dm", days, hours, mins)
+	case hours > 0:
+		return fmt.Sprintf("%dh %dm", hours, mins)
+	default:
+		return fmt.Sprintf("%dm", mins)
+	}
 }
 
 // ---------------------------------------------------------------------------
