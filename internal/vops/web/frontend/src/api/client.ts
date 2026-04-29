@@ -1,8 +1,27 @@
-// BASE is the sub-path prefix vOps is served under (e.g. "/vlog").
-// Injected by the Go server as <meta name="vops-base"> in index.html so that
-// API calls resolve correctly when Apache uses prefix-stripping ProxyPass.
-const meta = document.querySelector<HTMLMetaElement>('meta[name="vops-base"]');
-export const BASE = (meta?.content ?? '').replace(/\/$/, '');
+// BASE is the sub-path prefix vOps is served under (e.g. "/vops").
+// Primary source: <meta name="vops-base"> injected by the Go server (requires
+// base_path = "/vops" in vops.toml).
+// Fallback: inferred from the Vite asset URL — works even when base_path is
+// not set, as long as Apache strips the prefix before forwarding to Go
+// (ProxyPass /vops/ http://127.0.0.1:PORT/).
+function detectBase(): string {
+  const meta = document.querySelector<HTMLMetaElement>('meta[name="vops-base"]');
+  const configured = (meta?.content ?? '').replace(/\/$/, '');
+  if (configured) return configured;
+
+  // Walk script[src] elements; Vite always puts bundles under /assets/.
+  // If the resolved pathname is e.g. /vops/assets/index-xxx.js the prefix is /vops.
+  for (const s of document.querySelectorAll<HTMLScriptElement>('script[src]')) {
+    try {
+      const pathname = new URL(s.src).pathname;
+      const idx = pathname.indexOf('/assets/');
+      if (idx > 0) return pathname.slice(0, idx);
+    } catch { /* cross-origin or malformed — skip */ }
+  }
+  return '';
+}
+
+export const BASE = detectBase();
 
 export class APIError extends Error {
   status: number;
