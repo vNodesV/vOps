@@ -485,24 +485,33 @@ func cmdStart(f flags) int {
 		return 1
 	}
 
-	// Suite mode: co-launch vProx when config_path is configured in [vprox].
-	// Both subsystems run under a shared errgroup context so that a fatal
-	// error in either causes the other to shut down cleanly.
+	// Proxy controller: wired when config_path is set in [vprox].
+	// external = false → embedded suite mode (vProx goroutine shares errgroup)
+	// external = true  → external service mode (monitor/control via systemctl)
 	var proxyCtrl *vprox.Controller
 	if cfg.Vprox.ConfigPath != "" {
 		proxyCfg := vprox.Config{
-			Home:    cfg.Vprox.ConfigPath,
-			Verbose: f.verbose,
+			Home:        cfg.Vprox.ConfigPath,
+			Verbose:     f.verbose,
+			External:    cfg.Vprox.External,
+			ServiceName: cfg.Vprox.ServiceName,
 		}
 		proxyCtrl = vprox.NewController(proxyCfg)
 		if !f.quiet {
-			fmt.Fprintf(os.Stdout, "  proxy:    suite mode (config: %s)\n", cfg.Vprox.ConfigPath)
+			mode := "embedded"
+			if cfg.Vprox.External {
+				svc := cfg.Vprox.ServiceName
+				if svc == "" {
+					svc = "vProx"
+				}
+				mode = "external (" + svc + ".service)"
+			}
+			fmt.Fprintf(os.Stdout, "  proxy:    %s (config: %s)\n", mode, cfg.Vprox.ConfigPath)
 		}
 	}
-	_ = proxyCtrl // used in errgroup below
 
 	// Wire the proxy controller into the web server so the /api/v1/proxy/*
-	// endpoints can control and query the embedded vProx instance.
+	// endpoints can control and query vProx (embedded or external).
 	server.SetProxyController(proxyCtrl)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
@@ -521,8 +530,8 @@ func cmdStart(f flags) int {
 		return nil
 	})
 
-	// Launch vProx proxy (suite mode only).
-	if proxyCtrl != nil {
+	// Launch vProx proxy (embedded suite mode only — not when external=true).
+	if proxyCtrl != nil && !cfg.Vprox.External {
 		eg.Go(func() error {
 			return proxyCtrl.Start(egCtx)
 		})

@@ -3,7 +3,9 @@ package vprox
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -57,10 +59,26 @@ func NewController(cfg Config) *Controller {
 	}
 }
 
-// Start launches the vProx server in a background goroutine.
-// It is idempotent — calling Start while already running returns an error.
-// parentCtx cancellation propagates to the server goroutine.
+// effectiveServiceName returns the systemd unit name (without .service suffix).
+func (c *Controller) effectiveServiceName() string {
+	if c.cfg.ServiceName != "" {
+		return c.cfg.ServiceName
+	}
+	return "vProx"
+}
+
+// Start launches vProx. In embedded mode the server runs as a goroutine under
+// parentCtx. In external mode it delegates to "systemctl start <service>".
 func (c *Controller) Start(parentCtx context.Context) error {
+	if c.cfg.External {
+		unit := c.effectiveServiceName() + ".service"
+		out, err := exec.CommandContext(parentCtx, "sudo", "systemctl", "start", unit).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("systemctl start %s: %w: %s", unit, err, strings.TrimSpace(string(out)))
+		}
+		return nil
+	}
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -82,9 +100,6 @@ func (c *Controller) Start(parentCtx context.Context) error {
 	go func() {
 		defer close(done)
 
-		// Signal running — server is blocked in ListenAndServe.
-		// We optimistically mark running once Start is invoked; the server
-		// will return an error through the done channel if it can't bind.
 		c.mu.Lock()
 		if c.status == StatusStarting {
 			c.status = StatusRunning
@@ -106,8 +121,18 @@ func (c *Controller) Start(parentCtx context.Context) error {
 	return nil
 }
 
-// Stop signals the running server to shut down and waits for it to exit.
+// Stop signals vProx to shut down. In external mode it delegates to
+// "systemctl stop <service>".
 func (c *Controller) Stop() error {
+	if c.cfg.External {
+		unit := c.effectiveServiceName() + ".service"
+		out, err := exec.Command("sudo", "systemctl", "stop", unit).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("systemctl stop %s: %w: %s", unit, err, strings.TrimSpace(string(out)))
+		}
+		return nil
+	}
+
 	c.mu.Lock()
 	if c.status == StatusStopped || c.status == StatusError {
 		c.mu.Unlock()
@@ -128,6 +153,15 @@ func (c *Controller) Stop() error {
 
 // Restart performs a graceful Stop followed by Start.
 func (c *Controller) Restart(ctx context.Context) error {
+	if c.cfg.External {
+		unit := c.effectiveServiceName() + ".service"
+		out, err := exec.CommandContext(ctx, "sudo", "systemctl", "restart", unit).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("systemctl restart %s: %w: %s", unit, err, strings.TrimSpace(string(out)))
+		}
+		return nil
+	}
+
 	if err := c.Stop(); err != nil {
 		return fmt.Errorf("vprox controller: stop: %w", err)
 	}
@@ -135,15 +169,39 @@ func (c *Controller) Restart(ctx context.Context) error {
 }
 
 // State returns the current status and last error (if StatusError).
+// In external mode the status is queried live from systemctl is-active.
 func (c *Controller) State() (Status, error) {
+	if c.cfg.External {
+		return c.externalState()
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.status, c.lastErr
 }
 
-// UptimeSec returns seconds since the controller last called Start.
-// Returns 0 if the server has never been started or is currently stopped/errored.
+// externalState queries systemctl is-active and maps the output to a Status.
+func (c *Controller) externalState() (Status, error) {
+	unit := c.effectiveServiceName() + ".service"
+	out, _ := exec.Command("systemctl", "is-active", unit).Output()
+	switch strings.TrimSpace(string(out)) {
+	case "active":
+		return StatusRunning, nil
+	case "activating":
+		return StatusStarting, nil
+	case "failed":
+		return StatusError, fmt.Errorf("unit %s is failed", unit)
+	default:
+		return StatusStopped, nil
+	}
+}
+
+// UptimeSec returns seconds since the service was last started.
+// In external mode it reads ActiveEnterTimestamp from systemctl show.
+// Returns 0 when unavailable.
 func (c *Controller) UptimeSec() int64 {
+	if c.cfg.External {
+		return c.externalUptimeSec()
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.status != StatusRunning && c.status != StatusStarting {
@@ -153,6 +211,36 @@ func (c *Controller) UptimeSec() int64 {
 		return 0
 	}
 	return int64(time.Since(c.startedAt).Seconds())
+}
+
+// externalUptimeSec parses the ActiveEnterTimestamp reported by systemctl.
+func (c *Controller) externalUptimeSec() int64 {
+	unit := c.effectiveServiceName() + ".service"
+	out, err := exec.Command("systemctl", "show", "--property=ActiveEnterTimestamp", unit).Output()
+	if err != nil {
+		return 0
+	}
+	line := strings.TrimSpace(string(out))
+	idx := strings.Index(line, "=")
+	if idx < 0 {
+		return 0
+	}
+	ts := strings.TrimSpace(line[idx+1:])
+	if ts == "" || strings.EqualFold(ts, "n/a") {
+		return 0
+	}
+	for _, layout := range []string{
+		"Mon 2006-01-02 15:04:05 MST",
+		"Mon 2006-01-02 15:04:05 UTC",
+	} {
+		if t, parseErr := time.Parse(layout, ts); parseErr == nil {
+			if sec := int64(time.Since(t).Seconds()); sec > 0 {
+				return sec
+			}
+			return 0
+		}
+	}
+	return 0
 }
 
 // ConfigFilePath returns the path to the vProx settings TOML file

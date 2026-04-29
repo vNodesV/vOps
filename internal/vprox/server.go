@@ -59,6 +59,15 @@ type Config struct {
 	AutoRPS   float64
 	AutoBurst int
 
+	// External marks this as an externally-managed vProx instance.
+	// When true, the Controller does NOT run an embedded Server goroutine.
+	// Start/Stop/Restart delegate to systemctl; State queries systemd.
+	External bool
+
+	// ServiceName is the systemd unit name to control when External = true.
+	// Default: "vProx"  (unit file: "vProx.service").
+	ServiceName string
+
 	// Feature flags.
 	Verbose       bool
 	DisableAuto   bool

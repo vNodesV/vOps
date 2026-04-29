@@ -17,14 +17,28 @@ type Config struct {
 	Vprox VproxSection `toml:"vprox"`
 }
 
-// VproxSection holds suite-mode settings for the embedded vProx proxy server.
-// When config_path is non-empty, `vops start` will co-launch vProx alongside
-// the management panel under a shared errgroup context.
+// VproxSection holds settings for vProx integration.
+// Two modes are supported:
+//   - embedded (default): when config_path is set and external is false,
+//     `vops start` co-launches vProx in-process under a shared errgroup.
+//   - external: when external = true, vOps does NOT start vProx; it instead
+//     monitors and controls the separately-running systemd service, reading
+//     logs and status directly.
 type VproxSection struct {
-	// ConfigPath is the path to the vProx configuration directory.
-	// When empty (default), vProx is NOT started in suite mode.
-	// Example: config_path = "/opt/vOps/config/vprox"
+	// ConfigPath is the path to the vProx HOME directory.
+	// Required for both embedded and external modes.
+	// Example: config_path = "/home/vnodesv/.vOps"
 	ConfigPath string `toml:"config_path"`
+
+	// External, when true, disables the embedded vProx goroutine.
+	// vOps will monitor and control an independently-running vProx service
+	// (e.g. managed by systemd) rather than launching its own instance.
+	// Requires config_path to be set so vOps can locate logs and config files.
+	External bool `toml:"external"`
+
+	// ServiceName is the systemd unit name to manage when external = true.
+	// Default: "vProx"  (resolves to "vProx.service").
+	ServiceName string `toml:"service_name"`
 }
 
 // VOpsSection holds all vOps settings.
