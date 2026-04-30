@@ -90,8 +90,8 @@ type Server struct {
 
 // loginAttempt tracks failed login attempts for a single source IP.
 type loginAttempt struct {
-	count       int
-	lastAttempt time.Time // time of the most recent failed attempt (M-6)
+	count       int       // failed attempts since last reset
+	lastAttempt time.Time // time of the most recent failed attempt
 	lockedUntil time.Time
 }
 

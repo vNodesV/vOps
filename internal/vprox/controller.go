@@ -3,8 +3,10 @@ package vprox
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -122,11 +124,13 @@ func (c *Controller) Start(parentCtx context.Context) error {
 }
 
 // Stop signals vProx to shut down. In external mode it delegates to
-// "systemctl stop <service>".
+// "systemctl stop <service>" with a 30 s timeout.
 func (c *Controller) Stop() error {
 	if c.cfg.External {
 		unit := c.effectiveServiceName() + ".service"
-		out, err := exec.Command("sudo", "systemctl", "stop", unit).CombinedOutput()
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		out, err := exec.CommandContext(ctx, "sudo", "systemctl", "stop", unit).CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("systemctl stop %s: %w: %s", unit, err, strings.TrimSpace(string(out)))
 		}
@@ -148,7 +152,10 @@ func (c *Controller) Stop() error {
 	if done != nil {
 		<-done
 	}
-	return c.lastErr
+	c.mu.Lock()
+	lastErr := c.lastErr
+	c.mu.Unlock()
+	return lastErr
 }
 
 // Restart performs a graceful Stop followed by Start.
@@ -213,34 +220,37 @@ func (c *Controller) UptimeSec() int64 {
 	return int64(time.Since(c.startedAt).Seconds())
 }
 
-// externalUptimeSec parses the ActiveEnterTimestamp reported by systemctl.
+// externalUptimeSec returns seconds since the service last entered the active
+// state. It uses ActiveEnterTimestampMonotonic (µs since boot) diffed against
+// /proc/uptime so the result is locale- and timezone-independent.
 func (c *Controller) externalUptimeSec() int64 {
 	unit := c.effectiveServiceName() + ".service"
-	out, err := exec.Command("systemctl", "show", "--property=ActiveEnterTimestamp", unit).Output()
+	out, err := exec.Command("systemctl", "show", "--value", "--property=ActiveEnterTimestampMonotonic", unit).Output()
 	if err != nil {
 		return 0
 	}
-	line := strings.TrimSpace(string(out))
-	idx := strings.Index(line, "=")
-	if idx < 0 {
+	activationUs, err := strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
+	if err != nil || activationUs == 0 {
 		return 0
 	}
-	ts := strings.TrimSpace(line[idx+1:])
-	if ts == "" || strings.EqualFold(ts, "n/a") {
+	data, err := os.ReadFile("/proc/uptime")
+	if err != nil {
 		return 0
 	}
-	for _, layout := range []string{
-		"Mon 2006-01-02 15:04:05 MST",
-		"Mon 2006-01-02 15:04:05 UTC",
-	} {
-		if t, parseErr := time.Parse(layout, ts); parseErr == nil {
-			if sec := int64(time.Since(t).Seconds()); sec > 0 {
-				return sec
-			}
-			return 0
-		}
+	fields := strings.Fields(string(data))
+	if len(fields) == 0 {
+		return 0
 	}
-	return 0
+	bootSec, err := strconv.ParseFloat(fields[0], 64)
+	if err != nil {
+		return 0
+	}
+	currentUs := int64(bootSec * 1e6)
+	elapsed := currentUs - activationUs
+	if elapsed <= 0 {
+		return 0
+	}
+	return elapsed / 1_000_000
 }
 
 // ConfigFilePath returns the path to the vProx settings TOML file

@@ -29,6 +29,7 @@
   --vn-warning:       #d97706;
   --vn-warning-medium: #ea580c;
   --vn-danger:        #dc2626;
+  --vn-threat-high:   #ef4444;
   --vn-info:          #0284c7;
   --vn-on-primary:    #ffffff;
   --vn-shadow:        0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
@@ -58,6 +59,7 @@
   --vn-warning:       #ffa726;
   --vn-warning-medium: #ea580c;
   --vn-danger:        #ef5350;
+  --vn-threat-high:   #e53935;
   --vn-info:          #38bdf8;
   --vn-on-primary:    #001700;
   --vn-shadow:        0 0 28px rgba(0,255,0,0.18), inset 0 1px 0 rgba(0,255,0,0.06), 0 4px 20px rgba(0,0,0,0.6);
@@ -85,6 +87,7 @@
   --vn-warning:       #fbbf24;
   --vn-warning-medium: #f97316;
   --vn-danger:        #f87171;
+  --vn-threat-high:   #fca5a5;
   --vn-info:          #38bdf8;
   --vn-on-primary:    #ffffff;
   --vn-shadow:        0 0 28px rgba(59,130,246,0.18), inset 0 1px 0 rgba(59,130,246,0.06), 0 4px 20px rgba(0,0,0,0.6);
@@ -112,6 +115,7 @@
   --vn-warning:       #d97706;
   --vn-warning-medium: #ea580c;
   --vn-danger:        #dc2626;
+  --vn-threat-high:   #ef4444;
   --vn-info:          #0284c7;
   --vn-on-primary:    #ffffff;
   --vn-shadow:        0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);

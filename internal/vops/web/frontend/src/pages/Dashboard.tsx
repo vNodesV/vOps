@@ -160,6 +160,13 @@ function fmtRelative(iso: string): string {
   }
 }
 
+function fmtBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1_048_576) return `${(n / 1024).toFixed(1)} KB`;
+  if (n < 1_073_741_824) return `${(n / 1_048_576).toFixed(1)} MB`;
+  return `${(n / 1_073_741_824).toFixed(2)} GB`;
+}
+
 /* ── Infrastructure summary boxes ─────────────────────────────── */
 
 function SummaryBoxes() {
@@ -199,7 +206,7 @@ function SummaryBoxes() {
   }).length;
 
   const svcsOnline = services.filter(s => s.status?.service_active).length;
-  const svcsDown = services.filter(s => s.state === 'stopped' || s.state === 'unknown').length;
+  const svcsDown = services.filter(s => s.status != null && !s.status.service_active).length;
   // Count by node_type for breakdown (top 3 most common)
   const svcTypeCount = services.reduce((acc, s) => {
     acc[s.node_type] = (acc[s.node_type] ?? 0) + 1;
@@ -493,9 +500,12 @@ function HistorySparkline({ vmName }: { vmName: string }) {
         <div style={{ position: 'absolute', top: 0, left: 0 }}><Sparkline pts={pts.map(p => p.cpu_pct)} color="var(--vn-primary)" /></div>
       </div>
       <div style={{ display: 'flex', gap: '0.3rem', marginTop: '0.15rem', alignItems: 'center' }}>
-        <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: 'var(--vn-primary)', display: 'inline-block' }} title="CPU" aria-hidden="true" />
-        <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: 'var(--vn-success)', display: 'inline-block' }} title="Mem" aria-hidden="true" />
-        <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: 'var(--vn-warning)', display: 'inline-block' }} title="Disk" aria-hidden="true" />
+        <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: 'var(--vn-primary)', display: 'inline-block' }} aria-hidden="true" />
+        <span style={{ fontSize: '0.6rem', color: 'var(--vn-text-muted)', lineHeight: 1 }}>CPU</span>
+        <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: 'var(--vn-success)', display: 'inline-block' }} aria-hidden="true" />
+        <span style={{ fontSize: '0.6rem', color: 'var(--vn-text-muted)', lineHeight: 1 }}>Mem</span>
+        <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: 'var(--vn-warning)', display: 'inline-block' }} aria-hidden="true" />
+        <span style={{ fontSize: '0.6rem', color: 'var(--vn-text-muted)', lineHeight: 1 }}>Disk</span>
       </div>
     </div>
   );
@@ -724,6 +734,12 @@ function IngestSection() {
               <span className="font-medium" style={{ color: 'var(--vn-text-subtle)', fontSize: '0.8rem' }}>{fmtRelative(archiveStats.last_ingested_at)}</span>
             </div>
           )}
+          {(archiveStats.total_bytes ?? 0) > 0 && (
+            <div>
+              <span style={{ color: 'var(--vn-text-muted)' }}>Size:</span>{' '}
+              <span className="font-medium">{fmtBytes(archiveStats.total_bytes)}</span>
+            </div>
+          )}
         </div>
       ) : (
         <p className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>No ingest data available.</p>
@@ -820,7 +836,7 @@ function AlertsWidget() {
       ) : (
         <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
           {alerts.map((a, i) => (
-            <li key={i} className="flex items-center gap-2 text-sm">
+            <li key={`${a.type}-${a.label}-${i}`} className="flex items-center gap-2 text-sm">
               <span className="w-1.5 h-1.5 rounded-full shrink-0"
                 style={{ backgroundColor: a.type === 'danger' ? 'var(--vn-danger)' : 'var(--vn-warning)' }}
                 aria-hidden="true" />

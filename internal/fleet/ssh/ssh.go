@@ -10,7 +10,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"os"
 	"strconv"
@@ -19,6 +18,8 @@ import (
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
+
+	"github.com/vNodesV/vOps/internal/logging"
 )
 
 // Client wraps an active SSH connection.
@@ -91,7 +92,7 @@ func Dial(host string, port int, user, keyPath, knownHostsPath string) (*Client,
 			hostKeyAlgos = algos
 		}
 	} else {
-		log.Printf("[fleet/ssh] WARNING: host key verification disabled for %s — set known_hosts_path in vops.toml [vops.push.defaults] or run: ssh-keyscan -H %s >> ~/.ssh/known_hosts", host, host)
+		logging.Print("WRN", "fleet/ssh", "host key verification disabled — set known_hosts_path in vops.toml or run: ssh-keyscan -H <host> >> ~/.ssh/known_hosts", logging.F("host", host))
 		hostKeyCallback = ssh.InsecureIgnoreHostKey() //nolint:gosec // explicit config absent and no default known_hosts found
 	}
 
@@ -308,7 +309,7 @@ func newClientOverConn(conn net.Conn, targetAddr, user, keyPath, knownHostsPath 
 		if host == "" {
 			host = targetAddr
 		}
-		log.Printf("[fleet/ssh] WARNING: host key verification disabled for %s — add to ~/.ssh/known_hosts", host)
+		logging.Print("WRN", "fleet/ssh", "host key verification disabled — add host to ~/.ssh/known_hosts", logging.F("host", host))
 		hostKeyCallback = ssh.InsecureIgnoreHostKey() //nolint:gosec
 	}
 
