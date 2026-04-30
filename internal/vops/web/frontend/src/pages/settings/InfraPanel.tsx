@@ -752,7 +752,10 @@ export function NewDatacenterForm({ onSaved }: { onSaved: () => void }) {
 export function DatacentersPanel({ config }: { config: ConfigSnapshot }) {
   const queryClient = useQueryClient();
   const infras = (config.infras as InfraEntry[]) ?? [];
-  const onSaved = useCallback(() => queryClient.invalidateQueries({ queryKey: ['config'] }), [queryClient]);
+  const onSaved = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['config'] });
+    queryClient.invalidateQueries({ queryKey: ['fleet-host-inventory'] });
+  }, [queryClient]);
 
   return (
     <div className="space-y-4">

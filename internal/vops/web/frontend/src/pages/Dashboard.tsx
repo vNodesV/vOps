@@ -10,7 +10,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from 'recharts';
-import { getStats, getChart, getFleetChains, triggerIngest, triggerBackupAndIngest, getIngestStats, getVMStatus, vmUpgradeURL, getVMHistory, getServices } from '../api';
+import { getStats, getChart, getFleetChains, triggerIngest, triggerBackupAndIngest, getIngestStats, getVMStatus, vmUpgradeURL, getVMHistory, getUnits } from '../api';
 import type { Stats, ChartSeries, ChainStatus, ArchiveStats, VMStatus, VMMetricPoint } from '../api/types';
 import StatCard from '../components/StatCard';
 import Badge from '../components/Badge';
@@ -173,8 +173,8 @@ function SummaryBoxes() {
   });
 
   const { data: svcsData } = useQuery({
-    queryKey: ['services'],
-    queryFn: getServices,
+    queryKey: ['units'],
+    queryFn: getUnits,
     refetchInterval: 60_000,
     retry: false,
   });
@@ -187,7 +187,7 @@ function SummaryBoxes() {
   });
 
   const chains = chainsData?.chains ?? [];
-  const services = svcsData?.services ?? [];
+  const services = svcsData?.units ?? [];
   const vms: VMStatus[] = vmsData?.vms ?? [];
 
   const chainsSynced = chains.filter(c => !c.catching_up && c.node_status !== 'down').length;
@@ -198,11 +198,11 @@ function SummaryBoxes() {
     return Date.now() - new Date(c.latest_block_time).getTime() > 120_000;
   }).length;
 
-  const svcsOnline = services.filter(s => s.state === 'online').length;
-  const svcsDown = services.filter(s => s.state === 'down').length;
-  // Count by type for breakdown (top 3 most common)
+  const svcsOnline = services.filter(s => s.status?.service_active).length;
+  const svcsDown = services.filter(s => s.state === 'stopped' || s.state === 'unknown').length;
+  // Count by node_type for breakdown (top 3 most common)
   const svcTypeCount = services.reduce((acc, s) => {
-    acc[s.service_type] = (acc[s.service_type] ?? 0) + 1;
+    acc[s.node_type] = (acc[s.node_type] ?? 0) + 1;
     return acc;
   }, {} as Record<string, number>);
   const topTypes = Object.entries(svcTypeCount)

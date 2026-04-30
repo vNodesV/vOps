@@ -866,7 +866,10 @@ func (h *Handlers) HandleVMUpgrade(w http.ResponseWriter, r *http.Request) {
 	var err error
 	var client *fleetssh.Client
 	if jp := h.svc.Config().ResolveProxyJump(vm); jp != nil {
-		jumpAddr := jp.LanIP
+		jumpAddr := jp.VRackIP
+		if jumpAddr == "" {
+			jumpAddr = jp.LanIP
+		}
 		if jumpAddr == "" {
 			jumpAddr = jp.Name
 		}
