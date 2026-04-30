@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import {
   getUnits,
@@ -6,10 +7,13 @@ import {
   deleteUnit,
   updateUnit,
   getUnitStatusHistory,
+  getRegisteredChains,
+  registerChain,
+  unregisterChain,
 } from '../api';
 import { BASE } from '../api/client';
 import { openSSEStream } from '../api/sse';
-import type { CosmosUnit, CosmosUnitWithStatus, NodeType, NetworkType, UnitStatus } from '../api/types';
+import type { CosmosUnit, CosmosUnitWithStatus, NodeType, NetworkType, UnitStatus, RegisteredChain } from '../api/types';
 import { fmtDate, timeAgo } from '../lib/time';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -49,6 +53,109 @@ function fmtHeight(h: number): string {
 
 function fmtTime(ts: string): string {
   return fmtDate(ts);
+}
+
+// ── ValidatorUptime ───────────────────────────────────────────────────────────
+// Shows last-N poll points as a signing-strip for validator units.
+
+function ValidatorUptime({ unitName }: { unitName: string }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['unit-history', unitName],
+    queryFn: () => getUnitStatusHistory(unitName),
+    staleTime: 30_000,
+  });
+
+  if (isLoading) {
+    return <span style={{ fontSize: 11, color: '#6b7280' }}>Loading uptime…</span>;
+  }
+
+  const history: UnitStatus[] = (data?.history ?? []).slice(-50);
+  if (history.length === 0) {
+    return <span style={{ fontSize: 11, color: '#6b7280' }}>No history yet</span>;
+  }
+
+  return (
+    <div style={{ marginTop: 10 }}>
+      <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 4 }}>
+        Uptime — last {history.length} polls
+      </div>
+      <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+        {history.map((h, i) => {
+          let bg = '#374151';
+          if (h.service_active && !h.syncing) bg = '#4ade80';
+          else if (h.syncing) bg = '#fbbf24';
+          else if (h.service_active === false) bg = '#f87171';
+          return (
+            <div
+              key={`${unitName}-${i}`}
+              title={`${new Date(h.polled_at).toLocaleTimeString()} — ${h.service_active ? 'active' : 'inactive'}${h.syncing ? ' (syncing)' : ''} @ ${(h.block_height ?? 0).toLocaleString()}`}
+              style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: bg, cursor: 'default', flexShrink: 0 }}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── AddChainModal ─────────────────────────────────────────────────────────────
+
+function AddChainModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const [form, setForm] = useState({ chain: '', rpc_url: '', note: '' });
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm(f => ({ ...f, [k]: e.target.value }));
+
+  const handleSubmit = async () => {
+    if (!form.chain.trim() || !form.rpc_url.trim()) {
+      setErr('Chain ID and RPC URL are required.');
+      return;
+    }
+    setSaving(true);
+    try {
+      await registerChain({ chain: form.chain.trim(), rpc_url: form.rpc_url.trim(), note: form.note.trim() || undefined });
+      onCreated();
+      onClose();
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : 'Error registering chain');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal" style={{ width: 480 }}>
+        <div className="modal-header">
+          <span className="font-semibold">Register Chain</span>
+          <button onClick={onClose} className="btn btn-secondary btn-sm">✕</button>
+        </div>
+        <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {err && <div style={{ color: '#f87171', fontSize: 13 }}>{err}</div>}
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={{ fontSize: 12, color: '#9ca3af' }}>Chain ID *</span>
+            <input className="vn-input" value={form.chain} onChange={set('chain')} placeholder="cosmoshub-4" />
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={{ fontSize: 12, color: '#9ca3af' }}>RPC URL *</span>
+            <input className="vn-input" value={form.rpc_url} onChange={set('rpc_url')} placeholder="http://localhost:26657" />
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={{ fontSize: 12, color: '#9ca3af' }}>Note (optional)</span>
+            <input className="vn-input" value={form.note} onChange={set('note')} placeholder="optional note" />
+          </label>
+        </div>
+        <div className="modal-footer">
+          <button onClick={onClose} className="btn btn-secondary">Cancel</button>
+          <button onClick={handleSubmit} disabled={saving} className="btn btn-primary">
+            {saving ? 'Registering…' : 'Register Chain'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ── AddUnitModal ──────────────────────────────────────────────────────────────
@@ -557,6 +664,11 @@ function UnitCard({
               📝 {unit.notes}
             </div>
           )}
+          {unit.node_type === 'validator' && (
+            <div style={{ marginTop: 10, borderTop: '1px solid #1f2937', paddingTop: 10 }}>
+              <ValidatorUptime unitName={unit.name} />
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -569,6 +681,8 @@ export default function UnitsPage() {
   const [units, setUnits] = useState<CosmosUnitWithStatus[]>([]);
   const [loading, setLoading] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
+  const [showAddChain, setShowAddChain] = useState(false);
+  const [registeredChains, setRegisteredChains] = useState<RegisteredChain[]>([]);
   const [historyUnit, setHistoryUnit] = useState<CosmosUnitWithStatus | null>(null);
   const [logUnit, setLogUnit] = useState<CosmosUnitWithStatus | null>(null);
   const [deployUnit, setDeployUnit] = useState<CosmosUnitWithStatus | null>(null);
@@ -590,10 +704,18 @@ export default function UnitsPage() {
     }
   };
 
+  const loadChains = async () => {
+    try {
+      const res = await getRegisteredChains();
+      setRegisteredChains(res.registered_chains ?? []);
+    } catch { /* silently ignore */ }
+  };
+
   useEffect(() => {
     load();
+    loadChains();
     // Auto-refresh every 30s to pick up new poller results.
-    const t = setInterval(load, 30_000);
+    const t = setInterval(() => { void load(); void loadChains(); }, 30_000);
     return () => clearInterval(t);
   }, []);
 
@@ -601,6 +723,12 @@ export default function UnitsPage() {
     if (!confirm(`Delete unit "${name}"? This cannot be undone.`)) return;
     await deleteUnit(name);
     await load();
+  };
+
+  const handleRemoveChain = async (chain: string) => {
+    if (!confirm(`Unregister chain "${chain}"?`)) return;
+    await unregisterChain(chain);
+    await loadChains();
   };
 
   const filtered = units.filter(u => {
@@ -635,9 +763,12 @@ export default function UnitsPage() {
     <div style={{ padding: 24 }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20, flexWrap: 'wrap' }}>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>⚛ Services</h1>
+        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>⚛ Services & Chains</h1>
         <button onClick={() => setShowAdd(true)} className="btn btn-primary">
           + Register Service
+        </button>
+        <button onClick={() => setShowAddChain(true)} className="btn btn-secondary" style={{ borderColor: 'var(--vn-primary)', color: 'var(--vn-primary)' }}>
+          + Register Chain
         </button>
         <button onClick={load} disabled={loading} className="btn btn-secondary">
           {loading ? '⟳ Loading…' : '⟳ Refresh'}
@@ -727,8 +858,63 @@ export default function UnitsPage() {
         ))
       )}
 
+      {/* Registered Chains section */}
+      <div style={{ marginTop: 36 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>⛓ Registered Chains</h2>
+          <span style={{ fontSize: 12, color: 'var(--vn-text-subtle)' }}>
+            {registeredChains.length} registered — polled by vProx fleet
+          </span>
+        </div>
+        {registeredChains.length === 0 ? (
+          <div className="card" style={{ padding: 28, textAlign: 'center' }}>
+            <div style={{ color: 'var(--vn-text-subtle)', fontSize: 14, marginBottom: 12 }}>
+              No chains registered for fleet polling yet.
+            </div>
+            <button onClick={() => setShowAddChain(true)} className="btn btn-secondary" style={{ borderColor: 'var(--vn-primary)', color: 'var(--vn-primary)' }}>
+              + Register Chain
+            </button>
+          </div>
+        ) : (
+          <div className="card card-flush overflow-x-auto">
+            <table className="vn-table">
+              <thead>
+                <tr>
+                  <th>Chain ID</th>
+                  <th>RPC URL</th>
+                  <th>Note</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {registeredChains.map(c => (
+                  <tr key={c.chain}>
+                    <td className="px-3 py-2 font-medium">{c.chain}</td>
+                    <td className="px-3 py-2" style={{ fontFamily: 'monospace', fontSize: '0.78rem', color: 'var(--vn-text-muted)' }}>
+                      {c.rpc_url || '—'}
+                    </td>
+                    <td className="px-3 py-2" style={{ fontSize: '0.78rem', color: 'var(--vn-text-muted)' }}>
+                      {c.note || '—'}
+                    </td>
+                    <td className="px-3 py-2">
+                      <button
+                        onClick={() => { void handleRemoveChain(c.chain); }}
+                        style={{ background: 'transparent', color: 'var(--vn-danger)', border: '1px solid var(--vn-danger)', borderRadius: 4, padding: '0.25rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer' }}
+                      >
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       {/* Modals */}
       {showAdd && <AddUnitModal onClose={() => setShowAdd(false)} onCreated={load} />}
+      {showAddChain && <AddChainModal onClose={() => setShowAddChain(false)} onCreated={loadChains} />}
       {historyUnit && <StatusHistoryModal unit={historyUnit} onClose={() => setHistoryUnit(null)} />}
       {logUnit && <LogModal unit={logUnit} onClose={() => setLogUnit(null)} />}
       {deployUnit && <DeployModal unit={deployUnit} onClose={() => setDeployUnit(null)} />}

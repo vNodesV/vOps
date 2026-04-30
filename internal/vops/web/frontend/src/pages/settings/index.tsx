@@ -11,7 +11,7 @@ import type { ConfigSnapshot } from '../../api/types';
 import Spinner from '../../components/Spinner';
 
 import { FleetScanPanel, FleetSSHPanel, DatacentersPanel } from './InfraPanel';
-import { PortsPanel, ProxyControlsPanel, ChainProfilesPanel, RegisteredChainsPanel } from './ProxyPanel';
+import { PortsPanel, ProxyControlsPanel, ChainProfilesPanel } from './ProxyPanel';
 import { VOpsPanel, BackupsPanel, PreferencesPanel } from './SystemPanel';
 import { SecurityPanel, AutoBanPanel } from './SecurityPanel';
 import ServicesPage from '../CosmosNodes';
@@ -58,8 +58,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Services',
     desc: 'Cosmos node services and chain endpoints monitored by vOps',
     sections: [
-      { id: 'cosmos-nodes',      label: 'Cosmos Nodes' },
-      { id: 'registered-chains', label: 'Registered Chains' },
+      { id: 'cosmos-nodes', label: 'Services & Chains' },
     ],
   },
   {
@@ -116,8 +115,6 @@ export default function SettingsPage() {
         return config ? <ProxyControlsPanel config={config} /> : null;
       case 'chain-profiles':
         return config ? <ChainProfilesPanel config={config} /> : null;
-      case 'registered-chains':
-        return <RegisteredChainsPanel />;
       case 'cosmos-nodes':
         return <ServicesPage />;
       case 'vops':

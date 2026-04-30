@@ -11,7 +11,7 @@ import {
   CartesianGrid,
 } from 'recharts';
 import { getStats, getChart, getFleetChains, triggerIngest, triggerBackupAndIngest, getIngestStats, getVMStatus, vmUpgradeURL, getVMHistory, getUnits } from '../api';
-import type { Stats, ChartSeries, ChainStatus, ArchiveStats, VMStatus, VMMetricPoint } from '../api/types';
+import type { Stats, ChartSeries, ArchiveStats, VMStatus, VMMetricPoint, CosmosUnitWithStatus } from '../api/types';
 import StatCard from '../components/StatCard';
 import Badge from '../components/Badge';
 import Spinner from '../components/Spinner';
@@ -172,13 +172,6 @@ function fmtBytes(n: number): string {
 function SummaryBoxes() {
   const nav = useNavigate();
 
-  const { data: chainsData } = useQuery({
-    queryKey: ['fleet-chains'],
-    queryFn: getFleetChains,
-    refetchInterval: 60_000,
-    retry: false,
-  });
-
   const { data: svcsData } = useQuery({
     queryKey: ['units'],
     queryFn: getUnits,
@@ -193,17 +186,20 @@ function SummaryBoxes() {
     retry: false,
   });
 
-  const chains = chainsData?.chains ?? [];
   const services = svcsData?.units ?? [];
   const vms: VMStatus[] = vmsData?.vms ?? [];
 
-  const chainsSynced = chains.filter(c => !c.catching_up && c.node_status !== 'down').length;
-  const chainsCatching = chains.filter(c => c.catching_up).length;
-  const chainsProposals = chains.reduce((a, c) => a + (c.active_proposals ?? 0), 0);
-  const chainsStalled = chains.filter(c => {
-    if (!c.latest_block_time) return false;
-    return Date.now() - new Date(c.latest_block_time).getTime() > 120_000;
+  // Derive chain stats from registered services (grouped by chain_name)
+  const chainNames = [...new Set(services.map(u => u.chain_name || u.chain_id).filter(Boolean))];
+  const chainsSynced = chainNames.filter(chain => {
+    const cu = services.filter(u => (u.chain_name || u.chain_id) === chain);
+    return cu.some(u => u.status?.service_active && !u.status?.syncing);
   }).length;
+  const chainsCatching = chainNames.filter(chain => {
+    const cu = services.filter(u => (u.chain_name || u.chain_id) === chain);
+    return !cu.some(u => u.status?.service_active && !u.status?.syncing) && cu.some(u => u.status?.syncing);
+  }).length;
+  const chainsProposals = services.reduce((a, u) => a + (u.status?.gov_pending ?? 0), 0);
 
   const svcsOnline = services.filter(s => s.status?.service_active).length;
   const svcsDown = services.filter(s => s.status != null && !s.status.service_active).length;
@@ -226,13 +222,13 @@ function SummaryBoxes() {
   return (
     <div className="flex flex-wrap gap-2 mb-6">
       {/* Chains box */}
-      <div className="card" role="button" tabIndex={0} onClick={() => nav('/chains')}
-        onKeyDown={e => e.key === 'Enter' && nav('/chains')}
-        aria-label="Go to Chains page"
+      <div className="card" role="button" tabIndex={0} onClick={() => nav('/settings')}
+        onKeyDown={e => e.key === 'Enter' && nav('/settings')}
+        aria-label="Go to Services & Chains settings"
         style={{ cursor: 'pointer', flex: '1 1 200px', minWidth: 180, transition: 'border-color 0.15s' }}>
         <div className="text-xs font-semibold uppercase tracking-[0.06em] mb-3" style={{ color: 'var(--vn-text-muted)' }}>🔗 Chains</div>
         <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--vn-info)', marginBottom: '0.5rem' }}>
-          {chains.length}
+          {chainNames.length}
         </div>
         <div className="flex justify-between text-sm py-[0.15rem]">
           <span style={{ color: 'var(--vn-text-muted)' }}>Synced</span>
@@ -242,12 +238,6 @@ function SummaryBoxes() {
           <div className="flex justify-between text-sm py-[0.15rem]">
             <span style={{ color: 'var(--vn-text-muted)' }}>Catching up</span>
             <span style={{ color: 'var(--vn-warning)', fontWeight: 600 }}>{chainsCatching}</span>
-          </div>
-        )}
-        {chainsStalled > 0 && (
-          <div className="flex justify-between text-sm py-[0.15rem]">
-            <span style={{ color: 'var(--vn-danger)' }}>⚠ Stalled</span>
-            <span style={{ color: 'var(--vn-danger)', fontWeight: 600 }}>{chainsStalled}</span>
           </div>
         )}
         {chainsProposals > 0 && (
@@ -324,128 +314,124 @@ function SummaryBoxes() {
 
 /* ── DC ping color helper ────────────────────────────────────── */
 
-function pingColor(ms: number): string {
-  if (ms <= 0)   return 'var(--vn-text-muted)';
-  if (ms < 2)    return 'var(--vn-success)';
-  if (ms < 10)   return 'var(--vn-warning)';
-  return                'var(--vn-danger)';
-}
+
 
 function FleetTable() {
   const nav = useNavigate();
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ['fleet-chains'],
-    queryFn: getFleetChains,
+  const { data, isLoading } = useQuery({
+    queryKey: ['units'],
+    queryFn: getUnits,
     refetchInterval: 65_000,
     retry: false,
   });
 
-  if (isLoading) return <Spinner label="Loading fleet" />;
-  if (isError) {
+  if (isLoading) return <Spinner label="Loading services" />;
+
+  const allUnits: CosmosUnitWithStatus[] = data?.units ?? [];
+  if (allUnits.length === 0) {
     return (
       <div className="card text-center">
         <p className="text-sm" style={{ color: 'var(--vn-text-muted)' }}>
-          Fleet not configured &mdash; add chains in Settings to enable fleet monitoring.
+          No services registered &mdash; add chains &amp; services in Settings to enable monitoring.
         </p>
       </div>
     );
   }
 
-  const chains: ChainStatus[] = data?.chains ?? [];
-  if (chains.length === 0) {
-    return (
-      <div className="card text-center">
-        <p className="text-sm" style={{ color: 'var(--vn-text-muted)' }}>No chains registered.</p>
-      </div>
-    );
-  }
+  // Group units by chain_name, falling back to chain_id
+  const grouped = allUnits.reduce<Record<string, CosmosUnitWithStatus[]>>((acc, u) => {
+    const key = u.chain_name || u.chain_id || 'Unknown';
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(u);
+    return acc;
+  }, {});
 
   return (
     <div className="card card-flush overflow-x-auto">
       <table className="vn-table">
         <thead>
           <tr>
-            {['Chain', 'Network', 'Status', 'Height', 'Avg Block', 'Governance', 'Upgrade', 'Validator', 'DC Ping', 'Updated'].map(
-              (h) => (
-                <th
-                  key={h}
-                  scope="col"
-                >
-                  {h}
-                </th>
-              ),
-            )}
+            {['Chain', 'Network', 'Services', 'Active', 'Height', 'Gov', 'Validators', 'Updated'].map(h => (
+              <th key={h} scope="col">{h}</th>
+            ))}
           </tr>
         </thead>
         <tbody>
-          {chains.map((c) => (
-            <tr
-              key={c.chain}
-              style={{ cursor: 'pointer' }}
-              onClick={() => nav('/chains')}
-              title={`View ${c.dashboard_name || c.chain} details`}
-            >
-              <td className="px-3 py-2 font-medium whitespace-nowrap">{c.dashboard_name || c.chain}</td>
-              <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--vn-text-muted)' }}>
-                {c.network_type || c.type || '\u2014'}
-              </td>
-              <td className="px-3 py-2"><Badge status={c.node_status} /></td>
-              <td className="px-3 py-2 tabular-nums">{(c.height ?? 0).toLocaleString()}</td>
-              <td className="px-3 py-2 tabular-nums" style={{ color: 'var(--vn-text-muted)' }}>
-                {c.avg_block_sec != null ? `${c.avg_block_sec.toFixed(1)}s` : '\u2014'}
-              </td>
-              <td className="px-3 py-2">
-                {c.active_proposals > 0 ? (
-                  <span className="inline-flex items-center gap-1" style={{ color: 'var(--vn-warning)' }}>
-                    <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'var(--vn-warning)' }} aria-hidden="true" />
-                    {c.active_proposals} active
-                  </span>
-                ) : (
-                  <span style={{ color: 'var(--vn-text-subtle)' }}>None</span>
-                )}
-              </td>
-              <td className="px-3 py-2">
-                {c.upgrade_pending ? (
-                  <span style={{ color: 'var(--vn-warning)' }}>
-                    {c.upgrade_name} @ {c.upgrade_height?.toLocaleString()}
-                  </span>
-                ) : (
-                  <span style={{ color: 'var(--vn-text-subtle)' }}>{'\u2014'}</span>
-                )}
-              </td>
-              <td className="px-3 py-2">
-                {c.has_validator ? (
-                  <span className="inline-flex items-center gap-1">
-                    {c.val_jailed ? (
-                      <Badge status="blocked" />
-                    ) : c.val_bonded ? (
-                      <Badge status="synced" />
-                    ) : (
-                      <Badge status="flagged" />
-                    )}
-                    {c.val_participation && (
+          {Object.entries(grouped).map(([chain, chainUnits]) => {
+            const active = chainUnits.filter(u => u.status?.service_active);
+            const maxHeight = Math.max(0, ...chainUnits.map(u => u.status?.block_height ?? 0));
+            const totalGov = chainUnits.reduce((s, u) => s + (u.status?.gov_pending ?? 0), 0);
+            const validators = chainUnits.filter(u => u.node_type === 'validator');
+            const bondedValidators = validators.filter(u => (u.status?.voting_power ?? 0) > 0);
+            const network = chainUnits[0]?.network_type ?? '';
+            const chainId = chainUnits[0]?.chain_id ?? '';
+            const upgrades = chainUnits.filter(u => u.status?.upgrade_height != null && (u.status?.upgrade_height ?? 0) > 0);
+            const mostRecent = chainUnits
+              .map(u => u.status?.polled_at)
+              .filter((p): p is string => !!p)
+              .sort()
+              .pop();
+
+            return (
+              <tr
+                key={chain}
+                style={{ cursor: 'pointer' }}
+                onClick={() => nav('/settings')}
+                title={`View ${chain} services in Settings`}
+              >
+                <td className="px-3 py-2 font-medium whitespace-nowrap">
+                  {chain}
+                  {chainId && chainId !== chain && (
+                    <span className="text-xs ml-1" style={{ color: 'var(--vn-text-muted)' }}>{chainId}</span>
+                  )}
+                </td>
+                <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--vn-text-muted)' }}>
+                  {network || '\u2014'}
+                </td>
+                <td className="px-3 py-2 tabular-nums">{chainUnits.length}</td>
+                <td className="px-3 py-2">
+                  {active.length > 0 ? (
+                    <span style={{ color: 'var(--vn-success)', fontWeight: 600 }}>{active.length}</span>
+                  ) : (
+                    <Badge status="down" />
+                  )}
+                </td>
+                <td className="px-3 py-2 tabular-nums">
+                  {maxHeight > 0 ? maxHeight.toLocaleString() : '\u2014'}
+                </td>
+                <td className="px-3 py-2">
+                  {totalGov > 0 ? (
+                    <span className="inline-flex items-center gap-1" style={{ color: 'var(--vn-warning)' }}>
+                      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'var(--vn-warning)' }} aria-hidden="true" />
+                      {totalGov} active
+                    </span>
+                  ) : (
+                    <span style={{ color: 'var(--vn-text-subtle)' }}>None</span>
+                  )}
+                </td>
+                <td className="px-3 py-2">
+                  {validators.length > 0 ? (
+                    <span className="inline-flex items-center gap-1">
+                      <Badge status={bondedValidators.length > 0 ? 'synced' : 'down'} />
                       <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>
-                        {c.val_participation}
+                        {bondedValidators.length}/{validators.length}
                       </span>
-                    )}
-                    {c.val_missed_blocks > 0 && (
-                      <span className="text-xs" style={{ color: 'var(--vn-warning)' }}>
-                        ({c.val_missed_blocks} missed)
-                      </span>
-                    )}
-                  </span>
-                ) : (
-                  <span style={{ color: 'var(--vn-text-subtle)' }}>{'\u2014'}</span>
-                )}
-              </td>
-              <td className="px-3 py-2 tabular-nums" style={{ color: pingColor(c.lan_ping_ms) }}>
-                {c.lan_ping_ms > 0 ? `${c.lan_ping_ms}ms` : '\u2014'}
-              </td>
-              <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--vn-text-subtle)', fontSize: '12px' }}>
-                {fmtRelative(c.updated_at)}
-              </td>
-            </tr>
-          ))}
+                      {upgrades.length > 0 && (
+                        <span className="text-xs" style={{ color: 'var(--vn-warning)' }}>
+                          ⬆ {upgrades[0].status?.upgrade_name ?? 'upgrade'} @ {upgrades[0].status?.upgrade_height?.toLocaleString()}
+                        </span>
+                      )}
+                    </span>
+                  ) : (
+                    <span style={{ color: 'var(--vn-text-subtle)' }}>{'\u2014'}</span>
+                  )}
+                </td>
+                <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--vn-text-subtle)', fontSize: '12px' }}>
+                  {mostRecent ? fmtRelative(mostRecent) : '\u2014'}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
