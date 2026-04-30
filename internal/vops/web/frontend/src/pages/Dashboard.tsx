@@ -252,11 +252,11 @@ function SummaryBoxes() {
       </div>
 
       {/* Services box */}
-      <div className="card" role="button" tabIndex={0} onClick={() => nav('/services')}
-        onKeyDown={e => e.key === 'Enter' && nav('/services')}
-        aria-label="Go to Services page"
+      <div className="card" role="button" tabIndex={0} onClick={() => nav('/ops')}
+        onKeyDown={e => e.key === 'Enter' && nav('/ops')}
+        aria-label="Go to Operations Center"
         style={{ cursor: 'pointer', flex: '1 1 200px', minWidth: 180, transition: 'border-color 0.15s' }}>
-        <div className="text-xs font-semibold uppercase tracking-[0.06em] mb-3" style={{ color: 'var(--vn-text-muted)' }}>⚙ Services</div>
+        <div className="text-xs font-semibold uppercase tracking-[0.06em] mb-3" style={{ color: 'var(--vn-text-muted)' }}>⚙ Cosmos Units</div>
         <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--vn-primary)', marginBottom: '0.5rem' }}>
           {services.length}
         </div>
@@ -315,7 +315,17 @@ function SummaryBoxes() {
   );
 }
 
+/* ── DC ping color helper ────────────────────────────────────── */
+
+function pingColor(ms: number): string {
+  if (ms <= 0)   return 'var(--vn-text-muted)';
+  if (ms < 2)    return 'var(--vn-success)';
+  if (ms < 10)   return 'var(--vn-warning)';
+  return                'var(--vn-danger)';
+}
+
 function FleetTable() {
+  const nav = useNavigate();
   const { data, isLoading, isError } = useQuery({
     queryKey: ['fleet-chains'],
     queryFn: getFleetChains,
@@ -364,6 +374,9 @@ function FleetTable() {
           {chains.map((c) => (
             <tr
               key={c.chain}
+              style={{ cursor: 'pointer' }}
+              onClick={() => nav('/chains')}
+              title={`View ${c.dashboard_name || c.chain} details`}
             >
               <td className="px-3 py-2 font-medium whitespace-nowrap">{c.dashboard_name || c.chain}</td>
               <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--vn-text-muted)' }}>
@@ -418,7 +431,7 @@ function FleetTable() {
                   <span style={{ color: 'var(--vn-text-subtle)' }}>{'\u2014'}</span>
                 )}
               </td>
-              <td className="px-3 py-2 tabular-nums" style={{ color: 'var(--vn-text-muted)' }}>
+              <td className="px-3 py-2 tabular-nums" style={{ color: pingColor(c.lan_ping_ms) }}>
                 {c.lan_ping_ms > 0 ? `${c.lan_ping_ms}ms` : '\u2014'}
               </td>
               <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--vn-text-subtle)', fontSize: '12px' }}>
@@ -473,10 +486,17 @@ function HistorySparkline({ vmName }: { vmName: string }) {
   const pts: VMMetricPoint[] = data?.history ?? [];
   if (pts.length < 2) return <span style={{ color: 'var(--vn-text-subtle)', fontSize: '0.65rem' }}>no data</span>;
   return (
-    <div style={{ position: 'relative', height: 24, width: 100 }}>
-      <div style={{ position: 'absolute', top: 0, left: 0 }}><Sparkline pts={pts.map(p => p.storage_pct)} color="var(--vn-warning)" /></div>
-      <div style={{ position: 'absolute', top: 0, left: 0 }}><Sparkline pts={pts.map(p => p.mem_pct)} color="var(--vn-success)" /></div>
-      <div style={{ position: 'absolute', top: 0, left: 0 }}><Sparkline pts={pts.map(p => p.cpu_pct)} color="var(--vn-primary)" /></div>
+    <div>
+      <div style={{ position: 'relative', height: 24, width: 100 }}>
+        <div style={{ position: 'absolute', top: 0, left: 0 }}><Sparkline pts={pts.map(p => p.storage_pct)} color="var(--vn-warning)" /></div>
+        <div style={{ position: 'absolute', top: 0, left: 0 }}><Sparkline pts={pts.map(p => p.mem_pct)} color="var(--vn-success)" /></div>
+        <div style={{ position: 'absolute', top: 0, left: 0 }}><Sparkline pts={pts.map(p => p.cpu_pct)} color="var(--vn-primary)" /></div>
+      </div>
+      <div style={{ display: 'flex', gap: '0.3rem', marginTop: '0.15rem', alignItems: 'center' }}>
+        <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: 'var(--vn-primary)', display: 'inline-block' }} title="CPU" aria-hidden="true" />
+        <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: 'var(--vn-success)', display: 'inline-block' }} title="Mem" aria-hidden="true" />
+        <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: 'var(--vn-warning)', display: 'inline-block' }} title="Disk" aria-hidden="true" />
+      </div>
     </div>
   );
 }
@@ -573,15 +593,15 @@ function ServersPanel() {
                   )}
                 </td>
                 <td className="px-3 py-2">
-                  {vm.online && (
+                  {vm.online && vm.apt_count > 0 && (
                     <button
                       onClick={() => setUpgradeTarget(vm)}
                       className="px-2 py-1 text-xs rounded cursor-pointer whitespace-nowrap
                                  focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
                       style={{
-                        color: vm.apt_count > 0 ? 'var(--vn-on-primary)' : 'var(--vn-text-muted)',
-                        backgroundColor: vm.apt_count > 0 ? 'var(--vn-primary)' : 'transparent',
-                        border: vm.apt_count > 0 ? 'none' : '1px solid var(--vn-border)',
+                        color: 'var(--vn-on-primary)',
+                        backgroundColor: 'var(--vn-primary)',
+                        border: 'none',
                       }}
                       aria-label={`Upgrade ${vm.name}`}
                     >
@@ -689,9 +709,21 @@ function IngestSection() {
             <span className="font-medium">{archiveStats.total_archives}</span>
           </div>
           <div>
-            <span style={{ color: 'var(--vn-text-muted)' }}>Total Events:</span>{' '}
-            <span className="font-medium">{(archiveStats.total_events ?? 0).toLocaleString()}</span>
+            <span style={{ color: 'var(--vn-text-muted)' }}>Requests:</span>{' '}
+            <span className="font-medium">{(archiveStats.total_requests ?? 0).toLocaleString()}</span>
           </div>
+          {archiveStats.total_ratelimit > 0 && (
+            <div>
+              <span style={{ color: 'var(--vn-text-muted)' }}>Rate-limited:</span>{' '}
+              <span className="font-medium" style={{ color: 'var(--vn-warning)' }}>{archiveStats.total_ratelimit.toLocaleString()}</span>
+            </div>
+          )}
+          {archiveStats.last_ingested_at && (
+            <div>
+              <span style={{ color: 'var(--vn-text-muted)' }}>Last ingest:</span>{' '}
+              <span className="font-medium" style={{ color: 'var(--vn-text-subtle)', fontSize: '0.8rem' }}>{fmtRelative(archiveStats.last_ingested_at)}</span>
+            </div>
+          )}
         </div>
       ) : (
         <p className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>No ingest data available.</p>
@@ -701,74 +733,103 @@ function IngestSection() {
 }
 
 
-function ChainsFloater() {
-  const [expanded, setExpanded] = useState(false);
-  const qc = useQueryClient();
-  const cached = qc.getQueryData<{ chains: ChainStatus[] }>(['fleet-chains']);
+/* ── Alerts Widget (replaces ChainsFloater) ─────────────────── */
 
-  const { data, isLoading } = useQuery({
+type AlertEntry = { type: 'danger' | 'warn'; label: string };
+
+function AlertsWidget() {
+  const { data: chainsData } = useQuery({
     queryKey: ['fleet-chains'],
     queryFn: getFleetChains,
-    refetchInterval: expanded ? 30_000 : false,
-    enabled: expanded,
+    refetchInterval: 60_000,
+    retry: false,
+  });
+  const { data: vmsData } = useQuery({
+    queryKey: ['vm-status'],
+    queryFn: getVMStatus,
+    refetchInterval: 60_000,
+    retry: false,
   });
 
-  const chains = (data?.chains ?? cached?.chains ?? []);
-  const synced = chains.filter((c) => !c.catching_up && c.node_status !== 'down').length;
+  const chains = chainsData?.chains ?? [];
+  const vms: VMStatus[] = vmsData?.vms ?? [];
+
+  const alerts: AlertEntry[] = [];
+
+  chains.filter(c => c.node_status === 'down')
+    .forEach(c => alerts.push({ type: 'danger', label: `Node down: ${c.dashboard_name || c.chain}` }));
+
+  chains.filter(c => c.latest_block_time && Date.now() - new Date(c.latest_block_time).getTime() > 120_000 && c.node_status !== 'down')
+    .forEach(c => alerts.push({ type: 'danger', label: `Chain stalled: ${c.dashboard_name || c.chain}` }));
+
+  chains.filter(c => c.has_validator && c.val_jailed)
+    .forEach(c => alerts.push({ type: 'danger', label: `Validator jailed: ${c.dashboard_name || c.chain}` }));
+
+  chains.filter(c => c.upgrade_pending)
+    .forEach(c => alerts.push({ type: 'warn', label: `Upgrade pending: ${c.dashboard_name || c.chain} — ${c.upgrade_name}` }));
+
+  chains.filter(c => c.active_proposals > 0)
+    .forEach(c => alerts.push({
+      type: 'warn',
+      label: `${c.active_proposals} proposal${c.active_proposals > 1 ? 's' : ''} open: ${c.dashboard_name || c.chain}`,
+    }));
+
+  vms.filter(v => v.online && (v.cpu_pct >= 85 || v.mem_pct >= 85 || v.storage_pct >= 90))
+    .forEach(v => {
+      const issues: string[] = [];
+      if (v.cpu_pct >= 85)      issues.push(`CPU ${v.cpu_pct.toFixed(0)}%`);
+      if (v.mem_pct >= 85)      issues.push(`mem ${v.mem_pct.toFixed(0)}%`);
+      if (v.storage_pct >= 90)  issues.push(`disk ${v.storage_pct.toFixed(0)}%`);
+      alerts.push({ type: 'danger', label: `High resource: ${v.name} — ${issues.join(', ')}` });
+    });
+
+  const patchableVMs = vms.filter(v => v.online && v.apt_count > 0);
+  const totalPatches = patchableVMs.reduce((a, v) => a + v.apt_count, 0);
+  if (totalPatches > 0) {
+    alerts.push({
+      type: 'warn',
+      label: `${totalPatches} pending patch${totalPatches > 1 ? 'es' : ''} across ${patchableVMs.length} server${patchableVMs.length > 1 ? 's' : ''}`,
+    });
+  }
+
+  const dangerCount = alerts.filter(a => a.type === 'danger').length;
+  const warnCount   = alerts.filter(a => a.type === 'warn').length;
 
   return (
     <div className="card" style={{ marginTop: '1rem' }}>
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        style={{
-          border: '1px solid var(--vn-border)',
-          background: 'var(--vn-surface-2)',
-          color: 'var(--vn-text)',
-          borderRadius: 999,
-          padding: '0.35rem 0.75rem',
-          cursor: 'pointer',
-          fontSize: '0.82rem',
-          fontWeight: 600,
-        }}
-      >
-        {chains.length > 0 ? '⛓ Chains (' + synced + ' synced)' : '⛓ Chains'}
-      </button>
+      <div className="flex items-center gap-2 mb-3">
+        <h3 className="text-sm font-medium" style={{ color: 'var(--vn-text-muted)' }}>
+          Active Alerts
+        </h3>
+        {dangerCount > 0 && (
+          <span className="inline-flex items-center justify-center text-xs font-bold rounded-full px-1.5"
+            style={{ backgroundColor: 'var(--vn-danger)', color: '#fff', minWidth: '1.25rem', lineHeight: '1.25rem' }}>
+            {dangerCount}
+          </span>
+        )}
+        {warnCount > 0 && (
+          <span className="inline-flex items-center justify-center text-xs font-bold rounded-full px-1.5"
+            style={{ backgroundColor: 'var(--vn-warning)', color: '#000', minWidth: '1.25rem', lineHeight: '1.25rem' }}>
+            {warnCount}
+          </span>
+        )}
+      </div>
 
-      {expanded && (
-        <div style={{ marginTop: '0.75rem' }}>
-          {isLoading ? (
-            <Spinner label="Loading chains" />
-          ) : chains.length === 0 ? (
-            <p style={{ color: 'var(--vn-text-muted)', fontSize: '0.85rem', margin: 0 }}>No chains available.</p>
-          ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table className="vn-table">
-                <thead>
-                  <tr>
-                    {['Chain', 'Height', 'Status', 'Upgrade'].map((h) => <th key={h}>{h}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {chains.map((c) => (
-                    <tr key={c.chain}>
-                      <td>{c.dashboard_name || c.chain}</td>
-                      <td>{(c.height ?? 0).toLocaleString()}</td>
-                      <td><Badge status={c.node_status} /></td>
-                      <td>
-                        {c.upgrade_pending ? (
-                          <span style={{ color: 'var(--vn-warning)' }}>{c.upgrade_name || 'Pending'}</span>
-                        ) : (
-                          <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+      {alerts.length === 0 ? (
+        <p className="text-sm" style={{ color: 'var(--vn-success)' }}>✓ All systems nominal</p>
+      ) : (
+        <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+          {alerts.map((a, i) => (
+            <li key={i} className="flex items-center gap-2 text-sm">
+              <span className="w-1.5 h-1.5 rounded-full shrink-0"
+                style={{ backgroundColor: a.type === 'danger' ? 'var(--vn-danger)' : 'var(--vn-warning)' }}
+                aria-hidden="true" />
+              <span style={{ color: a.type === 'danger' ? 'var(--vn-danger)' : 'var(--vn-warning)' }}>
+                {a.label}
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
@@ -777,6 +838,7 @@ function ChainsFloater() {
 /* ── Dashboard Page ──────────────────────────────────────────── */
 
 export default function DashboardPage() {
+  const nav = useNavigate();
   const { data: stats, isLoading } = useQuery<Stats>({
     queryKey: ['stats'],
     queryFn: getStats,
@@ -795,11 +857,11 @@ export default function DashboardPage() {
       ) : stats ? (
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
           <StatCard label="Total Requests" value={stats.total_requests} icon={<RequestsIcon />} variant="info" />
-          <StatCard label="Total IPs" value={stats.total_ips} icon={<IPIcon />} variant="default" />
+          <StatCard label="Total IPs" value={stats.total_ips} icon={<IPIcon />} variant="default" onClick={() => nav('/accounts')} />
           <StatCard label="Rate Limit Events" value={stats.total_ratelimit_events} icon={<ShieldIcon />} variant="warning" />
           <StatCard label="Archives" value={stats.total_archives} icon={<ArchiveIcon />} variant="info" />
-          <StatCard label="Flagged IPs" value={stats.flagged_ips} icon={<FlagIcon />} variant="warning" />
-          <StatCard label="Blocked IPs" value={stats.blocked_ips} icon={<BlockIcon />} variant="danger" />
+          <StatCard label="Flagged IPs" value={stats.flagged_ips} icon={<FlagIcon />} variant="warning" onClick={() => nav('/accounts')} />
+          <StatCard label="Blocked IPs" value={stats.blocked_ips} icon={<BlockIcon />} variant="danger" onClick={() => nav('/accounts')} />
         </div>
       ) : null}
 
@@ -840,7 +902,7 @@ export default function DashboardPage() {
         <ServersPanel />
       </div>
 
-      <ChainsFloater />
+      <AlertsWidget />
     </div>
   );
 }

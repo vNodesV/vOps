@@ -7,6 +7,7 @@ interface StatCardProps {
   value: string | number;
   icon?: ReactNode;
   variant?: Variant;
+  onClick?: () => void;
 }
 
 const variantColors: Record<Variant, string> = {
@@ -22,15 +23,22 @@ export default function StatCard({
   value,
   icon,
   variant = 'default',
+  onClick,
 }: StatCardProps) {
   const accent = variantColors[variant];
+  const interactive = !!onClick;
 
   return (
     <article
       className="card flex items-center gap-4 rounded-lg p-4"
       style={{
         borderRadius: 'var(--vn-radius)',
+        cursor: interactive ? 'pointer' : undefined,
       }}
+      role={interactive ? 'button' : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={interactive ? (e) => { if (e.key === 'Enter' || e.key === ' ') onClick?.(); } : undefined}
       aria-label={`${label}: ${value}`}
     >
       {icon && (

@@ -168,14 +168,11 @@ export interface RegisteredChain {
 // Ingest
 export interface ArchiveStats {
   total_archives: number;
-  total_events: number;
-  archives: Array<{
-    filename: string;
-    ingested_at: string;
-    request_count: number;
-    ratelimit_count: number;
-    size_bytes: number;
-  }>;
+  total_bytes: number;
+  total_requests: number;
+  total_ratelimit: number;
+  last_ingested_at: string;
+  last_filename: string;
 }
 
 // Settings snapshot (raw config map)

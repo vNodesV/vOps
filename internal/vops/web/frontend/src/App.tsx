@@ -10,6 +10,7 @@ import {
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TaskProvider } from './contexts/TaskContext';
 
+import CosmosNodes from './pages/CosmosNodes';
 import Dashboard from './pages/Dashboard';
 import AccountsPage from './pages/Accounts';
 import AccountDetail from './pages/AccountDetail';
@@ -89,6 +90,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   ];
 
   const moreLinks = [
+    { to: '/chains', label: 'Chains' },
     { to: '/topology', label: 'Topology' },
     { to: '/multiprox', label: 'Multi-vProx' },
     { to: '/audit', label: 'Audit Log' },
@@ -268,6 +270,7 @@ export default function App() {
               <Route path="/ops" element={<OperationsPage />} />
               <Route path="/proxy" element={<ProxyPage />} />
               <Route path="/services" element={<Navigate to="/settings" replace />} />
+              <Route path="/chains" element={<CosmosNodes />} />
               <Route path="/topology" element={<TopologyPage />} />
               <Route path="/multiprox" element={<MultiProxPage />} />
               <Route path="/audit" element={<AuditPage />} />
