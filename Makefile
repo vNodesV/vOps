@@ -80,7 +80,10 @@ EFFECTIVE_GOROOT  := $(if $(_TOOLCHAIN_GOROOT),$(_TOOLCHAIN_GOROOT),$(GOROOT))
 # excluded from .PHONY so they don't pollute tab-completion.
 .PHONY: all help install build build-vops release-vops \
         clean ufw reset-services service-vops service-vprox system-user-vops \
-        bump-patch bump-minor bump-major toml-upgrade
+        bump-patch bump-minor bump-major toml-upgrade upgrade-1.2.1-1.4.4
+
+# Remote host for upgrade-1.2.1-1.4.4 — override: make upgrade-1.2.1-1.4.4 UPGRADE_HOST=user@host
+UPGRADE_HOST ?= www.fr
 
 all: help
 
@@ -100,6 +103,7 @@ help:
 	@echo "  make clean            Remove local build artifacts"
 	@echo "  make ufw              Passwordless UFW + apt sudoers for vOps"
 	@echo "  make toml-upgrade     SSH to INFRA_HOST ($(INFRA_HOST)) and patch infra TOML files"
+	@echo "  make upgrade-1.2.1-1.4.4  Full upgrade UPGRADE_HOST ($(UPGRADE_HOST)): migrate configs + rebuild"
 	@echo ""
 	@echo "  Version management (vOps):"
 	@echo "    make bump-patch       0.0.1 → 0.0.2  (bug fixes / small improvements)"
@@ -668,3 +672,18 @@ bump-major:
 toml-upgrade:
 	@echo "→ Patching infra TOMLs on $(INFRA_HOST) ..."
 	@ssh $(INFRA_HOST) python3 - < scripts/toml-upgrade.py
+
+## ─── Version upgrade (v1.2.x → v1.4.4) ─────────────────────────────────────
+
+## Full upgrade: migrate ~/.vProx config layout → ~/.vOps, rebuild binary, restart.
+## Runs scripts/upgrade-1.2.1-to-1.4.4.sh on UPGRADE_HOST over SSH.
+## Idempotent — safe to re-run; existing files in ~/.vOps are never overwritten.
+## Override host: make upgrade-1.2.1-1.4.4 UPGRADE_HOST=user@host
+
+upgrade-1.2.1-1.4.4:
+	@echo "────────────────────────────────────────────────────────"
+	@echo "  vOps upgrade: v1.2.x → v1.4.4"
+	@echo "  Host:   $(UPGRADE_HOST)"
+	@echo "  Script: scripts/upgrade-1.2.1-to-1.4.4.sh"
+	@echo "────────────────────────────────────────────────────────"
+	@ssh $(UPGRADE_HOST) 'bash -s' < scripts/upgrade-1.2.1-to-1.4.4.sh
