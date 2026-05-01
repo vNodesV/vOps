@@ -676,7 +676,8 @@ toml-upgrade:
 ## ─── Version upgrade (v1.2.x → v1.4.4) ─────────────────────────────────────
 
 ## Full upgrade: migrate ~/.vProx config layout → ~/.vOps, rebuild binary, restart.
-## Runs scripts/upgrade-1.2.1-to-1.4.4.sh on UPGRADE_HOST over SSH.
+## Copies scripts/upgrade-1.2.1-to-1.4.4.sh to /tmp on UPGRADE_HOST, then runs
+## it with a real TTY (-t) so sudo prompts and make output display correctly.
 ## Idempotent — safe to re-run; existing files in ~/.vOps are never overwritten.
 ## Override host: make upgrade-1.2.1-1.4.4 UPGRADE_HOST=user@host
 
@@ -686,4 +687,5 @@ upgrade-1.2.1-1.4.4:
 	@echo "  Host:   $(UPGRADE_HOST)"
 	@echo "  Script: scripts/upgrade-1.2.1-to-1.4.4.sh"
 	@echo "────────────────────────────────────────────────────────"
-	@ssh $(UPGRADE_HOST) 'bash -s' < scripts/upgrade-1.2.1-to-1.4.4.sh
+	@scp -q scripts/upgrade-1.2.1-to-1.4.4.sh $(UPGRADE_HOST):/tmp/vops-upgrade.sh
+	@ssh -t $(UPGRADE_HOST) 'bash /tmp/vops-upgrade.sh; rm -f /tmp/vops-upgrade.sh'
