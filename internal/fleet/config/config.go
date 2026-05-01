@@ -555,6 +555,10 @@ func LoadFromInfraFiles(dir string) (*Config, error) {
 			if f.VMs[i].HostRef == "" && f.Host.Name != "" {
 				f.VMs[i].HostRef = f.Host.Name
 			}
+			// Inherit datacenter from host when the VM entry has none.
+			if f.VMs[i].Datacenter == "" && f.Host.Datacenter != "" {
+				f.VMs[i].Datacenter = f.Host.Datacenter
+			}
 			if f.VMs[i].Port == 0 {
 				f.VMs[i].Port = 22
 			}
