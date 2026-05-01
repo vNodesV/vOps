@@ -82,9 +82,6 @@ EFFECTIVE_GOROOT  := $(if $(_TOOLCHAIN_GOROOT),$(_TOOLCHAIN_GOROOT),$(GOROOT))
         clean ufw reset-services service-vops service-vprox system-user-vops \
         bump-patch bump-minor bump-major toml-upgrade upgrade-1.2.1-1.4.4
 
-# Remote host for upgrade-1.2.1-1.4.4 — override: make upgrade-1.2.1-1.4.4 UPGRADE_HOST=user@host
-UPGRADE_HOST ?= www.fr
-
 all: help
 
 ## ─── Public targets ──────────────────────────────────────────────────────────
@@ -103,7 +100,7 @@ help:
 	@echo "  make clean            Remove local build artifacts"
 	@echo "  make ufw              Passwordless UFW + apt sudoers for vOps"
 	@echo "  make toml-upgrade     SSH to INFRA_HOST ($(INFRA_HOST)) and patch infra TOML files"
-	@echo "  make upgrade-1.2.1-1.4.4  Full upgrade UPGRADE_HOST ($(UPGRADE_HOST)): migrate configs + rebuild"
+	@echo "  make upgrade-1.2.1-1.4.4  Migrate ~/.vProx config → ~/.vOps, rebuild + restart (run ON server)"
 	@echo ""
 	@echo "  Version management (vOps):"
 	@echo "    make bump-patch       0.0.1 → 0.0.2  (bug fixes / small improvements)"
@@ -676,16 +673,8 @@ toml-upgrade:
 ## ─── Version upgrade (v1.2.x → v1.4.4) ─────────────────────────────────────
 
 ## Full upgrade: migrate ~/.vProx config layout → ~/.vOps, rebuild binary, restart.
-## Copies scripts/upgrade-1.2.1-to-1.4.4.sh to /tmp on UPGRADE_HOST, then runs
-## it with a real TTY (-t) so sudo prompts and make output display correctly.
+## Run this ON the target server after `git pull origin vOps_v1.4.0`.
 ## Idempotent — safe to re-run; existing files in ~/.vOps are never overwritten.
-## Override host: make upgrade-1.2.1-1.4.4 UPGRADE_HOST=user@host
 
 upgrade-1.2.1-1.4.4:
-	@echo "────────────────────────────────────────────────────────"
-	@echo "  vOps upgrade: v1.2.x → v1.4.4"
-	@echo "  Host:   $(UPGRADE_HOST)"
-	@echo "  Script: scripts/upgrade-1.2.1-to-1.4.4.sh"
-	@echo "────────────────────────────────────────────────────────"
-	@scp -q scripts/upgrade-1.2.1-to-1.4.4.sh $(UPGRADE_HOST):/tmp/vops-upgrade.sh
-	@ssh -t $(UPGRADE_HOST) 'bash /tmp/vops-upgrade.sh; rm -f /tmp/vops-upgrade.sh'
+	@bash scripts/upgrade-1.2.1-to-1.4.4.sh
