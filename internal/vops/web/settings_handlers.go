@@ -9,7 +9,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -18,6 +17,8 @@ import (
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
+
+	"github.com/vNodesV/vOps/internal/logging"
 	"golang.org/x/crypto/ssh"
 
 	"github.com/pelletier/go-toml/v2"
@@ -152,7 +153,7 @@ func (s *Server) handleAPIGenSSHKey(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 
-	log.Printf("[vops] SSH key pair generated → %s", privPath)
+	logging.Print("INF", "vops", "SSH key pair generated", logging.F("path", privPath))
 	writeJSON(w, http.StatusOK, map[string]any{
 		"public_key":       strings.TrimSpace(string(pubBytes)),
 		"private_key_path": privPath,
@@ -293,7 +294,7 @@ func (s *Server) reloadFleetRuntime(ctx context.Context) {
 	}
 	runtimeCfg, err := fleetcfg.LoadRuntimeConfig(s.home, defs, s.cfg.VOps.Push.ChainsDir, s.cfg.VOps.Push.InfraDir)
 	if err != nil {
-		log.Printf("[settings] fleet runtime reload failed: %v", err)
+		logging.Print("ERR", "settings", "fleet runtime reload failed", logging.F("err", err))
 		return
 	}
 	s.fleetSvc.SetConfig(runtimeCfg)

@@ -8,13 +8,13 @@ package intel
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"golang.org/x/time/rate"
 
+	"github.com/vNodesV/vOps/internal/logging"
 	"github.com/vNodesV/vOps/internal/vops/config"
 	"github.com/vNodesV/vOps/internal/vops/db"
 )
@@ -68,7 +68,7 @@ func (e *Enricher) Start() {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				log.Printf("[intel] worker panic (recovered): %v — restarting", r)
+				logging.Print("ERR", "intel", "worker panic recovered — restarting", logging.F("panic", r))
 				e.Start() // restart the goroutine
 			}
 		}()
@@ -76,7 +76,7 @@ func (e *Enricher) Start() {
 			select {
 			case ip := <-e.queue:
 				if _, err := e.EnrichNow(ip); err != nil {
-					log.Printf("[intel] enrich %s: %v", ip, err)
+					logging.Print("WRN", "intel", "enrich failed", logging.F("ip", ip), logging.F("err", err))
 				}
 			case <-e.done:
 				// Drain remaining items.
@@ -84,7 +84,7 @@ func (e *Enricher) Start() {
 					select {
 					case ip := <-e.queue:
 						if _, err := e.EnrichNow(ip); err != nil {
-							log.Printf("[intel] enrich %s: %v", ip, err)
+							logging.Print("WRN", "intel", "enrich failed", logging.F("ip", ip), logging.F("err", err))
 						}
 					default:
 						return
@@ -216,7 +216,7 @@ func (e *Enricher) EnrichStream(ctx context.Context, ip string, force bool, emit
 		emit(EnrichProgress{Step: "vt_cached", Msg: "VirusTotal: cached (TTL valid)", Pct: 30})
 	case vt.err != nil:
 		emit(EnrichProgress{Step: "vt_err", Msg: "VirusTotal: " + vt.err.Error(), Pct: 30, IsErr: true})
-		log.Printf("[intel] virustotal %s: %v", ip, vt.err)
+		logging.Print("WRN", "intel", "virustotal lookup failed", logging.F("ip", ip), logging.F("err", vt.err))
 	default:
 		vtMalicious = vt.malicious
 		vtRaw = vt.raw
@@ -226,7 +226,7 @@ func (e *Enricher) EnrichStream(ctx context.Context, ip string, force bool, emit
 		}
 		emit(EnrichProgress{Step: "vt_done", Msg: msg, Pct: 30})
 		if err2 := e.db.UpsertIntelCache(ip, sourceVirusTotal, nowISO, vt.raw); err2 != nil {
-			log.Printf("[intel] cache virustotal %s: %v", ip, err2)
+			logging.Print("WRN", "intel", "cache virustotal failed", logging.F("ip", ip), logging.F("err", err2))
 		}
 	}
 
@@ -240,13 +240,13 @@ func (e *Enricher) EnrichStream(ctx context.Context, ip string, force bool, emit
 		emit(EnrichProgress{Step: "abuse_cached", Msg: "AbuseIPDB: cached (TTL valid)", Pct: 60})
 	case abuse.err != nil:
 		emit(EnrichProgress{Step: "abuse_err", Msg: "AbuseIPDB: " + abuse.err.Error(), Pct: 60, IsErr: true})
-		log.Printf("[intel] abuseipdb %s: %v", ip, abuse.err)
+		logging.Print("WRN", "intel", "abuseipdb lookup failed", logging.F("ip", ip), logging.F("err", abuse.err))
 	default:
 		abuseScore = abuse.score
 		abuseRaw = abuse.raw
 		emit(EnrichProgress{Step: "abuse_done", Msg: fmt.Sprintf("AbuseIPDB: confidence score %d", abuse.score), Pct: 60})
 		if err2 := e.db.UpsertIntelCache(ip, sourceAbuseIPDB, nowISO, abuse.raw); err2 != nil {
-			log.Printf("[intel] cache abuseipdb %s: %v", ip, abuse.err)
+			logging.Print("WRN", "intel", "cache abuseipdb failed", logging.F("ip", ip), logging.F("err", err2))
 		}
 	}
 
@@ -260,7 +260,7 @@ func (e *Enricher) EnrichStream(ctx context.Context, ip string, force bool, emit
 		emit(EnrichProgress{Step: "shodan_cached", Msg: "Shodan: cached (TTL valid)", Pct: 80})
 	case shodan.err != nil:
 		emit(EnrichProgress{Step: "shodan_err", Msg: "Shodan: " + shodan.err.Error(), Pct: 80, IsErr: true})
-		log.Printf("[intel] shodan %s: %v", ip, shodan.err)
+		logging.Print("WRN", "intel", "shodan lookup failed", logging.F("ip", ip), logging.F("err", shodan.err))
 	case shodan.result == nil:
 		emit(EnrichProgress{Step: "shodan_none", Msg: "Shodan: no data for this IP", Pct: 80})
 	default:
@@ -268,7 +268,7 @@ func (e *Enricher) EnrichStream(ctx context.Context, ip string, force bool, emit
 		shodanRaw = shodan.raw
 		emit(EnrichProgress{Step: "shodan_done", Msg: fmt.Sprintf("Shodan: %d open port(s)", len(shodan.result.Ports)), Pct: 80})
 		if err2 := e.db.UpsertIntelCache(ip, sourceShodan, nowISO, shodan.raw); err2 != nil {
-			log.Printf("[intel] cache shodan %s: %v", ip, err2)
+			logging.Print("WRN", "intel", "cache shodan failed", logging.F("ip", ip), logging.F("err", err2))
 		}
 	}
 

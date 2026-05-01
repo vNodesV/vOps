@@ -138,9 +138,15 @@ func resolvePublicIP(vm config.VM, cfg *config.Config) string {
 
 // dialVM opens an SSH connection to vm, using a ProxyJump when vm.ProxyJumpParams
 // (or a Config-resolved jump host) is configured.
+// For jump hosts, VRackIP is preferred over LanIP so that cross-datacenter
+// reachability (e.g. QC → RBX via 10.1.0.0/24) works correctly.
 func dialVM(vm config.VM, cfg *config.Config) (*fleetssh.Client, error) {
 	if jp := cfg.ResolveProxyJump(&vm); jp != nil {
-		jumpAddr := jp.LanIP
+		// Prefer vRack IP (cross-DC) → LAN IP → hostname for the jump host.
+		jumpAddr := jp.VRackIP
+		if jumpAddr == "" {
+			jumpAddr = jp.LanIP
+		}
 		if jumpAddr == "" {
 			jumpAddr = jp.Name
 		}

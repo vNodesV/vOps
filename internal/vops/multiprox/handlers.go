@@ -8,11 +8,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/vNodesV/vOps/internal/logging"
 )
 
 // isDangerousHost returns true when the URL hostname resolves to an address
@@ -207,7 +208,7 @@ func (h *Handlers) HandlePingAll(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var inst row
 		if scanErr := rows.Scan(&inst.name, &inst.url, &inst.apiKey); scanErr != nil {
-			log.Printf("[multiprox] HandlePingAll: row scan error: %v", scanErr) // M-1
+			logging.Print("WRN", "multiprox", "ping-all row scan error", logging.F("err", scanErr))
 			continue
 		}
 		inst.apiKey, _ = decryptAPIKey(h.key, inst.apiKey)
@@ -247,7 +248,7 @@ func (h *Handlers) HandlePingAll(w http.ResponseWriter, r *http.Request) {
 				`UPDATE vprox_instances SET status = ?, last_seen = ? WHERE name = ?`,
 				status, now, inst.name,
 			); execErr != nil {
-				log.Printf("[multiprox] HandlePingAll: db update %s: %v", inst.name, execErr) // M-1
+				logging.Print("WRN", "multiprox", "ping-all db update failed", logging.F("name", inst.name), logging.F("err", execErr))
 			}
 			results[i] = result{Name: inst.name, Status: status, LastSeen: now}
 		}()

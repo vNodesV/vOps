@@ -6,14 +6,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
+
 	fleetssh "github.com/vNodesV/vOps/internal/fleet/ssh"
+	"github.com/vNodesV/vOps/internal/logging"
 	"github.com/vNodesV/vOps/internal/vops/ctxkeys"
 	opsdb "github.com/vNodesV/vOps/internal/vops/db"
 )
@@ -81,7 +82,7 @@ func (h *Handlers) HandleShell(w http.ResponseWriter, r *http.Request) {
 	// the route is valid before committing to a potentially slow SSH dial.
 	conn, err := h.wsUpgrader().Upgrade(w, r, nil)
 	if err != nil {
-		slog.Error("vm.shell: websocket upgrade failed", "err", err)
+		logging.Print("ERR", "vm.shell", "websocket upgrade failed", logging.F("err", err))
 		return // Upgrade already wrote an HTTP error
 	}
 	defer conn.Close()
@@ -117,7 +118,7 @@ func (h *Handlers) HandleShell(w http.ResponseWriter, r *http.Request) {
 	// Idle timer — reset on every read/write.
 	idleMu := &sync.Mutex{}
 	idleTimer := time.AfterFunc(shellIdleTimeout, func() {
-		slog.Info("vm.shell: idle timeout", "host", hostName)
+		logging.Print("INF", "vm.shell", "idle timeout", logging.F("host", hostName))
 		cancel()
 	})
 	defer idleTimer.Stop()
@@ -147,7 +148,7 @@ func (h *Handlers) HandleShell(w http.ResponseWriter, r *http.Request) {
 					websocket.CloseNormalClosure,
 					websocket.CloseGoingAway,
 					websocket.CloseNoStatusReceived) {
-					slog.Warn("vm.shell: ws read error", "host", hostName, "err", err)
+					logging.Print("WRN", "vm.shell", "ws read error", logging.F("host", hostName), logging.F("err", err))
 				}
 				return
 			}
@@ -169,7 +170,7 @@ func (h *Handlers) HandleShell(w http.ResponseWriter, r *http.Request) {
 			}
 
 			if _, err := shell.Write(msg); err != nil {
-				slog.Warn("vm.shell: ssh write error", "host", hostName, "err", err)
+				logging.Print("WRN", "vm.shell", "ssh write error", logging.F("host", hostName), logging.F("err", err))
 				return
 			}
 		}
@@ -204,13 +205,13 @@ func (h *Handlers) HandleShell(w http.ResponseWriter, r *http.Request) {
 				encoded := base64.StdEncoding.EncodeToString(buf[:n])
 				_ = conn.SetWriteDeadline(time.Now().Add(shellWriteWait))
 				if wErr := conn.WriteJSON(shellMsg{Type: "data", Data: encoded}); wErr != nil {
-					slog.Warn("vm.shell: ws write error", "host", hostName, "err", wErr)
+					logging.Print("WRN", "vm.shell", "ws write error", logging.F("host", hostName), logging.F("err", wErr))
 					return
 				}
 			}
 			if err != nil {
 				if err != io.EOF {
-					slog.Warn("vm.shell: ssh read error", "host", hostName, "err", err)
+					logging.Print("WRN", "vm.shell", "ssh read error", logging.F("host", hostName), logging.F("err", err))
 				}
 				return
 			}
