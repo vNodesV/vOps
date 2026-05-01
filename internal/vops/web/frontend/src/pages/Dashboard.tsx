@@ -748,21 +748,23 @@ function IngestSection() {
 }
 
 
-/* ── Alerts Widget (replaces ChainsFloater) ─────────────────── */
+/* ── Alerts Banner (compact top-of-page strip) ───────────────── */
 
 type AlertEntry = { type: 'danger' | 'warn'; label: string };
 
-function AlertsWidget() {
+function useAlerts() {
   const { data: chainsData } = useQuery({
     queryKey: ['fleet-chains'],
     queryFn: getFleetChains,
-    refetchInterval: 60_000,
+    refetchInterval: 30_000,
+    staleTime: 0,
     retry: false,
   });
   const { data: vmsData } = useQuery({
     queryKey: ['vm-status'],
     queryFn: getVMStatus,
-    refetchInterval: 60_000,
+    refetchInterval: 30_000,
+    staleTime: 0,
     retry: false,
   });
 
@@ -781,21 +783,21 @@ function AlertsWidget() {
     .forEach(c => alerts.push({ type: 'danger', label: `Validator jailed: ${c.dashboard_name || c.chain}` }));
 
   chains.filter(c => c.upgrade_pending)
-    .forEach(c => alerts.push({ type: 'warn', label: `Upgrade pending: ${c.dashboard_name || c.chain} — ${c.upgrade_name}` }));
+    .forEach(c => alerts.push({ type: 'warn', label: `Upgrade pending: ${c.dashboard_name || c.chain}${c.upgrade_name ? ` — ${c.upgrade_name}` : ''}` }));
 
   chains.filter(c => c.active_proposals > 0)
     .forEach(c => alerts.push({
       type: 'warn',
-      label: `${c.active_proposals} proposal${c.active_proposals > 1 ? 's' : ''} open: ${c.dashboard_name || c.chain}`,
+      label: `${c.active_proposals} proposal${c.active_proposals > 1 ? 's' : ''}: ${c.dashboard_name || c.chain}`,
     }));
 
   vms.filter(v => v.online && (v.cpu_pct >= 85 || v.mem_pct >= 85 || v.storage_pct >= 90))
     .forEach(v => {
       const issues: string[] = [];
-      if (v.cpu_pct >= 85)      issues.push(`CPU ${v.cpu_pct.toFixed(0)}%`);
-      if (v.mem_pct >= 85)      issues.push(`mem ${v.mem_pct.toFixed(0)}%`);
-      if (v.storage_pct >= 90)  issues.push(`disk ${v.storage_pct.toFixed(0)}%`);
-      alerts.push({ type: 'danger', label: `High resource: ${v.name} — ${issues.join(', ')}` });
+      if (v.cpu_pct >= 85)     issues.push(`CPU ${v.cpu_pct.toFixed(0)}%`);
+      if (v.mem_pct >= 85)     issues.push(`mem ${v.mem_pct.toFixed(0)}%`);
+      if (v.storage_pct >= 90) issues.push(`disk ${v.storage_pct.toFixed(0)}%`);
+      alerts.push({ type: 'danger', label: `${v.name} — ${issues.join(', ')}` });
     });
 
   const patchableVMs = vms.filter(v => v.online && v.apt_count > 0);
@@ -803,49 +805,84 @@ function AlertsWidget() {
   if (totalPatches > 0) {
     alerts.push({
       type: 'warn',
-      label: `${totalPatches} pending patch${totalPatches > 1 ? 'es' : ''} across ${patchableVMs.length} server${patchableVMs.length > 1 ? 's' : ''}`,
+      label: `${totalPatches} patch${totalPatches > 1 ? 'es' : ''} / ${patchableVMs.length} server${patchableVMs.length > 1 ? 's' : ''}`,
     });
   }
 
+  return alerts;
+}
+
+function AlertsBanner() {
+  const alerts = useAlerts();
   const dangerCount = alerts.filter(a => a.type === 'danger').length;
   const warnCount   = alerts.filter(a => a.type === 'warn').length;
 
-  return (
-    <div className="card" style={{ marginTop: '1rem' }}>
-      <div className="flex items-center gap-2 mb-3">
-        <h3 className="text-sm font-medium" style={{ color: 'var(--vn-text-muted)' }}>
-          Active Alerts
-        </h3>
-        {dangerCount > 0 && (
-          <span className="inline-flex items-center justify-center text-xs font-bold rounded-full px-1.5"
-            style={{ backgroundColor: 'var(--vn-danger)', color: '#fff', minWidth: '1.25rem', lineHeight: '1.25rem' }}>
-            {dangerCount}
-          </span>
-        )}
-        {warnCount > 0 && (
-          <span className="inline-flex items-center justify-center text-xs font-bold rounded-full px-1.5"
-            style={{ backgroundColor: 'var(--vn-warning)', color: '#000', minWidth: '1.25rem', lineHeight: '1.25rem' }}>
-            {warnCount}
-          </span>
-        )}
+  if (alerts.length === 0) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+        <span style={{
+          display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+          fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.02em',
+          color: 'var(--vn-success)',
+          background: 'color-mix(in srgb, var(--vn-success) 12%, transparent)',
+          border: '1px solid color-mix(in srgb, var(--vn-success) 30%, transparent)',
+          borderRadius: '999px', padding: '0.15rem 0.6rem',
+        }}>
+          ✓ All systems nominal
+        </span>
       </div>
+    );
+  }
 
-      {alerts.length === 0 ? (
-        <p className="text-sm" style={{ color: 'var(--vn-success)' }}>✓ All systems nominal</p>
-      ) : (
-        <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-          {alerts.map((a, i) => (
-            <li key={`${a.type}-${a.label}-${i}`} className="flex items-center gap-2 text-sm">
-              <span className="w-1.5 h-1.5 rounded-full shrink-0"
-                style={{ backgroundColor: a.type === 'danger' ? 'var(--vn-danger)' : 'var(--vn-warning)' }}
-                aria-hidden="true" />
-              <span style={{ color: a.type === 'danger' ? 'var(--vn-danger)' : 'var(--vn-warning)' }}>
-                {a.label}
-              </span>
-            </li>
-          ))}
-        </ul>
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.35rem' }}>
+      {dangerCount > 0 && (
+        <span style={{
+          fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.06em',
+          color: 'var(--vn-danger)', textTransform: 'uppercase', marginRight: '0.1rem',
+        }}>
+          {dangerCount} CRIT
+        </span>
       )}
+      {alerts.filter(a => a.type === 'danger').map((a, i) => (
+        <span key={`d-${i}`} style={{
+          display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+          fontSize: '0.72rem', fontWeight: 500,
+          color: 'var(--vn-danger)',
+          background: 'color-mix(in srgb, var(--vn-danger) 12%, transparent)',
+          border: '1px solid color-mix(in srgb, var(--vn-danger) 35%, transparent)',
+          borderRadius: '999px', padding: '0.15rem 0.6rem',
+          whiteSpace: 'nowrap',
+        }}>
+          <span style={{ width: '0.4rem', height: '0.4rem', borderRadius: '50%', backgroundColor: 'var(--vn-danger)', flexShrink: 0 }} />
+          {a.label}
+        </span>
+      ))}
+      {warnCount > 0 && dangerCount > 0 && (
+        <span style={{ width: '1px', height: '1rem', background: 'var(--vn-border)', margin: '0 0.15rem' }} />
+      )}
+      {warnCount > 0 && (
+        <span style={{
+          fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.06em',
+          color: 'var(--vn-warning)', textTransform: 'uppercase', marginRight: '0.1rem',
+        }}>
+          {warnCount} WARN
+        </span>
+      )}
+      {alerts.filter(a => a.type === 'warn').map((a, i) => (
+        <span key={`w-${i}`} style={{
+          display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+          fontSize: '0.72rem', fontWeight: 500,
+          color: 'var(--vn-warning)',
+          background: 'color-mix(in srgb, var(--vn-warning) 12%, transparent)',
+          border: '1px solid color-mix(in srgb, var(--vn-warning) 35%, transparent)',
+          borderRadius: '999px', padding: '0.15rem 0.6rem',
+          whiteSpace: 'nowrap',
+        }}>
+          <span style={{ width: '0.4rem', height: '0.4rem', borderRadius: '50%', backgroundColor: 'var(--vn-warning)', flexShrink: 0 }} />
+          {a.label}
+        </span>
+      ))}
     </div>
   );
 }
@@ -864,9 +901,13 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold" style={{ color: 'var(--vn-text)' }}>
-        Dashboard
-      </h2>
+      {/* Page header with inline alerts banner */}
+      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+        <h2 className="text-lg font-semibold" style={{ color: 'var(--vn-text)', flexShrink: 0 }}>
+          Dashboard
+        </h2>
+        <AlertsBanner />
+      </div>
 
       {/* Stat Cards */}
       {isLoading ? (
@@ -924,8 +965,6 @@ export default function DashboardPage() {
         </div>
         <ServersPanel />
       </div>
-
-      <AlertsWidget />
 
       {chainSettingsOpen && (
         <SettingsDrawer title="Chain Profile Settings" onClose={() => setChainSettingsOpen(false)}>
