@@ -769,7 +769,7 @@ export function DatacentersPanel({ config }: { config: ConfigSnapshot }) {
               className="p-4 rounded-lg text-xs text-center"
               style={{ backgroundColor: 'var(--vn-surface-2)', border: '1px dashed var(--vn-border)', color: 'var(--vn-text-muted)' }}
             >
-              No datacenter files found in <code>config/infra/</code>. Add one below or run the Setup Wizard.
+              No datacenter files found in <code>config/infra/</code>. Add one using the form below.
             </div>
           ) : (
             infras.map((dc) => (

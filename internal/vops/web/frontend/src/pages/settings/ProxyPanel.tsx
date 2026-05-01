@@ -280,7 +280,7 @@ export function ChainProfilesPanel({ config }: { config: ConfigSnapshot }) {
           {chains.length === 0 ? (
             <div className="p-4 rounded-lg text-xs text-center"
               style={{ backgroundColor: 'var(--vn-surface-2)', border: '1px dashed var(--vn-border)', color: 'var(--vn-text-muted)' }}>
-              No chain profiles found. Add one below or run the Setup Wizard.
+              No chain profiles found. Add one using the form below.
             </div>
           ) : (
             chains.map((c) => <ChainCard key={c.file} chain={c} onSaved={onSaved} />)

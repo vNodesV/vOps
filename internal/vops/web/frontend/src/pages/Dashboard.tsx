@@ -16,6 +16,10 @@ import StatCard from '../components/StatCard';
 import Badge from '../components/Badge';
 import Spinner from '../components/Spinner';
 import UpgradeModal from '../components/UpgradeModal';
+import SettingsDrawer, { GearButton, ConfigPanel } from '../components/SettingsDrawer';
+import { ChainProfilesPanel } from './settings/ProxyPanel';
+import { BackupsPanel } from './settings/SystemPanel';
+import { FleetScanPanel, DatacentersPanel } from './settings/InfraPanel';
 
 /* ── SVG Icons ───────────────────────────────────────────────── */
 
@@ -626,6 +630,7 @@ function ServersPanel() {
 
 function IngestSection() {
   const queryClient = useQueryClient();
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const statsQ = useQuery({
     queryKey: ['ingest-stats'],
     queryFn: getIngestStats,
@@ -653,9 +658,12 @@ function IngestSection() {
   return (
     <div className="card">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-medium" style={{ color: 'var(--vn-text-muted)' }}>
-          Archive Ingest
-        </h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+          <h3 className="text-sm font-medium" style={{ color: 'var(--vn-text-muted)' }}>
+            Archive Ingest
+          </h3>
+          <GearButton onClick={() => setSettingsOpen(true)} label="Ingest & backup settings" />
+        </div>
         <div style={{ display: 'flex', gap: '0.4rem' }}>
           <button
             onClick={() => backupMut.mutate()}
@@ -729,6 +737,11 @@ function IngestSection() {
         </div>
       ) : (
         <p className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>No ingest data available.</p>
+      )}
+      {settingsOpen && (
+        <SettingsDrawer title="Ingest & Backup Settings" onClose={() => setSettingsOpen(false)}>
+          <ConfigPanel>{(cfg) => <BackupsPanel config={cfg} />}</ConfigPanel>
+        </SettingsDrawer>
       )}
     </div>
   );
@@ -841,6 +854,8 @@ function AlertsWidget() {
 
 export default function DashboardPage() {
   const nav = useNavigate();
+  const [chainSettingsOpen, setChainSettingsOpen] = useState(false);
+  const [serversSettingsOpen, setServersSettingsOpen] = useState(false);
   const { data: stats, isLoading } = useQuery<Stats>({
     queryKey: ['stats'],
     queryFn: getStats,
@@ -879,9 +894,12 @@ export default function DashboardPage() {
 
       {/* Chain Status */}
       <div>
-        <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--vn-text-muted)' }}>
-          Chain Status
-        </h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.75rem' }}>
+          <h3 className="text-sm font-medium" style={{ color: 'var(--vn-text-muted)' }}>
+            Chain Status
+          </h3>
+          <GearButton onClick={() => setChainSettingsOpen(true)} label="Chain profile settings" />
+        </div>
         <FleetTable />
       </div>
 
@@ -898,13 +916,30 @@ export default function DashboardPage() {
 
       {/* Servers */}
       <div>
-        <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--vn-text-muted)' }}>
-          Servers
-        </h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.75rem' }}>
+          <h3 className="text-sm font-medium" style={{ color: 'var(--vn-text-muted)' }}>
+            Servers
+          </h3>
+          <GearButton onClick={() => setServersSettingsOpen(true)} label="Fleet & server settings" />
+        </div>
         <ServersPanel />
       </div>
 
       <AlertsWidget />
+
+      {chainSettingsOpen && (
+        <SettingsDrawer title="Chain Profile Settings" onClose={() => setChainSettingsOpen(false)}>
+          <ConfigPanel>{(cfg) => <ChainProfilesPanel config={cfg} />}</ConfigPanel>
+        </SettingsDrawer>
+      )}
+      {serversSettingsOpen && (
+        <SettingsDrawer title="Fleet & Server Settings" onClose={() => setServersSettingsOpen(false)}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+            <FleetScanPanel />
+            <ConfigPanel>{(cfg) => <DatacentersPanel config={cfg} />}</ConfigPanel>
+          </div>
+        </SettingsDrawer>
+      )}
     </div>
   );
 }

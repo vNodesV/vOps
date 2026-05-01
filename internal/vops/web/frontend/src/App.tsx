@@ -7,7 +7,7 @@ import {
   Navigate,
   useLocation,
 } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { TaskProvider } from './contexts/TaskContext';
 
 import CosmosNodes from './pages/CosmosNodes';
@@ -22,7 +22,10 @@ import MultiProxPage from './pages/MultiProx';
 import AuditPage from './pages/Audit';
 import ProxyPage from './pages/proxy';
 import DebugPanel from './components/DebugPanel';
-import { logout, getDebugMode, setDebugMode } from './api';
+import SettingsDrawer, { GearButton } from './components/SettingsDrawer';
+import { VOpsPanel, BackupsPanel, PreferencesPanel } from './pages/settings/SystemPanel';
+import Spinner from './components/Spinner';
+import { logout, getDebugMode, setDebugMode, getConfig } from './api';
 import { BASE } from './api/client';
 import { applyTheme, THEMES } from './lib/theme';
 
@@ -30,11 +33,32 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
 });
 
+/* ── Global settings drawer ──────────────────────────────────── */
+
+function GlobalSettingsDrawer({ onClose }: { onClose: () => void }) {
+  const { data: config, isLoading } = useQuery({ queryKey: ['config'], queryFn: getConfig });
+  return (
+    <SettingsDrawer title="System Settings" onClose={onClose}>
+      {isLoading ? (
+        <Spinner label="Loading settings…" />
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          {config && <VOpsPanel config={config} />}
+          {config && <BackupsPanel config={config} />}
+          <PreferencesPanel />
+        </div>
+      )}
+    </SettingsDrawer>
+  );
+}
+
+
 function Shell({ children }: { children: React.ReactNode }) {
   const loc = useLocation();
   const [debugEnabled, setDebugEnabled] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [globalSettingsOpen, setGlobalSettingsOpen] = useState(false);
   const [currentTheme, setCurrentTheme] = useState(
     () => document.documentElement.getAttribute('data-theme') ?? 'vthemedgr'
   );
@@ -178,6 +202,12 @@ function Shell({ children }: { children: React.ReactNode }) {
               🐛
             </button>
 
+            <GearButton
+              onClick={() => setGlobalSettingsOpen(true)}
+              label="System settings"
+              style={{ opacity: 0.6, padding: '0.3rem' }}
+            />
+
             <button className="nav-logout-btn" onClick={handleLogout} aria-label="Log out">
               Logout
             </button>
@@ -197,6 +227,11 @@ function Shell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </nav>
+
+      {/* ── Global settings drawer ─────────────────────────────── */}
+      {globalSettingsOpen && (
+        <GlobalSettingsDrawer onClose={() => setGlobalSettingsOpen(false)} />
+      )}
 
       {/* ── Mobile nav drawer ──────────────────────────────────── */}
       {mobileOpen && (

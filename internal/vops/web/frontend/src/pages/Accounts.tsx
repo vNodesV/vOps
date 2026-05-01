@@ -8,6 +8,8 @@ import ThreatScore from '../components/ThreatScore';
 import SortableHeader from '../components/SortableHeader';
 import Spinner from '../components/Spinner';
 import InvestigateModal from '../components/InvestigateModal';
+import SettingsDrawer, { GearButton, ConfigPanel } from '../components/SettingsDrawer';
+import { SecurityPanel, AutoBanPanel } from './settings/SecurityPanel';
 
 const PAGE_SIZES = [25, 50, 100, 200, 0] as const;
 
@@ -121,6 +123,7 @@ export default function AccountsPage() {
   // Modal state — holds the full account object for the investigate popup.
   const [investigateAcct, setInvestigateAcct] = useState<IPAccount | null>(null);
   const [showUFWModal, setShowUFWModal] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // URL-driven state
   const page = Number(searchParams.get('page') || '1');
@@ -207,9 +210,12 @@ export default function AccountsPage() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <h2 className="text-lg font-semibold" style={{ color: 'var(--vn-text)' }}>
-          IP Accounts
-        </h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+          <h2 className="text-lg font-semibold" style={{ color: 'var(--vn-text)' }}>
+            IP Accounts
+          </h2>
+          <GearButton onClick={() => setSettingsOpen(true)} label="Security & auto-ban settings" />
+        </div>
         <div className="flex items-center gap-3">
           <button
             onClick={() => setShowUFWModal(true)}
@@ -220,6 +226,15 @@ export default function AccountsPage() {
           </button>
         </div>
       </div>
+
+      {settingsOpen && (
+        <SettingsDrawer title="Security & Auto-ban Settings" onClose={() => setSettingsOpen(false)}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+            <SecurityPanel />
+            <ConfigPanel>{(cfg) => <AutoBanPanel config={cfg} />}</ConfigPanel>
+          </div>
+        </SettingsDrawer>
+      )}
 
       {ufwMut.isSuccess && (
         <div className="alert alert-success" role="alert">

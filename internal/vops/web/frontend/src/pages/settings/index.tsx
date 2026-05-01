@@ -6,7 +6,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getConfig } from '../../api';
-import { BASE } from '../../api/client';
 import type { ConfigSnapshot } from '../../api/types';
 import Spinner from '../../components/Spinner';
 
@@ -139,25 +138,16 @@ export default function SettingsPage() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold" style={{ color: 'var(--vn-text)' }}>
-            Settings
-          </h2>
-          <p className="text-xs mt-0.5" style={{ color: 'var(--vn-text-muted)' }}>
-            Configure vOps, fleet, chains, authentication, and infrastructure.
-          </p>
-        </div>
-        <button
-          onClick={() => { window.location.href = BASE + '/settings/wizard'; }}
-          className="btn btn-secondary"
-        >
-          Setup Wizard
-        </button>
+      <div>
+        <h2 className="text-lg font-semibold" style={{ color: 'var(--vn-text)' }}>
+          Settings
+        </h2>
+        <p className="text-xs mt-0.5" style={{ color: 'var(--vn-text-muted)' }}>
+          Configure vOps, fleet, chains, authentication, and infrastructure.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-        {/* Left sidebar — groups + sections */}
         <nav className="md:col-span-1 space-y-1" aria-label="Settings navigation">
           {NAV_GROUPS.map((group) => (
             <div key={group.id}>
@@ -233,22 +223,10 @@ export default function SettingsPage() {
           {/* Main section content */}
           {renderSection()}
 
-          {/* Wizard callout if config not loaded */}
           {!isLoading && !config && (
-            <div
-              className="p-4 rounded-lg text-sm text-center space-y-3"
-              style={{ backgroundColor: 'var(--vn-surface)', border: '1px dashed var(--vn-border)' }}
-            >
-              <p style={{ color: 'var(--vn-text-muted)' }}>
-                Configuration not yet initialized. Run the Setup Wizard to get started.
-              </p>
-              <button
-                onClick={() => { window.location.href = BASE + '/settings/wizard'; }}
-                className="btn btn-primary"
-              >
-                Open Setup Wizard
-              </button>
-            </div>
+            <p style={{ fontSize: '0.875rem', color: 'var(--vn-text-muted)', padding: '1rem 0' }}>
+              Configuration unavailable — check that vOps can reach its config file.
+            </p>
           )}
         </main>
       </div>

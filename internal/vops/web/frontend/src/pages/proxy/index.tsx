@@ -15,6 +15,8 @@ import {
 } from '../../api';
 import { BASE } from '../../api/client';
 import type { ProxyStatus } from '../../api/types';
+import SettingsDrawer, { GearButton, ConfigPanel } from '../../components/SettingsDrawer';
+import { PortsPanel, ProxyControlsPanel } from '../settings/ProxyPanel';
 
 /* ── Status badge ────────────────────────────────────────────── */
 
@@ -314,6 +316,7 @@ type Tab = typeof TABS[number];
 
 export default function ProxyPage() {
   const [activeTab, setActiveTab] = useState<Tab>('Status');
+  const [proxySettingsOpen, setProxySettingsOpen] = useState(false);
   const qc = useQueryClient();
 
   const { data, isLoading, error } = useQuery<ProxyStatus>({
@@ -349,16 +352,32 @@ export default function ProxyPage() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h2 className="text-lg font-semibold" style={{ color: 'var(--vn-text)' }}>
-            Proxy Management
-          </h2>
-          <p className="text-xs mt-0.5" style={{ color: 'var(--vn-text-muted)' }}>
-            Manage the embedded vProx reverse-proxy server.
-          </p>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
+          <div>
+            <h2 className="text-lg font-semibold" style={{ color: 'var(--vn-text)' }}>
+              Proxy Management
+            </h2>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--vn-text-muted)' }}>
+              Manage the embedded vProx reverse-proxy server.
+            </p>
+          </div>
+          <GearButton onClick={() => setProxySettingsOpen(true)} label="Proxy settings" style={{ marginTop: '0.25rem' }} />
         </div>
         {data && <StatusBadge status={data.status} />}
       </div>
+
+      {proxySettingsOpen && (
+        <SettingsDrawer title="Proxy Settings" onClose={() => setProxySettingsOpen(false)}>
+          <ConfigPanel>
+            {(cfg) => (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <PortsPanel config={cfg} />
+                <ProxyControlsPanel config={cfg} />
+              </div>
+            )}
+          </ConfigPanel>
+        </SettingsDrawer>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 border-b" style={{ borderColor: 'var(--vn-border)' }}>

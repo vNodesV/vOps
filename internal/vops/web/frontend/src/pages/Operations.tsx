@@ -20,6 +20,8 @@ import Spinner from '../components/Spinner';
 import { openSSEStream } from '../api/sse';
 import { BASE } from '../api/client';
 import { useTasks } from '../contexts/TaskContext';
+import SettingsDrawer, { GearButton, ConfigPanel } from '../components/SettingsDrawer';
+import { FleetScanPanel, FleetSSHPanel, DatacentersPanel } from './settings/InfraPanel';
 
 /* ═══════════════════════════════════════════════════════════════
    SVG Icons
@@ -1454,6 +1456,7 @@ function DatacenterBox({
 
 export default function OperationsPage() {
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [opsSettingsOpen, setOpsSettingsOpen] = useState(false);
   const { addTask, updateTask } = useTasks();
   const qc = useQueryClient();
 
@@ -1590,8 +1593,25 @@ export default function OperationsPage() {
           >
             🔍 Scan Hosts
           </button>
+          <GearButton onClick={() => setOpsSettingsOpen(true)} label="Fleet & infrastructure settings" />
         </div>
       </div>
+
+      {opsSettingsOpen && (
+        <SettingsDrawer title="Fleet & Infrastructure Settings" onClose={() => setOpsSettingsOpen(false)}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+            <FleetScanPanel />
+            <ConfigPanel>
+              {(cfg) => (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                  <FleetSSHPanel config={cfg} />
+                  <DatacentersPanel config={cfg} />
+                </div>
+              )}
+            </ConfigPanel>
+          </div>
+        </SettingsDrawer>
+      )}
 
       {statusQ.isLoading ? (
         <Spinner label="Loading fleet status…" />
