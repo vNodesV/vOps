@@ -70,6 +70,7 @@ scripts/set_required_checks.sh
 AGENT_DIRECTIVE.md
 doc.go
 scripts/*.*
+!scripts/toml-upgrade.py
 
 # Environment files
 .env

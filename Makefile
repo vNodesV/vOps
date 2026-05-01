@@ -57,6 +57,9 @@ GEO_DB_DST := $(GEO_DIR)/ip2location.mmdb
 
 ENV_FILE := $(VOPS_HOME)/._env
 
+# Remote infra host for TOML patching — override: make toml-upgrade INFRA_HOST=user@host
+INFRA_HOST ?= www.qc
+
 # Validate Go environment
 GOPATH := $(shell go env GOPATH)
 GOROOT := $(shell go env GOROOT)
@@ -77,7 +80,7 @@ EFFECTIVE_GOROOT  := $(if $(_TOOLCHAIN_GOROOT),$(_TOOLCHAIN_GOROOT),$(GOROOT))
 # excluded from .PHONY so they don't pollute tab-completion.
 .PHONY: all help install build build-vops release-vops \
         clean ufw reset-services service-vops service-vprox system-user-vops \
-        bump-patch bump-minor bump-major
+        bump-patch bump-minor bump-major toml-upgrade
 
 all: help
 
@@ -96,6 +99,7 @@ help:
 		@echo "  make release-vops     Cross-compile linux/amd64 → vops-linux-amd64, commit + push"
 	@echo "  make clean            Remove local build artifacts"
 	@echo "  make ufw              Passwordless UFW + apt sudoers for vOps"
+	@echo "  make toml-upgrade     SSH to INFRA_HOST ($(INFRA_HOST)) and patch infra TOML files"
 	@echo ""
 	@echo "  Version management (vOps):"
 	@echo "    make bump-patch       0.0.1 → 0.0.2  (bug fixes / small improvements)"
@@ -654,3 +658,13 @@ bump-major:
 	new="$$((maj+1)).0.0"; \
 	printf "$$new\n" > cmd/vops/VERSION; \
 	echo "✓ vOps version: $$ver → $$new  (cmd/vops/VERSION updated)"
+
+## ─── Infra config maintenance ────────────────────────────────────────────────
+
+## Patch live infra TOML files on the remote control VM.
+## Creates timestamped backups before modifying. Shows exactly what was changed.
+## Override host: make toml-upgrade INFRA_HOST=user@host
+
+toml-upgrade:
+	@echo "→ Patching infra TOMLs on $(INFRA_HOST) ..."
+	@ssh $(INFRA_HOST) python3 - < scripts/toml-upgrade.py
