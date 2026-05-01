@@ -1,32 +1,24 @@
 #!/usr/bin/env bash
-# upgrade-1.2.1-to-1.4.4.sh — Migrate vProx v1.2.x → vOps v1.4.4
+# upgrade-1.2.1-to-1.4.4.sh — Migrate vProx v1.2.x layout → vOps v1.4.4
 #
-# Usage (from dev machine, via Makefile):
-#   make upgrade-1.2.1-1.4.4                        # targets www.fr
-#   make upgrade-1.2.1-1.4.4 UPGRADE_HOST=other     # override host
-#
-# Or directly on the target server:
-#   bash ~/vOps/scripts/upgrade-1.2.1-to-1.4.4.sh
+# Run DIRECTLY on www.fr (not from dev machine):
+#   cd ~/vOps && git pull origin vOps_v1.4.0
+#   make upgrade-1.2.1-1.4.4
 #
 # What this does:
-#   1. Validates preconditions
+#   1. Validates preconditions (go in PATH, old config exists, repo present)
 #   2. Backs up ~/.vProx to timestamped snapshot
 #   3. Creates full ~/.vOps directory tree
-#   4. Migrates all config files (with format transforms for v1.4.x schema)
-#   5. Copies data assets (GeoIP DB, log archives)
-#   6. Checks out vOps_v1.4.0 branch and rebuilds the binary
-#   7. Reloads systemd and restarts vOps
+#   4. Copies SSH keys: ~/.vprox/secret/ → ~/.vOps/secret/
+#   5. Writes fresh TOML files (heredoc, correct v1.4.4 schema, fr's real values)
+#        vops.toml  — extracts api_key/password_hash/intel keys from old file
+#        rbx1.toml  — all RBX VMs, updated key paths
+#        qc1.toml   — QC host header (no VMs from this side)
+#   6. Copies remaining configs as-is (vprox settings, fleet, chains)
+#   7. Copies data assets (GeoIP DB, log archives)
+#   8. Checks out vOps_v1.4.0, builds binary, restarts vOps
 #
-# Idempotent: any file that already exists in ~/.vOps is skipped.
-# Re-running is safe — nothing is overwritten.
-#
-# Config migrations performed:
-#   vops.toml   → adds [vprox] section (config_path, external, service_name)
-#                 sets archives_dir to absolute path
-#                 removes infra_dir (unknown field in v1.4.x schema)
-#   rbx.toml    → renamed rbx1.toml (naming convention alignment)
-#   qc.toml     → renamed qc1.toml, stray [vm] / vm=[] removed
-#   all others  → copied as-is (no schema changes)
+# Idempotent: files that already exist in ~/.vOps are skipped.
 
 set -euo pipefail
 
@@ -36,187 +28,293 @@ ok()      { echo -e "${GRN}  ✓${RST} $*"; }
 warn()    { echo -e "${YEL}  ⚠${RST} $*"; }
 err()     { echo -e "${RED}  ✗${RST} $*" >&2; }
 inf()     { echo -e "${BLU}  →${RST} $*"; }
-section() { echo ""; echo "── $* "; echo "────────────────────────────────────────────────────────"; }
+section() { echo ""; echo -e "${BLU}── $*${RST}"; echo "────────────────────────────────────────────────────────"; }
 
 # ── paths ─────────────────────────────────────────────────────────────────────
 VPROX_HOME="${HOME}/.vProx"
 VOPS_HOME="${HOME}/.vOps"
-TS=$(date +%Y%m%d_%H%M%S)
-BACKUP="${HOME}/.vProx-backup-${TS}"
-REPO="${HOME}/vOps"
-
 OLD_CFG="${VPROX_HOME}/config"
 NEW_CFG="${VOPS_HOME}/config"
+REPO="${HOME}/vOps"
+TS=$(date +%Y%m%d_%H%M%S)
+BACKUP="${HOME}/.vProx-backup-${TS}"
+SSH_KEY="${VOPS_HOME}/secret/vops_ssh_key"
 
 # ─────────────────────────────────────────────────────────────────────────────
 section "Pre-flight checks"
 
-if [[ ! -d "${VPROX_HOME}" ]]; then
-    err "~/.vProx not found — nothing to migrate."
-    err "This script requires an existing v1.2.x vProx installation."
-    exit 1
-fi
+[[ -d "${VPROX_HOME}" ]]             || { err "~/.vProx not found"; exit 1; }
+[[ -f "${OLD_CFG}/vops/vops.toml" ]] || { err "~/.vProx/config/vops/vops.toml not found"; exit 1; }
+[[ -d "${REPO}" ]]                   || { err "~/vOps repo not found at ${REPO}"; exit 1; }
+command -v go >/dev/null 2>&1        || { err "go not found in PATH"; exit 1; }
 
-if [[ ! -f "${OLD_CFG}/vops/vops.toml" ]]; then
-    err "~/.vProx/config/vops/vops.toml not found."
-    err "Expected a v1.2.x vProx config layout."
-    exit 1
-fi
-
-if [[ ! -d "${REPO}" ]]; then
-    err "~/vOps repo not found at ${REPO}."
-    exit 1
-fi
-
-command -v go >/dev/null 2>&1 || { err "go not found in PATH"; exit 1; }
-ok "Source: ${VPROX_HOME}"
-ok "Target: ${VOPS_HOME}"
-ok "Repo:   ${REPO}"
+ok "Source : ${VPROX_HOME}"
+ok "Target : ${VOPS_HOME}"
+ok "Repo   : ${REPO}"
 
 # ─────────────────────────────────────────────────────────────────────────────
-section "Backup ~/.vProx → ${BACKUP}"
+section "Backup ~/.vProx"
 
 cp -a "${VPROX_HOME}" "${BACKUP}"
-ok "Backup complete: ${BACKUP}"
+ok "Backup → ${BACKUP}"
 
 # ─────────────────────────────────────────────────────────────────────────────
-section "Creating ~/.vOps directory structure"
+section "Directory structure"
 
-dirs=(
-    "${VOPS_HOME}/config/vops"
-    "${VOPS_HOME}/config/vops/chains"
-    "${VOPS_HOME}/config/vprox"
-    "${VOPS_HOME}/config/chains"
-    "${VOPS_HOME}/config/infra"
-    "${VOPS_HOME}/config/fleet"
-    "${VOPS_HOME}/config/backup"
-    "${VOPS_HOME}/data/geolocation"
-    "${VOPS_HOME}/data/logs/archives"
-    "${VOPS_HOME}/service"
-    "${VOPS_HOME}/.samples"
-)
-for d in "${dirs[@]}"; do
-    mkdir -p "${d}"
-    ok "dir: ${d}"
-done
+mkdir -p \
+    "${VOPS_HOME}/config/vops/chains" \
+    "${VOPS_HOME}/config/vprox" \
+    "${VOPS_HOME}/config/chains" \
+    "${VOPS_HOME}/config/infra" \
+    "${VOPS_HOME}/config/fleet" \
+    "${VOPS_HOME}/config/backup" \
+    "${VOPS_HOME}/data/geolocation" \
+    "${VOPS_HOME}/data/logs/archives" \
+    "${VOPS_HOME}/secret"
+ok "Dirs created under ${VOPS_HOME}"
 
 # ─────────────────────────────────────────────────────────────────────────────
-section "Migrating vops.toml  (adds [vprox] section)"
+section "SSH keys  (~/.vprox/secret/ → ~/.vOps/secret/)"
 
-VOPS_TOML_DST="${NEW_CFG}/vops/vops.toml"
-VOPS_TOML_SRC="${OLD_CFG}/vops/vops.toml"
-
-if [[ -f "${VOPS_TOML_DST}" ]]; then
-    warn "vops.toml already exists at destination — skipping"
+OLD_KEY="${HOME}/.vprox/secret/vops_ssh_key"
+if [[ -f "${OLD_KEY}" ]]; then
+    cp "${OLD_KEY}"     "${SSH_KEY}"
+    cp "${OLD_KEY}.pub" "${SSH_KEY}.pub" 2>/dev/null || true
+    chmod 600 "${SSH_KEY}"
+    ok "vops_ssh_key → ${SSH_KEY}"
 else
-    # Stage to a temp file before finalising
-    TMP_VOPS=$(mktemp)
-    cp "${VOPS_TOML_SRC}" "${TMP_VOPS}"
+    warn "${OLD_KEY} not found — infra SSH will not work until key is placed at ${SSH_KEY}"
+fi
 
-    # Remove infra_dir — field removed in v1.4.x schema (go-toml strict-mode safe)
-    sed -i '/^[[:space:]]*infra_dir[[:space:]]*=/d' "${TMP_VOPS}"
+# ─────────────────────────────────────────────────────────────────────────────
+section "vops.toml  (fresh write, fr's real credentials)"
 
-    # Set archives_dir to the new absolute path (was empty in v1.2.x)
-    sed -i "s|^archives_dir[[:space:]]*=.*|archives_dir = '${VOPS_HOME}/data/logs/archives'|" "${TMP_VOPS}"
+NEW_VOPS="${NEW_CFG}/vops/vops.toml"
 
-    # Append [vprox] section if not already present
-    if ! grep -q '^\[vprox\]' "${TMP_VOPS}"; then
-        cat >> "${TMP_VOPS}" << VPROX_SECTION
+if [[ -f "${NEW_VOPS}" ]]; then
+    warn "vops.toml already exists — skipping"
+else
+    OLD_VOPS="${OLD_CFG}/vops/vops.toml"
+    # Extract real values from old config (single-quoted TOML values)
+    _get() { grep -m1 "^${1}[[:space:]]*=" "${OLD_VOPS}" | sed "s/.*=[[:space:]]*['\"]//;s/['\"].*//"; }
+    API_KEY=$(_get api_key)
+    PASS_HASH=$(_get password_hash)
+    ABUSE_KEY=$(_get abuseipdb)
+    VT_KEY=$(_get virustotal)
+    SHODAN_KEY=$(_get shodan)
 
-# ── vProx integration (added by upgrade-1.2.1-to-1.4.4) ──────────────────
-# v1.4.0: vOps and vProx share the same home directory.
-# config_path must be the absolute path to the vOps home (no ~ expansion).
-# external = true because vProx runs as a standalone systemd service.
+    cat > "${NEW_VOPS}" << TOML
+[vops]
+port               = 8889
+base_path          = '/'
+api_key            = '${API_KEY}'
+db_path            = '${VOPS_HOME}/data/vops.db'
+archives_dir       = '${VOPS_HOME}/data/logs/archives'
+vprox_bin          = 'vprox'
+watch_interval_sec = 60
+bind_address       = '127.0.0.1'
+
+[vops.push]
+chains_dir        = '${NEW_CFG}/chains'
+infra_dir         = '${NEW_CFG}/infra'
+db_path           = '${VOPS_HOME}/data/push.db'
+poll_interval_sec = 60
+
+[vops.push.defaults]
+user             = ''
+key_path         = ''
+known_hosts_path = ''
+
+[vops.intel]
+auto_enrich          = false
+cache_ttl_hours      = 24
+rate_limit_rpm       = 10
+auto_ban_enabled     = false
+auto_ban_threshold   = 5
+ban_duration_minutes = 60
+ban_whitelist        = []
+
+[vops.intel.keys]
+abuseipdb  = '${ABUSE_KEY}'
+virustotal = '${VT_KEY}'
+shodan     = '${SHODAN_KEY}'
+
+[vops.server]
+read_timeout_sec  = 30
+write_timeout_sec = 30
+
+[vops.auth]
+allowed_groups = []
+ssh_port       = 0
+username       = 'vnodesv'
+password_hash  = '${PASS_HASH}'
+
+[vops.ui]
+theme = 'vthemedbl'
+
 [vprox]
 config_path  = '${VOPS_HOME}'
 external     = true
 service_name = 'vProx'
-VPROX_SECTION
-    fi
-
-    mv "${TMP_VOPS}" "${VOPS_TOML_DST}"
-    ok "vops.toml migrated → ${VOPS_TOML_DST}"
-    inf "  + [vprox] section added (config_path=${VOPS_HOME}, external=true)"
-    inf "  + archives_dir set to ${VOPS_HOME}/data/logs/archives"
-    inf "  + infra_dir removed (v1.4.x schema)"
+TOML
+    ok "vops.toml written → ${NEW_VOPS}"
+    inf "  api_key:       ${API_KEY:0:12}..."
+    inf "  password_hash: ${PASS_HASH:0:12}..."
+    inf "  [vprox]:       config_path=${VOPS_HOME}, external=true"
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-section "Migrating vprox/settings.toml"
+section "vprox/settings.toml  (copy as-is)"
 
-_migrate_simple() {
+_cp_once() {
     local src="$1" dst="$2" label="$3"
     if [[ -f "${dst}" ]]; then
         warn "${label} already exists — skipping"
     elif [[ -f "${src}" ]]; then
         cp "${src}" "${dst}"
-        ok "${label} → ${dst}"
+        ok "${label}"
     else
         warn "${label} not found at source — skipping"
     fi
 }
 
-_migrate_simple \
-    "${OLD_CFG}/vprox/settings.toml" \
-    "${NEW_CFG}/vprox/settings.toml" \
-    "vprox/settings.toml"
+_cp_once "${OLD_CFG}/vprox/settings.toml" "${NEW_CFG}/vprox/settings.toml" "vprox/settings.toml"
 
 # ─────────────────────────────────────────────────────────────────────────────
-section "Migrating infra TOML files"
+section "infra/rbx1.toml  (fresh write, updated key paths)"
 
-# rbx.toml → rbx1.toml  (naming convention; remove stray vm = [] if present)
 RBX_DST="${NEW_CFG}/infra/rbx1.toml"
 if [[ -f "${RBX_DST}" ]]; then
     warn "infra/rbx1.toml already exists — skipping"
-elif [[ -f "${OLD_CFG}/infra/rbx.toml" ]]; then
-    # Remove stray scalar 'vm = []' at line 1 (TOML array-table conflict bug)
-    sed '1{/^vm[[:space:]]*=[[:space:]]*\[\]/d}' "${OLD_CFG}/infra/rbx.toml" > "${RBX_DST}"
-    ok "infra/rbx.toml  → infra/rbx1.toml"
 else
-    warn "infra/rbx.toml not found at source — skipping"
-fi
+    cat > "${RBX_DST}" << TOML
+[host]
+name                = 'rbx.vnodesv.net'
+public_ip           = '141.94.162.127'
+lan_ip              = '10.0.0.1'
+datacenter          = 'RBX1'
+user                = 'vnodes.v.eu'
+ssh_key_path        = '${SSH_KEY}'
+port                = 22
+vrack_ip            = ''
+ssh_known_hosts_path = ''
 
-# qc.vnodesv.net.toml → qc1.toml  (rename; remove stray [vm] empty table)
-QC_DST="${NEW_CFG}/infra/qc1.toml"
-if [[ -f "${QC_DST}" ]]; then
-    warn "infra/qc1.toml already exists — skipping"
-elif [[ -f "${OLD_CFG}/infra/qc.vnodesv.net.toml" ]]; then
-    # Remove bare [vm] section header with no [[vm]] entries (causes parse noise)
-    grep -v '^[[:space:]]*\[vm\][[:space:]]*$' "${OLD_CFG}/infra/qc.vnodesv.net.toml" > "${QC_DST}"
-    ok "infra/qc.vnodesv.net.toml → infra/qc1.toml"
-else
-    warn "infra/qc.vnodesv.net.toml not found at source — skipping"
+[vprox]
+name         = 'vProx'
+lan_ip       = ''
+key          = ''
+user         = 'vnodesv'
+ssh_key_path = '${SSH_KEY}'
+
+[[vm]]
+name       = 'cheqd'
+host_ref   = 'RBX1'
+host       = '10.0.0.23'
+lan_ip     = '10.0.0.23'
+datacenter = 'RBX1'
+type       = 'node'
+user       = 'vnodesv'
+key_path   = '${SSH_KEY}'
+port       = 22
+
+[[vm]]
+name       = 'sifchain'
+host_ref   = 'RBX1'
+host       = '10.0.0.21'
+lan_ip     = '10.0.0.21'
+datacenter = 'RBX1'
+type       = 'node'
+user       = 'vnodesv'
+key_path   = '${SSH_KEY}'
+port       = 22
+
+[[vm]]
+name       = 'elysRBX'
+host_ref   = 'RBX1'
+host       = '10.0.0.11'
+lan_ip     = '10.0.0.11'
+datacenter = 'RBX1'
+type       = 'node'
+user       = 'vnodesv'
+key_path   = '${SSH_KEY}'
+port       = 22
+
+[[vm]]
+name       = 'cheqd-services'
+host_ref   = 'RBX1'
+host       = '10.0.0.13'
+lan_ip     = '10.0.0.13'
+datacenter = 'RBX1'
+type       = 'node'
+user       = 'vnodesv'
+key_path   = '${SSH_KEY}'
+port       = 22
+
+[[vm]]
+name       = 'www.fr'
+host_ref   = 'RBX1'
+host       = '127.0.0.1'
+lan_ip     = '127.0.0.1'
+datacenter = 'RBX1'
+type       = 'webserver'
+user       = 'vnodesv'
+key_path   = '${SSH_KEY}'
+port       = 22
+TOML
+    ok "rbx1.toml written → ${RBX_DST}"
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-section "Migrating chain configs"
+section "infra/qc1.toml  (fresh write, RBX→QC vrack path)"
+
+QC_DST="${NEW_CFG}/infra/qc1.toml"
+if [[ -f "${QC_DST}" ]]; then
+    warn "infra/qc1.toml already exists — skipping"
+else
+    cat > "${QC_DST}" << TOML
+[host]
+name                = 'qc.vnodesv.net'
+public_ip           = '10.1.0.2'
+lan_ip              = '10.0.0.1'
+datacenter          = 'QC1'
+user                = 'vnodes.v.ca'
+ssh_key_path        = '${SSH_KEY}'
+port                = 22
+vrack_ip            = ''
+ssh_known_hosts_path = ''
+
+[vprox]
+name         = 'vProx'
+lan_ip       = ''
+key          = ''
+user         = 'vnodesv'
+ssh_key_path = '/home/vnodesv/.ssh/id_vShare'
+TOML
+    ok "qc1.toml written → ${QC_DST}"
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
+section "Fleet settings  (copy as-is)"
+
+_cp_once "${OLD_CFG}/fleet/settings.toml" "${NEW_CFG}/fleet/settings.toml" "fleet/settings.toml"
+
+# ─────────────────────────────────────────────────────────────────────────────
+section "Chain configs  (copy as-is)"
 
 if [[ -d "${OLD_CFG}/chains" ]]; then
     for f in "${OLD_CFG}/chains"/*.toml; do
         [[ -f "${f}" ]] || continue
         base=$(basename "${f}")
         dst="${NEW_CFG}/chains/${base}"
-        if [[ -f "${dst}" ]]; then
-            warn "chains/${base} already exists — skipping"
-        else
-            cp "${f}" "${dst}"
-            ok "chains/${base}"
-        fi
+        if [[ -f "${dst}" ]]; then warn "chains/${base} exists — skip"
+        else cp "${f}" "${dst}"; ok "chains/${base}"; fi
     done
 else
     warn "~/.vProx/config/chains/ not found — skipping"
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-section "Migrating fleet/settings.toml"
-
-_migrate_simple \
-    "${OLD_CFG}/fleet/settings.toml" \
-    "${NEW_CFG}/fleet/settings.toml" \
-    "fleet/settings.toml"
-
-# ─────────────────────────────────────────────────────────────────────────────
-section "Migrating vops chain configs"
+section "vOps chain configs  (copy as-is)"
 
 if [[ -d "${OLD_CFG}/vops/chains" ]]; then
     mkdir -p "${NEW_CFG}/vops/chains"
@@ -224,84 +322,60 @@ if [[ -d "${OLD_CFG}/vops/chains" ]]; then
         [[ -f "${f}" ]] || continue
         base=$(basename "${f}")
         dst="${NEW_CFG}/vops/chains/${base}"
-        if [[ -f "${dst}" ]]; then
-            warn "vops/chains/${base} already exists — skipping"
-        else
-            cp "${f}" "${dst}"
-            ok "vops/chains/${base}"
-        fi
+        if [[ -f "${dst}" ]]; then warn "vops/chains/${base} exists — skip"
+        else cp "${f}" "${dst}"; ok "vops/chains/${base}"; fi
     done
 else
     warn "~/.vProx/config/vops/chains/ not found — skipping"
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-section "Migrating data assets"
+section "Data assets  (GeoIP + archives)"
 
-# GeoIP database (critical for proxy geo-enrichment)
-GEO_SRC="${VPROX_HOME}/data/geolocation/ip2location.mmdb"
-GEO_DST="${VOPS_HOME}/data/geolocation/ip2location.mmdb"
-if [[ -f "${GEO_DST}" ]]; then
-    warn "GeoIP DB already exists — skipping"
-elif [[ -f "${GEO_SRC}" ]]; then
-    cp "${GEO_SRC}" "${GEO_DST}"
-    ok "ip2location.mmdb → ${GEO_DST}  ($(du -sh "${GEO_DST}" | cut -f1))"
-else
-    warn "GeoIP DB not found at source — geo-enrichment will be disabled"
-    warn "  Expected: ${GEO_SRC}"
-fi
+_cp_once \
+    "${VPROX_HOME}/data/geolocation/ip2location.mmdb" \
+    "${VOPS_HOME}/data/geolocation/ip2location.mmdb" \
+    "ip2location.mmdb"
 
-# Log archives (existing backups for ingest)
+count=0
 ARCH_SRC="${VPROX_HOME}/data/logs/archives"
 ARCH_DST="${VOPS_HOME}/data/logs/archives"
 if [[ -d "${ARCH_SRC}" ]]; then
-    count=0
     for f in "${ARCH_SRC}"/*.tar.gz; do
         [[ -f "${f}" ]] || continue
         base=$(basename "${f}")
         dst="${ARCH_DST}/${base}"
-        if [[ -f "${dst}" ]]; then
-            warn "archive ${base} already exists — skipping"
-        else
-            cp "${f}" "${dst}"
-            ok "archive: ${base}"
-            (( count++ )) || true
-        fi
+        if [[ -f "${dst}" ]]; then warn "archive ${base} exists — skip"
+        else cp "${f}" "${dst}"; ok "archive: ${base}"; (( count++ )) || true; fi
     done
-    ok "${count} archive(s) copied to ${ARCH_DST}"
-else
-    warn "No archives directory found at ${ARCH_SRC}"
 fi
+ok "${count} archive(s) copied to ${ARCH_DST}"
 
 # ─────────────────────────────────────────────────────────────────────────────
-section "Checkout vOps_v1.4.0 branch + build"
+section "Checkout vOps_v1.4.0 + build"
 
 cd "${REPO}"
-
 CURRENT_BRANCH=$(git branch --show-current 2>/dev/null || echo "detached")
 if [[ "${CURRENT_BRANCH}" != "vOps_v1.4.0" ]]; then
-    inf "Switching from '${CURRENT_BRANCH}' → vOps_v1.4.0"
-    git fetch origin 2>&1 | sed 's/^/  /'
-    git checkout vOps_v1.4.0 2>&1 | sed 's/^/  /'
+    inf "Switching '${CURRENT_BRANCH}' → vOps_v1.4.0"
+    git fetch origin
+    git checkout vOps_v1.4.0
 fi
-git pull origin vOps_v1.4.0 2>&1 | sed 's/^/  /'
+git pull origin vOps_v1.4.0
 ok "Branch: $(git branch --show-current)  @ $(git log --oneline -1)"
 
-# Rebuild binary (skips frontend if node absent; syncs service files; restarts vOps)
-inf "Running make build-vops ..."
-make build-vops 2>&1 | sed 's/^/  /'
+inf "Building vOps binary..."
+make build-vops
 
 # ─────────────────────────────────────────────────────────────────────────────
-section "Upgrade complete"
+section "Upgrade complete ✓"
 
 echo ""
-echo "  Version:  $(vOps --version 2>/dev/null || echo 'check /usr/local/bin/vOps --version')"
-echo "  Config:   ${VOPS_HOME}/config/vops/vops.toml"
-echo "  Backup:   ${BACKUP}"
+echo "  Config : ${VOPS_HOME}/config/vops/vops.toml"
+echo "  Backup : ${BACKUP}"
 echo ""
-echo "  Verify:"
-echo "    journalctl -u vOps -n 20 --no-pager"
+echo "  Verify : journalctl -u vOps -n 30 --no-pager"
 echo ""
-warn "vProx (proxy traffic) was NOT restarted — still using ${VPROX_HOME} as its home."
-warn "vProx home path (${VPROX_HOME}) remains unchanged for the proxy process."
-inf  "To migrate vProx itself: update its --home flag in vProx.service to point to ${VOPS_HOME}"
+warn "vProx was NOT restarted — proxy traffic untouched."
+warn "vProx still reads ${VPROX_HOME}. To consolidate later:"
+inf  "  Update --home in vProx.service → ${VOPS_HOME}"
