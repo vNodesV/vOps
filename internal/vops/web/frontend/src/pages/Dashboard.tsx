@@ -242,6 +242,7 @@ function SummaryBoxes() {
   const alerts = useAlerts();
   const dangerCount = alerts.filter(a => a.type === 'danger').length;
   const warnCount   = alerts.filter(a => a.type === 'warn').length;
+  const [alertModal, setAlertModal] = useState<'danger' | 'warn' | null>(null);
 
   const { data: svcsData } = useQuery({
     queryKey: ['units'],
@@ -291,6 +292,7 @@ function SummaryBoxes() {
     : null;
 
   return (
+    <>
     <div className="flex flex-wrap gap-2 mb-6">
       {/* Chains box */}
       <div className="card" role="button" tabIndex={0} onClick={() => nav('/settings')}
@@ -383,42 +385,69 @@ function SummaryBoxes() {
       <div className="card" style={{ flex: '1 1 200px', minWidth: 180 }}>
         <div className="text-xs font-semibold uppercase tracking-[0.06em] mb-3" style={{ color: 'var(--vn-text-muted)' }}>🔔 Alerts</div>
         {dangerCount === 0 && warnCount === 0 ? (
-          <div style={{ fontSize: '0.8rem', color: 'var(--vn-success)', fontWeight: 600 }}>✓ All nominal</div>
+          <>
+            <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--vn-success)', marginBottom: '0.5rem' }}>✓</div>
+            <div className="text-sm py-[0.15rem]" style={{ color: 'var(--vn-success)' }}>All nominal</div>
+          </>
         ) : (
           <>
+            <div style={{ fontSize: '1.75rem', fontWeight: 700, color: dangerCount > 0 ? 'var(--vn-danger)' : 'var(--vn-warning)', marginBottom: '0.5rem' }}>
+              {dangerCount + warnCount}
+            </div>
             {dangerCount > 0 && (
-              <div className="flex justify-between text-sm py-[0.15rem]">
+              <button
+                className="flex justify-between text-sm py-[0.15rem] w-full"
+                style={{ background: 'none', border: 'none', padding: '0.15rem 0', cursor: 'pointer' }}
+                onClick={() => setAlertModal('danger')}
+              >
                 <span style={{ color: 'var(--vn-danger)' }}>🔴 Critical</span>
                 <span style={{ color: 'var(--vn-danger)', fontWeight: 700 }}>{dangerCount}</span>
-              </div>
+              </button>
             )}
             {warnCount > 0 && (
-              <div className="flex justify-between text-sm py-[0.15rem]">
+              <button
+                className="flex justify-between text-sm py-[0.15rem] w-full"
+                style={{ background: 'none', border: 'none', padding: '0.15rem 0', cursor: 'pointer' }}
+                onClick={() => setAlertModal('warn')}
+              >
                 <span style={{ color: 'var(--vn-warning)' }}>⚠ Warning</span>
                 <span style={{ color: 'var(--vn-warning)', fontWeight: 700 }}>{warnCount}</span>
-              </div>
+              </button>
             )}
-            <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-              {alerts.slice(0, 4).map((a, i) => (
-                <div key={i} style={{
-                  fontSize: '0.7rem',
-                  color: a.type === 'danger' ? 'var(--vn-danger)' : 'var(--vn-warning)',
-                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                }}>
-                  {a.label}
-                </div>
-              ))}
-              {alerts.length > 4 && (
-                <div style={{ fontSize: '0.7rem', color: 'var(--vn-text-muted)' }}>
-                  +{alerts.length - 4} more
-                </div>
-              )}
-            </div>
           </>
         )}
       </div>
 
     </div>
+
+    {alertModal && (
+      <div
+        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        onClick={() => setAlertModal(null)}
+      >
+        <div
+          className="card"
+          style={{ maxWidth: 480, width: '90%', maxHeight: '70vh', overflow: 'auto', padding: '1.5rem' }}
+          onClick={e => e.stopPropagation()}
+        >
+          <h3 style={{ fontWeight: 700, marginBottom: '1rem', fontSize: '1rem', color: alertModal === 'danger' ? 'var(--vn-danger)' : 'var(--vn-warning)' }}>
+            {alertModal === 'danger' ? '🔴 Critical Alerts' : '⚠ Warnings'} ({alerts.filter(a => a.type === alertModal).length})
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '1.5rem' }}>
+            {alerts.filter(a => a.type === alertModal).map((a, i) => (
+              <div key={i} style={{ fontSize: '0.875rem', color: alertModal === 'danger' ? 'var(--vn-danger)' : 'var(--vn-warning)' }}>
+                {a.label}
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+            <button className="btn btn-secondary btn-sm" onClick={() => setAlertModal(null)}>Cancel</button>
+            <button className="btn btn-primary btn-sm" onClick={() => { setAlertModal(null); nav('/ops'); }}>Go to OpsCenter</button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 
