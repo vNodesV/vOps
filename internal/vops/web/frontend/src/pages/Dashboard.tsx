@@ -11,7 +11,7 @@ import {
   CartesianGrid,
 } from 'recharts';
 import { getStats, getChart, getFleetChains, triggerIngest, triggerBackupAndIngest, getIngestStats, getVMStatus, vmUpgradeURL, getVMHistory, getUnits } from '../api';
-import type { Stats, ChartSeries, ArchiveStats, VMStatus, VMMetricPoint, CosmosUnitWithStatus } from '../api/types';
+import type { Stats, ChartSeries, VMStatus, VMMetricPoint, CosmosUnitWithStatus } from '../api/types';
 import StatCard from '../components/StatCard';
 import Badge from '../components/Badge';
 import Spinner from '../components/Spinner';
@@ -171,10 +171,77 @@ function fmtBytes(n: number): string {
   return `${(n / 1_073_741_824).toFixed(2)} GB`;
 }
 
+/* ── Alerts hook ─────────────────────────────────────────────── */
+
+type AlertEntry = { type: 'danger' | 'warn'; label: string };
+
+function useAlerts() {
+  const { data: chainsData } = useQuery({
+    queryKey: ['fleet-chains'],
+    queryFn: getFleetChains,
+    refetchInterval: 30_000,
+    staleTime: 0,
+    retry: false,
+  });
+  const { data: vmsData } = useQuery({
+    queryKey: ['vm-status'],
+    queryFn: getVMStatus,
+    refetchInterval: 30_000,
+    staleTime: 0,
+    retry: false,
+  });
+
+  const chains = chainsData?.chains ?? [];
+  const vms: VMStatus[] = vmsData?.vms ?? [];
+
+  const alerts: AlertEntry[] = [];
+
+  chains.filter(c => c.node_status === 'down')
+    .forEach(c => alerts.push({ type: 'danger', label: `Node down: ${c.dashboard_name || c.chain}` }));
+
+  chains.filter(c => c.latest_block_time && Date.now() - new Date(c.latest_block_time).getTime() > 120_000 && c.node_status !== 'down')
+    .forEach(c => alerts.push({ type: 'danger', label: `Chain stalled: ${c.dashboard_name || c.chain}` }));
+
+  chains.filter(c => c.has_validator && c.val_jailed)
+    .forEach(c => alerts.push({ type: 'danger', label: `Validator jailed: ${c.dashboard_name || c.chain}` }));
+
+  chains.filter(c => c.upgrade_pending)
+    .forEach(c => alerts.push({ type: 'warn', label: `Upgrade pending: ${c.dashboard_name || c.chain}${c.upgrade_name ? ` — ${c.upgrade_name}` : ''}` }));
+
+  chains.filter(c => c.active_proposals > 0)
+    .forEach(c => alerts.push({
+      type: 'warn',
+      label: `${c.active_proposals} proposal${c.active_proposals > 1 ? 's' : ''}: ${c.dashboard_name || c.chain}`,
+    }));
+
+  vms.filter(v => v.online && (v.cpu_pct >= 85 || v.mem_pct >= 85 || v.storage_pct >= 90))
+    .forEach(v => {
+      const issues: string[] = [];
+      if (v.cpu_pct >= 85)     issues.push(`CPU ${v.cpu_pct.toFixed(0)}%`);
+      if (v.mem_pct >= 85)     issues.push(`mem ${v.mem_pct.toFixed(0)}%`);
+      if (v.storage_pct >= 90) issues.push(`disk ${v.storage_pct.toFixed(0)}%`);
+      alerts.push({ type: 'danger', label: `${v.name} — ${issues.join(', ')}` });
+    });
+
+  const patchableVMs = vms.filter(v => v.online && v.apt_count > 0);
+  const totalPatches = patchableVMs.reduce((a, v) => a + v.apt_count, 0);
+  if (totalPatches > 0) {
+    alerts.push({
+      type: 'warn',
+      label: `${totalPatches} patch${totalPatches > 1 ? 'es' : ''} / ${patchableVMs.length} server${patchableVMs.length > 1 ? 's' : ''}`,
+    });
+  }
+
+  return alerts;
+}
+
 /* ── Infrastructure summary boxes ─────────────────────────────── */
 
 function SummaryBoxes() {
   const nav = useNavigate();
+  const alerts = useAlerts();
+  const dangerCount = alerts.filter(a => a.type === 'danger').length;
+  const warnCount   = alerts.filter(a => a.type === 'warn').length;
 
   const { data: svcsData } = useQuery({
     queryKey: ['units'],
@@ -309,6 +376,45 @@ function SummaryBoxes() {
           <div style={{ fontSize: '0.75rem', color: 'var(--vn-text-muted)', marginTop: '0.25rem' }}>
             No VMs polled yet
           </div>
+        )}
+      </div>
+
+      {/* Alerts box */}
+      <div className="card" style={{ flex: '1 1 200px', minWidth: 180 }}>
+        <div className="text-xs font-semibold uppercase tracking-[0.06em] mb-3" style={{ color: 'var(--vn-text-muted)' }}>🔔 Alerts</div>
+        {dangerCount === 0 && warnCount === 0 ? (
+          <div style={{ fontSize: '0.8rem', color: 'var(--vn-success)', fontWeight: 600 }}>✓ All nominal</div>
+        ) : (
+          <>
+            {dangerCount > 0 && (
+              <div className="flex justify-between text-sm py-[0.15rem]">
+                <span style={{ color: 'var(--vn-danger)' }}>🔴 Critical</span>
+                <span style={{ color: 'var(--vn-danger)', fontWeight: 700 }}>{dangerCount}</span>
+              </div>
+            )}
+            {warnCount > 0 && (
+              <div className="flex justify-between text-sm py-[0.15rem]">
+                <span style={{ color: 'var(--vn-warning)' }}>⚠ Warning</span>
+                <span style={{ color: 'var(--vn-warning)', fontWeight: 700 }}>{warnCount}</span>
+              </div>
+            )}
+            <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+              {alerts.slice(0, 4).map((a, i) => (
+                <div key={i} style={{
+                  fontSize: '0.7rem',
+                  color: a.type === 'danger' ? 'var(--vn-danger)' : 'var(--vn-warning)',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}>
+                  {a.label}
+                </div>
+              ))}
+              {alerts.length > 4 && (
+                <div style={{ fontSize: '0.7rem', color: 'var(--vn-text-muted)' }}>
+                  +{alerts.length - 4} more
+                </div>
+              )}
+            </div>
+          </>
         )}
       </div>
 
@@ -628,9 +734,11 @@ function ServersPanel() {
 
 /* ── Ingest Section ──────────────────────────────────────────── */
 
-function IngestSection() {
+function IngestBar() {
   const queryClient = useQueryClient();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: 'ok' | 'err'; msg: string } | null>(null);
+
   const statsQ = useQuery({
     queryKey: ['ingest-stats'],
     queryFn: getIngestStats,
@@ -639,105 +747,80 @@ function IngestSection() {
 
   const ingestMut = useMutation({
     mutationFn: triggerIngest,
-    onSuccess: () => {
+    onSuccess: (d) => {
       queryClient.invalidateQueries({ queryKey: ['ingest-stats'] });
       queryClient.invalidateQueries({ queryKey: ['stats'] });
+      setFeedback({ type: 'ok', msg: `${d.count} events ingested` });
+      setTimeout(() => setFeedback(null), 4000);
     },
+    onError: (e: Error) => { setFeedback({ type: 'err', msg: e.message }); },
   });
 
   const backupMut = useMutation({
     mutationFn: triggerBackupAndIngest,
-    onSuccess: () => {
+    onSuccess: (d) => {
       queryClient.invalidateQueries({ queryKey: ['ingest-stats'] });
       queryClient.invalidateQueries({ queryKey: ['stats'] });
+      setFeedback({ type: 'ok', msg: `${d.processed} archives processed` });
+      setTimeout(() => setFeedback(null), 4000);
     },
+    onError: (e: Error) => { setFeedback({ type: 'err', msg: e.message }); },
   });
 
-  const archiveStats: ArchiveStats | undefined = statsQ.data;
+  const busy = ingestMut.isPending || backupMut.isPending;
+  const s = statsQ.data;
 
   return (
-    <div className="card">
-      <div className="flex items-center justify-between mb-3">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-          <h3 className="text-sm font-medium" style={{ color: 'var(--vn-text-muted)' }}>
-            Archive Ingest
-          </h3>
-          <GearButton onClick={() => setSettingsOpen(true)} label="Ingest & backup settings" />
-        </div>
-        <div style={{ display: 'flex', gap: '0.4rem' }}>
-          <button
-            onClick={() => backupMut.mutate()}
-            disabled={backupMut.isPending || ingestMut.isPending}
-            title="Run vprox --new-backup then ingest"
-            className="btn btn-secondary btn-sm"
-          >
-            {backupMut.isPending ? 'Backing up…' : '💾 Backup & Ingest'}
-          </button>
-          <button
-            onClick={() => ingestMut.mutate()}
-            disabled={ingestMut.isPending || backupMut.isPending}
-            className="btn btn-primary btn-sm disabled:opacity-50"
-          >
-            {ingestMut.isPending ? 'Ingesting\u2026' : 'Trigger Ingest'}
-          </button>
-        </div>
+    <div style={{
+      display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.6rem',
+      padding: '0.45rem 0.85rem',
+      border: '1px solid var(--vn-border)', borderRadius: 'var(--vn-radius)',
+      background: 'var(--vn-surface)', fontSize: '0.78rem',
+    }}>
+      <span style={{ color: 'var(--vn-text-muted)', fontWeight: 600, flexShrink: 0 }}>
+        Archive Ingest
+      </span>
+
+      {s && (
+        <span style={{ color: 'var(--vn-text-muted)', display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+          <span>{s.total_archives} archives</span>
+          {s.last_ingested_at && (
+            <span>· last: <span style={{ color: 'var(--vn-text)' }}>{fmtRelative(s.last_ingested_at)}</span></span>
+          )}
+          {(s.total_bytes ?? 0) > 0 && (
+            <span>· {fmtBytes(s.total_bytes)}</span>
+          )}
+        </span>
+      )}
+
+      {feedback && (
+        <span style={{
+          fontSize: '0.72rem', fontWeight: 500,
+          color: feedback.type === 'ok' ? 'var(--vn-success)' : 'var(--vn-danger)',
+        }}>
+          {feedback.type === 'ok' ? '✓' : '✗'} {feedback.msg}
+        </span>
+      )}
+
+      <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+        <button
+          onClick={() => backupMut.mutate()}
+          disabled={busy}
+          title="Run vprox --new-backup then ingest"
+          className="btn btn-secondary btn-sm"
+        >
+          {backupMut.isPending ? 'Backing up…' : '💾 Backup & Ingest'}
+        </button>
+        <button
+          onClick={() => ingestMut.mutate()}
+          disabled={busy}
+          className="btn btn-primary btn-sm disabled:opacity-50"
+        >
+          {ingestMut.isPending ? 'Ingesting…' : 'Trigger Ingest'}
+        </button>
+        <GearButton onClick={() => setSettingsOpen(true)} label="Ingest & backup settings" />
       </div>
 
-      {ingestMut.isSuccess && (
-        <div className="alert alert-success mb-3" role="alert">
-          Ingest complete &mdash; {ingestMut.data.count} events processed.
-        </div>
-      )}
-      {backupMut.isSuccess && (
-        <div className="alert alert-success mb-3" role="alert">
-          Backup &amp; ingest complete &mdash; {backupMut.data.processed} archives processed.
-        </div>
-      )}
-      {backupMut.isError && (
-        <div className="alert alert-danger mb-3" role="alert">
-          Backup failed: {(backupMut.error as Error).message}
-        </div>
-      )}
-      {ingestMut.isError && (
-        <div className="alert alert-danger mb-3" role="alert">
-          Ingest failed: {(ingestMut.error as Error).message}
-        </div>
-      )}
-
-      {statsQ.isLoading ? (
-        <Spinner size={16} label="Loading ingest stats" />
-      ) : archiveStats ? (
-        <div className="grid grid-cols-2 gap-3 text-sm">
-          <div>
-            <span style={{ color: 'var(--vn-text-muted)' }}>Archives:</span>{' '}
-            <span className="font-medium">{archiveStats.total_archives}</span>
-          </div>
-          <div>
-            <span style={{ color: 'var(--vn-text-muted)' }}>Requests:</span>{' '}
-            <span className="font-medium">{(archiveStats.total_requests ?? 0).toLocaleString()}</span>
-          </div>
-          {archiveStats.total_ratelimit > 0 && (
-            <div>
-              <span style={{ color: 'var(--vn-text-muted)' }}>Rate-limited:</span>{' '}
-              <span className="font-medium" style={{ color: 'var(--vn-warning)' }}>{archiveStats.total_ratelimit.toLocaleString()}</span>
-            </div>
-          )}
-          {archiveStats.last_ingested_at && (
-            <div>
-              <span style={{ color: 'var(--vn-text-muted)' }}>Last ingest:</span>{' '}
-              <span className="font-medium" style={{ color: 'var(--vn-text-subtle)', fontSize: '0.8rem' }}>{fmtRelative(archiveStats.last_ingested_at)}</span>
-            </div>
-          )}
-          {(archiveStats.total_bytes ?? 0) > 0 && (
-            <div>
-              <span style={{ color: 'var(--vn-text-muted)' }}>Size:</span>{' '}
-              <span className="font-medium">{fmtBytes(archiveStats.total_bytes)}</span>
-            </div>
-          )}
-        </div>
-      ) : (
-        <p className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>No ingest data available.</p>
-      )}
       {settingsOpen && (
         <SettingsDrawer title="Ingest & Backup Settings" onClose={() => setSettingsOpen(false)}>
           <ConfigPanel>{(cfg) => <BackupsPanel config={cfg} />}</ConfigPanel>
@@ -748,151 +831,13 @@ function IngestSection() {
 }
 
 
-/* ── Alerts Banner (compact top-of-page strip) ───────────────── */
-
-type AlertEntry = { type: 'danger' | 'warn'; label: string };
-
-function useAlerts() {
-  const { data: chainsData } = useQuery({
-    queryKey: ['fleet-chains'],
-    queryFn: getFleetChains,
-    refetchInterval: 30_000,
-    staleTime: 0,
-    retry: false,
-  });
-  const { data: vmsData } = useQuery({
-    queryKey: ['vm-status'],
-    queryFn: getVMStatus,
-    refetchInterval: 30_000,
-    staleTime: 0,
-    retry: false,
-  });
-
-  const chains = chainsData?.chains ?? [];
-  const vms: VMStatus[] = vmsData?.vms ?? [];
-
-  const alerts: AlertEntry[] = [];
-
-  chains.filter(c => c.node_status === 'down')
-    .forEach(c => alerts.push({ type: 'danger', label: `Node down: ${c.dashboard_name || c.chain}` }));
-
-  chains.filter(c => c.latest_block_time && Date.now() - new Date(c.latest_block_time).getTime() > 120_000 && c.node_status !== 'down')
-    .forEach(c => alerts.push({ type: 'danger', label: `Chain stalled: ${c.dashboard_name || c.chain}` }));
-
-  chains.filter(c => c.has_validator && c.val_jailed)
-    .forEach(c => alerts.push({ type: 'danger', label: `Validator jailed: ${c.dashboard_name || c.chain}` }));
-
-  chains.filter(c => c.upgrade_pending)
-    .forEach(c => alerts.push({ type: 'warn', label: `Upgrade pending: ${c.dashboard_name || c.chain}${c.upgrade_name ? ` — ${c.upgrade_name}` : ''}` }));
-
-  chains.filter(c => c.active_proposals > 0)
-    .forEach(c => alerts.push({
-      type: 'warn',
-      label: `${c.active_proposals} proposal${c.active_proposals > 1 ? 's' : ''}: ${c.dashboard_name || c.chain}`,
-    }));
-
-  vms.filter(v => v.online && (v.cpu_pct >= 85 || v.mem_pct >= 85 || v.storage_pct >= 90))
-    .forEach(v => {
-      const issues: string[] = [];
-      if (v.cpu_pct >= 85)     issues.push(`CPU ${v.cpu_pct.toFixed(0)}%`);
-      if (v.mem_pct >= 85)     issues.push(`mem ${v.mem_pct.toFixed(0)}%`);
-      if (v.storage_pct >= 90) issues.push(`disk ${v.storage_pct.toFixed(0)}%`);
-      alerts.push({ type: 'danger', label: `${v.name} — ${issues.join(', ')}` });
-    });
-
-  const patchableVMs = vms.filter(v => v.online && v.apt_count > 0);
-  const totalPatches = patchableVMs.reduce((a, v) => a + v.apt_count, 0);
-  if (totalPatches > 0) {
-    alerts.push({
-      type: 'warn',
-      label: `${totalPatches} patch${totalPatches > 1 ? 'es' : ''} / ${patchableVMs.length} server${patchableVMs.length > 1 ? 's' : ''}`,
-    });
-  }
-
-  return alerts;
-}
-
-function AlertsBanner() {
-  const alerts = useAlerts();
-  const dangerCount = alerts.filter(a => a.type === 'danger').length;
-  const warnCount   = alerts.filter(a => a.type === 'warn').length;
-
-  if (alerts.length === 0) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-        <span style={{
-          display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
-          fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.02em',
-          color: 'var(--vn-success)',
-          background: 'color-mix(in srgb, var(--vn-success) 12%, transparent)',
-          border: '1px solid color-mix(in srgb, var(--vn-success) 30%, transparent)',
-          borderRadius: '999px', padding: '0.15rem 0.6rem',
-        }}>
-          ✓ All systems nominal
-        </span>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.35rem' }}>
-      {dangerCount > 0 && (
-        <span style={{
-          fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.06em',
-          color: 'var(--vn-danger)', textTransform: 'uppercase', marginRight: '0.1rem',
-        }}>
-          {dangerCount} CRIT
-        </span>
-      )}
-      {alerts.filter(a => a.type === 'danger').map((a, i) => (
-        <span key={`d-${i}`} style={{
-          display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
-          fontSize: '0.72rem', fontWeight: 500,
-          color: 'var(--vn-danger)',
-          background: 'color-mix(in srgb, var(--vn-danger) 12%, transparent)',
-          border: '1px solid color-mix(in srgb, var(--vn-danger) 35%, transparent)',
-          borderRadius: '999px', padding: '0.15rem 0.6rem',
-          whiteSpace: 'nowrap',
-        }}>
-          <span style={{ width: '0.4rem', height: '0.4rem', borderRadius: '50%', backgroundColor: 'var(--vn-danger)', flexShrink: 0 }} />
-          {a.label}
-        </span>
-      ))}
-      {warnCount > 0 && dangerCount > 0 && (
-        <span style={{ width: '1px', height: '1rem', background: 'var(--vn-border)', margin: '0 0.15rem' }} />
-      )}
-      {warnCount > 0 && (
-        <span style={{
-          fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.06em',
-          color: 'var(--vn-warning)', textTransform: 'uppercase', marginRight: '0.1rem',
-        }}>
-          {warnCount} WARN
-        </span>
-      )}
-      {alerts.filter(a => a.type === 'warn').map((a, i) => (
-        <span key={`w-${i}`} style={{
-          display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
-          fontSize: '0.72rem', fontWeight: 500,
-          color: 'var(--vn-warning)',
-          background: 'color-mix(in srgb, var(--vn-warning) 12%, transparent)',
-          border: '1px solid color-mix(in srgb, var(--vn-warning) 35%, transparent)',
-          borderRadius: '999px', padding: '0.15rem 0.6rem',
-          whiteSpace: 'nowrap',
-        }}>
-          <span style={{ width: '0.4rem', height: '0.4rem', borderRadius: '50%', backgroundColor: 'var(--vn-warning)', flexShrink: 0 }} />
-          {a.label}
-        </span>
-      ))}
-    </div>
-  );
-}
-
 /* ── Dashboard Page ──────────────────────────────────────────── */
 
 export default function DashboardPage() {
   const nav = useNavigate();
   const [chainSettingsOpen, setChainSettingsOpen] = useState(false);
   const [serversSettingsOpen, setServersSettingsOpen] = useState(false);
+  const [serversOpen, setServersOpen] = useState(false);
   const { data: stats, isLoading } = useQuery<Stats>({
     queryKey: ['stats'],
     queryFn: getStats,
@@ -901,29 +846,30 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Page header with inline alerts banner */}
-      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
-        <h2 className="text-lg font-semibold" style={{ color: 'var(--vn-text)', flexShrink: 0 }}>
-          Dashboard
-        </h2>
-        <AlertsBanner />
-      </div>
+      {/* Page header */}
+      <h2 className="text-lg font-semibold" style={{ color: 'var(--vn-text)' }}>
+        Dashboard
+      </h2>
 
-      {/* Stat Cards */}
+      {/* Stat pills — 3 left + 3 right */}
       {isLoading ? (
         <Spinner label="Loading stats" />
       ) : stats ? (
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-          <StatCard label="Total Requests" value={stats.total_requests} icon={<RequestsIcon />} variant="info" />
-          <StatCard label="Total IPs" value={stats.total_ips} icon={<IPIcon />} variant="default" onClick={() => nav('/accounts')} />
-          <StatCard label="Rate Limit Events" value={stats.total_ratelimit_events} icon={<ShieldIcon />} variant="warning" />
-          <StatCard label="Archives" value={stats.total_archives} icon={<ArchiveIcon />} variant="info" />
-          <StatCard label="Flagged IPs" value={stats.flagged_ips} icon={<FlagIcon />} variant="warning" onClick={() => nav('/accounts')} />
-          <StatCard label="Blocked IPs" value={stats.blocked_ips} icon={<BlockIcon />} variant="danger" onClick={() => nav('/accounts')} />
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', flex: '3 1 0', flexWrap: 'wrap' }}>
+            <StatCard label="Requests" value={stats.total_requests} icon={<RequestsIcon />} variant="info" />
+            <StatCard label="Total IPs" value={stats.total_ips} icon={<IPIcon />} variant="default" onClick={() => nav('/accounts')} />
+            <StatCard label="Rate Limits" value={stats.total_ratelimit_events} icon={<ShieldIcon />} variant="warning" />
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem', flex: '3 1 0', flexWrap: 'wrap' }}>
+            <StatCard label="Archives" value={stats.total_archives} icon={<ArchiveIcon />} variant="info" />
+            <StatCard label="Flagged IPs" value={stats.flagged_ips} icon={<FlagIcon />} variant="warning" onClick={() => nav('/accounts')} />
+            <StatCard label="Blocked IPs" value={stats.blocked_ips} icon={<BlockIcon />} variant="danger" onClick={() => nav('/accounts')} />
+          </div>
         </div>
       ) : null}
 
-      {/* Charts — two-column layout matching vLog v1.4.0 */}
+      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card">
           <ChartPanel title="Requests over Time (30d)" queryKey="chart-requests" chartType="requests_over_time" />
@@ -931,6 +877,40 @@ export default function DashboardPage() {
         <div className="card">
           <ChartPanel title="IPs over Time (30d)" queryKey="chart-ips" chartType="ips_over_time" />
         </div>
+      </div>
+
+      {/* Infrastructure Overview — 4 pills: Chains, Services, VMs, Alerts */}
+      <div>
+        <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--vn-text-muted)' }}>
+          Infrastructure Overview
+        </h3>
+        <SummaryBoxes />
+      </div>
+
+      {/* Servers — collapsible, default closed */}
+      <div>
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => setServersOpen(v => !v)}
+          onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setServersOpen(v => !v)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: '0.5rem',
+            cursor: 'pointer', userSelect: 'none',
+            marginBottom: serversOpen ? '0.75rem' : 0,
+          }}
+          aria-expanded={serversOpen}
+        >
+          <span style={{
+            fontSize: '0.65rem', color: 'var(--vn-text-muted)',
+            transition: 'transform 0.15s',
+            transform: serversOpen ? 'rotate(90deg)' : 'rotate(0deg)',
+            display: 'inline-block',
+          }}>▶</span>
+          <h3 className="text-sm font-medium" style={{ color: 'var(--vn-text-muted)' }}>Servers</h3>
+          <GearButton onClick={e => { e.stopPropagation(); setServersSettingsOpen(true); }} label="Fleet & server settings" />
+        </div>
+        {serversOpen && <ServersPanel />}
       </div>
 
       {/* Chain Status */}
@@ -944,27 +924,8 @@ export default function DashboardPage() {
         <FleetTable />
       </div>
 
-      {/* Ingest */}
-      <IngestSection />
-
-      {/* Infrastructure Overview — quick-nav to Chains / Services / VMs */}
-      <div>
-        <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--vn-text-muted)' }}>
-          Infrastructure Overview
-        </h3>
-        <SummaryBoxes />
-      </div>
-
-      {/* Servers */}
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.75rem' }}>
-          <h3 className="text-sm font-medium" style={{ color: 'var(--vn-text-muted)' }}>
-            Servers
-          </h3>
-          <GearButton onClick={() => setServersSettingsOpen(true)} label="Fleet & server settings" />
-        </div>
-        <ServersPanel />
-      </div>
+      {/* Archive Ingest — compact single-line bar at bottom */}
+      <IngestBar />
 
       {chainSettingsOpen && (
         <SettingsDrawer title="Chain Profile Settings" onClose={() => setChainSettingsOpen(false)}>
