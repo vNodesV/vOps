@@ -884,13 +884,13 @@ export default function DashboardPage() {
       {isLoading ? (
         <Spinner label="Loading stats" />
       ) : stats ? (
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', gap: '0.5rem', flex: '3 1 0', flexWrap: 'wrap' }}>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
             <StatCard label="Requests" value={stats.total_requests} icon={<RequestsIcon />} variant="info" />
             <StatCard label="Total IPs" value={stats.total_ips} icon={<IPIcon />} variant="default" onClick={() => nav('/accounts')} />
             <StatCard label="Rate Limits" value={stats.total_ratelimit_events} icon={<ShieldIcon />} variant="warning" />
           </div>
-          <div style={{ display: 'flex', gap: '0.5rem', flex: '3 1 0', flexWrap: 'wrap' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
             <StatCard label="Archives" value={stats.total_archives} icon={<ArchiveIcon />} variant="info" />
             <StatCard label="Flagged IPs" value={stats.flagged_ips} icon={<FlagIcon />} variant="warning" onClick={() => nav('/accounts')} />
             <StatCard label="Blocked IPs" value={stats.blocked_ips} icon={<BlockIcon />} variant="danger" onClick={() => nav('/accounts')} />
