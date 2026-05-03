@@ -99,8 +99,8 @@ export default function InvestigateModal({ ip, acct, onClose }: InvestigateModal
     setStreamDone(true);
     setOverallPct(100);
     setPortPct(100);
-    // Use refetchType: 'none' so the table does NOT re-sort after a scan completes.
-    queryClient.invalidateQueries({ queryKey: ['accounts'], refetchType: 'none' });
+    // Refresh the accounts list so updated data and sort are shown after dismiss.
+    queryClient.invalidateQueries({ queryKey: ['accounts'] });
     queryClient.invalidateQueries({ queryKey: ['account', ip] });
   }, [queryClient, ip]);
 

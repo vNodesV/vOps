@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getAccount, blockIP, unblockIP } from '../api';
 import { BASE } from '../api/client';
@@ -41,11 +41,15 @@ export default function AccountDetailPage() {
   const queryClient = useQueryClient();
 
   const [activeStream, setActiveStream] = useState<StreamAction>(null);
+  const [streamDone, setStreamDone] = useState(false);
   const [confirmBlock, setConfirmBlock] = useState(false);
 
   // Stable callback — prevents SSEStream useEffect from looping on re-render.
   const handleStreamDone = useCallback(() => {
+    setStreamDone(true);
     queryClient.invalidateQueries({ queryKey: ['account', ip] });
+    // Also refresh the accounts list so sort/data are fresh when navigating back.
+    queryClient.invalidateQueries({ queryKey: ['accounts'] });
   }, [queryClient, ip]);
 
   const { data: account, isLoading, isError, error } = useQuery({
@@ -100,7 +104,7 @@ export default function AccountDetailPage() {
     );
   }
 
-  if (!account) return null;
+  if (!account) return <Navigate to="/accounts" replace />;
 
   const threatFlags = parseJSON<string[]>(account.ThreatFlags, []);
   const tags = parseJSON<string[]>(account.Tags, []);
@@ -312,12 +316,19 @@ export default function AccountDetailPage() {
                   {activeStream === 'investigate' && 'Full Investigation'}
                 </h4>
                 <button
-                  onClick={() => setActiveStream(null)}
+                  onClick={() => {
+                    setActiveStream(null);
+                    setStreamDone(false);
+                    // After investigation completes, go back to the refreshed accounts list.
+                    if (activeStream === 'investigate' && streamDone) {
+                      navigate('/accounts');
+                    }
+                  }}
                   className="text-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-                  style={{ color: 'var(--vn-text-muted)' }}
-                  aria-label="Close stream"
+                  style={{ color: streamDone && activeStream === 'investigate' ? 'var(--vn-primary)' : 'var(--vn-text-muted)' }}
+                  aria-label="Dismiss stream"
                 >
-                  Close
+                  {streamDone && activeStream === 'investigate' ? '← Back to Accounts' : 'Dismiss'}
                 </button>
               </div>
               <SSEStream
