@@ -606,6 +606,18 @@ func applyVOps(home string, f map[string]any) error {
 	return writeConfigNoPrompt(path, cfg)
 }
 
+// ApplyIntelKeys updates only the AbuseIPDB, VirusTotal, and Shodan API keys
+// in vops.toml without touching any other configuration fields.
+// Empty values preserve the existing key; non-empty values replace it.
+func ApplyIntelKeys(home string, f map[string]any) error {
+	path := configPath(home, "vops", "vops.toml")
+	existing := loadExistingVOps(path)
+	existing.VOps.Intel.Keys.AbuseIPDB = preserveRedactedStringField(f, "abuseipdb", existing.VOps.Intel.Keys.AbuseIPDB)
+	existing.VOps.Intel.Keys.VirusTotal = preserveRedactedStringField(f, "virustotal", existing.VOps.Intel.Keys.VirusTotal)
+	existing.VOps.Intel.Keys.Shodan = preserveRedactedStringField(f, "shodan", existing.VOps.Intel.Keys.Shodan)
+	return writeConfigNoPrompt(path, existing)
+}
+
 func applyFleet(home string, f map[string]any) error {
 	var s fleetSettingsFile
 	s.SSH.User = fieldStr(f, "ssh_user", "ubuntu")
@@ -1627,10 +1639,6 @@ func importVOpsFields(data []byte) (map[string]any, error) {
 		"abuseipdb":          "",
 		"virustotal":         "",
 		"shodan":             "",
-		// _set flags: true when a key is stored — keys themselves are never returned.
-		"abuseipdb_set":  strings.TrimSpace(v.Intel.Keys.AbuseIPDB) != "",
-		"virustotal_set": strings.TrimSpace(v.Intel.Keys.VirusTotal) != "",
-		"shodan_set":     strings.TrimSpace(v.Intel.Keys.Shodan) != "",
 		"push_user":          v.Push.Defaults.User,
 		"push_key_path":      v.Push.Defaults.KeyPath,
 		"poll_interval_sec":  v.Push.PollIntervalSec,

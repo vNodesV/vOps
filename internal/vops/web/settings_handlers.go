@@ -325,6 +325,22 @@ func (s *Server) handleAPISettingsSave(step string) http.HandlerFunc {
 	}
 }
 
+// handleAPIIntelKeys updates only the AbuseIPDB, VirusTotal, and Shodan API keys
+// in vops.toml, leaving all other settings untouched.
+func (s *Server) handleAPIIntelKeys(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 4*1024)
+	var fields map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&fields); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON payload"})
+		return
+	}
+	if err := configwizard.ApplyIntelKeys(s.home, fields); err != nil {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
 // handleAPISettingsPreferences persists UI preferences (theme) to vops.toml,
 // updates the in-memory config, and sets a vops_theme cookie for flash-free load.
 func (s *Server) handleAPISettingsPreferences(w http.ResponseWriter, r *http.Request) {

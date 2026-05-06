@@ -221,6 +221,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	mux.Handle("POST /settings/api/config/settings", s.requireSession(http.HandlerFunc(s.handleAPISettingsSave("settings"))))
 	mux.Handle("POST /settings/api/config/chain", s.requireSession(http.HandlerFunc(s.handleAPISettingsSave("chain"))))
 	mux.Handle("POST /settings/api/config/vops", s.requireSession(http.HandlerFunc(s.handleAPISettingsSave("vops"))))
+	mux.Handle("POST /settings/api/config/intel-keys", s.requireSession(http.HandlerFunc(s.handleAPIIntelKeys)))
 	mux.Handle("POST /settings/api/config/fleet", s.requireSession(http.HandlerFunc(s.handleAPISettingsSave("fleet"))))
 	mux.Handle("POST /settings/api/config/infra", s.requireSession(http.HandlerFunc(s.handleAPISettingsSave("infra"))))
 	mux.Handle("POST /settings/api/config/backup", s.requireSession(http.HandlerFunc(s.handleAPISettingsSave("backup"))))

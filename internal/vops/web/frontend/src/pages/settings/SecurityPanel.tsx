@@ -179,10 +179,11 @@ export function IntelKeysPanel({ config }: { config: ConfigSnapshot }) {
   const raw = typeof config.vops === 'string' ? config.vops : '';
   const t = parseTOML(raw);
 
-  // _set flags: true when a key is already stored in vops.toml
-  const abuseSet    = String(t['vops.abuseipdb_set'])  === 'true';
-  const vtSet       = String(t['vops.virustotal_set']) === 'true';
-  const shodanSet   = String(t['vops.shodan_set'])     === 'true';
+  // _set: redactSnapshotTOML writes "[REDACTED]" for non-empty keys, "" for empty.
+  // parseTOML returns the section-qualified path: vops.intel.keys.<name>
+  const abuseSet  = t['vops.intel.keys.abuseipdb']  === '[REDACTED]';
+  const vtSet     = t['vops.intel.keys.virustotal'] === '[REDACTED]';
+  const shodanSet = t['vops.intel.keys.shodan']     === '[REDACTED]';
 
   const [keys, setKeys] = useState({ abuseipdb: '', virustotal: '', shodan: '' });
   const set = (k: keyof typeof keys) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -190,7 +191,7 @@ export function IntelKeysPanel({ config }: { config: ConfigSnapshot }) {
 
   const saveMut = useMutation({
     mutationFn: () =>
-      saveConfig('vops', {
+      saveConfig('intel-keys', {
         abuseipdb:  keys.abuseipdb,
         virustotal: keys.virustotal,
         shodan:     keys.shodan,
