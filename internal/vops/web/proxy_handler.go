@@ -3,10 +3,12 @@ package web
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // proxyStatusResponse is the JSON payload returned by GET /api/v1/proxy/status.
@@ -133,13 +135,13 @@ func (s *Server) handleProxyConfig(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleProxyLogs streams recent vProx log lines via Server-Sent Events.
+// handleProxyLogs streams vProx log lines via Server-Sent Events.
 //
 //	GET /api/v1/proxy/logs
 //
-// If the log file is not readable (in-process proxy, no file yet, etc.) the
-// stream emits a single "live_not_available" event so the UI can display a
-// friendly message instead of a spinner.
+// Sends the last 100 historical lines, fires an "end" event to signal the
+// transition to live mode, then tails the file every second for new content.
+// Handles log rotation: if the file shrinks the stream reopens the file.
 func (s *Server) handleProxyLogs(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -167,27 +169,67 @@ func (s *Server) handleProxyLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	defer f.Close()
 
-	// Tail last 100 lines by scanning the whole file (log files are bounded).
-	var lines []string
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
+	// Send last 100 historical lines.
+	var hist []string
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		hist = append(hist, sc.Text())
 	}
-	if len(lines) > 100 {
-		lines = lines[len(lines)-100:]
+	if len(hist) > 100 {
+		hist = hist[len(hist)-100:]
 	}
-
-	for _, line := range lines {
-		// Escape newlines inside data value to keep SSE frame valid.
-		safe := strings.ReplaceAll(line, "\n", " ")
-		fmt.Fprintf(w, "data: %s\n\n", safe)
+	for _, line := range hist {
+		fmt.Fprintf(w, "data: %s\n\n", strings.ReplaceAll(line, "\n", " "))
 	}
 	flusher.Flush()
 
-	// Signal end of historical lines.
+	// Signal end of historical lines; client stays connected for live tail.
 	fmt.Fprintf(w, "event: end\ndata: \n\n")
 	flusher.Flush()
 
-	// Hold the connection open until the client disconnects.
-	<-r.Context().Done()
+	// Record current file offset — tail from here.
+	offset, err := f.Seek(0, io.SeekCurrent)
+	if err != nil {
+		<-r.Context().Done()
+		return
+	}
+
+	// Live tail: poll every second for new content.
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-ticker.C:
+			// Rotation check: if file is smaller than our offset, reopen.
+			fi, statErr := f.Stat()
+			if statErr != nil || fi.Size() < offset {
+				_ = f.Close()
+				f, err = os.Open(logPath) //nolint:gosec
+				if err != nil {
+					continue
+				}
+				offset = 0
+			}
+
+			// Seek to known offset and scan new lines.
+			if _, err = f.Seek(offset, io.SeekStart); err != nil {
+				continue
+			}
+			sc2 := bufio.NewScanner(f)
+			wrote := false
+			for sc2.Scan() {
+				fmt.Fprintf(w, "data: %s\n\n", strings.ReplaceAll(sc2.Text(), "\n", " "))
+				wrote = true
+			}
+			// Advance offset to current position.
+			if pos, seekErr := f.Seek(0, io.SeekCurrent); seekErr == nil {
+				offset = pos
+			}
+			if wrote {
+				flusher.Flush()
+			}
+		}
+	}
 }

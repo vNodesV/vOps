@@ -121,7 +121,7 @@ function OverviewTab({
       setLogMsg((e as MessageEvent).data || 'Live log not available.');
       es.close();
     });
-    es.addEventListener('end', () => es.close());
+    // 'end' = historical lines done, connection stays open for live tail
     es.onmessage = (e) => setLines(prev => [...prev, e.data]);
     es.onerror   = () => es.close();
 
@@ -134,14 +134,35 @@ function OverviewTab({
 
   return (
     <div className="space-y-4">
-      {/* Status row */}
-      <div className="card flex items-center gap-4 flex-wrap">
-        <div className="text-sm font-medium" style={{ color: 'var(--vn-text)' }}>Status</div>
-        {data && <StatusBadge status={data.status} />}
-        {data?.status === 'running' && data.uptime_sec > 0 && (
-          <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>
-            Uptime: <span style={{ color: 'var(--vn-text)' }}>{fmtUptime(data.uptime_sec)}</span>
-          </span>
+      {/* Status + Controls — single card */}
+      <div className="card space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          {/* Left: badge + uptime */}
+          <div className="flex items-center gap-3 flex-wrap">
+            {data && <StatusBadge status={data.status} />}
+            {data?.status === 'running' && data.uptime_sec > 0 && (
+              <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>
+                Uptime: <span style={{ color: 'var(--vn-text)' }}>{fmtUptime(data.uptime_sec)}</span>
+              </span>
+            )}
+          </div>
+          {/* Right: controls */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <button className="btn btn-primary btn-sm" onClick={() => startMut.mutate()}
+              disabled={busy || isRunning} title={isRunning ? 'Already running' : 'Start proxy'}>
+              {startMut.isPending ? 'Starting…' : 'Start'}
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={() => stopMut.mutate()}
+              disabled={busy || isStopped} title={isStopped ? 'Already stopped' : 'Stop proxy'}>
+              {stopMut.isPending ? 'Stopping…' : 'Stop'}
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={() => restartMut.mutate()} disabled={busy}>
+              {restartMut.isPending ? 'Restarting…' : 'Restart'}
+            </button>
+          </div>
+        </div>
+        {errMsg && (
+          <div className="text-xs" style={{ color: 'var(--vn-danger)' }}>{errMsg.message}</div>
         )}
       </div>
 
@@ -152,24 +173,6 @@ function OverviewTab({
           {data.error}
         </div>
       )}
-
-      {/* Controls row */}
-      <div className="card flex items-center gap-3 flex-wrap">
-        <button className="btn btn-primary" onClick={() => startMut.mutate()}
-          disabled={busy || isRunning} title={isRunning ? 'Already running' : 'Start proxy'}>
-          {startMut.isPending ? 'Starting…' : 'Start'}
-        </button>
-        <button className="btn btn-secondary" onClick={() => stopMut.mutate()}
-          disabled={busy || isStopped} title={isStopped ? 'Already stopped' : 'Stop proxy'}>
-          {stopMut.isPending ? 'Stopping…' : 'Stop'}
-        </button>
-        <button className="btn btn-secondary" onClick={() => restartMut.mutate()} disabled={busy}>
-          {restartMut.isPending ? 'Restarting…' : 'Restart'}
-        </button>
-        {errMsg && (
-          <span className="text-xs" style={{ color: 'var(--vn-danger)' }}>{errMsg.message}</span>
-        )}
-      </div>
 
       {/* Collapsible log section — default hidden, no stream until opened */}
       <div className="card space-y-2">
