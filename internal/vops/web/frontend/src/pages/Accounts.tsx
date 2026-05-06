@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { getAccounts, syncUFW } from '../api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getAccounts, syncUFW, blockIP, unblockIP } from '../api';
 import type { IPAccount } from '../api/types';
 import Badge from '../components/Badge';
 import ThreatScore from '../components/ThreatScore';
@@ -114,11 +114,104 @@ function ScanBadge({ updatedAt }: { updatedAt: string }) {
   );
 }
 
+/* ── Recommended Action Pill ─────────────────────────────────────────────── */
+
+function RecommendedAction({
+  acct,
+  onInvestigate,
+  onRefresh,
+}: {
+  acct: IPAccount;
+  onInvestigate: () => void;
+  onRefresh: () => void;
+}) {
+  const [confirmBlock, setConfirmBlock] = useState(false);
+
+  const blockMut = useMutation({
+    mutationFn: () => blockIP(acct.IP),
+    onSuccess: () => { setConfirmBlock(false); onRefresh(); },
+  });
+
+  const unblockMut = useMutation({
+    mutationFn: () => unblockIP(acct.IP),
+    onSuccess: onRefresh,
+  });
+
+  const score = acct.ThreatScore;
+  const isBlocked = acct.Status === 'blocked';
+
+  // Blocked + still malicious → static indicator
+  if (isBlocked && score >= 50) {
+    return (
+      <span
+        className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
+        style={{ background: 'color-mix(in srgb, var(--vn-danger) 15%, transparent)', color: 'var(--vn-danger)' }}
+      >
+        Blocked
+      </span>
+    );
+  }
+
+  // Blocked + clean → recommend unblock
+  if (isBlocked && score >= 0 && score < 20) {
+    return (
+      <button
+        onClick={(e) => { e.stopPropagation(); unblockMut.mutate(); }}
+        disabled={unblockMut.isPending}
+        className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium cursor-pointer disabled:opacity-50"
+        style={{ background: 'color-mix(in srgb, var(--vn-text-muted) 12%, transparent)', color: 'var(--vn-text-muted)' }}
+      >
+        {unblockMut.isPending ? '…' : '↩ Unblock'}
+      </button>
+    );
+  }
+
+  // Malicious + not blocked → recommend block (two-step confirm)
+  if (!isBlocked && score >= 50) {
+    return (
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!confirmBlock) { setConfirmBlock(true); return; }
+          blockMut.mutate();
+        }}
+        onBlur={() => setConfirmBlock(false)}
+        disabled={blockMut.isPending}
+        className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium cursor-pointer disabled:opacity-50 transition-colors"
+        style={{
+          background: confirmBlock
+            ? 'color-mix(in srgb, var(--vn-danger) 30%, transparent)'
+            : 'color-mix(in srgb, var(--vn-danger) 15%, transparent)',
+          color: 'var(--vn-danger)',
+        }}
+      >
+        {blockMut.isPending ? '…' : confirmBlock ? 'Confirm?' : '⚠ Block'}
+      </button>
+    );
+  }
+
+  // Suspicious + not blocked → recommend investigate
+  if (!isBlocked && score >= 20 && score < 50) {
+    return (
+      <button
+        onClick={(e) => { e.stopPropagation(); onInvestigate(); }}
+        className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium cursor-pointer"
+        style={{ background: 'color-mix(in srgb, var(--vn-warning) 15%, transparent)', color: 'var(--vn-warning)' }}
+      >
+        ∿ Watch
+      </button>
+    );
+  }
+
+  return null;
+}
+
 /* ── Page ────────────────────────────────────────────────────────────────── */
 
 export default function AccountsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   // Modal state — holds the full account object for the investigate popup.
   const [investigateAcct, setInvestigateAcct] = useState<IPAccount | null>(null);
@@ -167,6 +260,10 @@ export default function AccountsPage() {
     mutationFn: (pass: string) => syncUFW(pass || undefined),
     onSuccess: () => setShowUFWModal(false),
   });
+
+  const handleAccountRefresh = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['accounts'] });
+  }, [queryClient]);
 
   const handleSort = useCallback(
     (column: string) => {
@@ -315,6 +412,9 @@ export default function AccountsPage() {
                   <th scope="col" className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--vn-text-muted)' }}>
                     <span className="sr-only">Actions</span>
                   </th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider whitespace-nowrap" style={{ color: 'var(--vn-text-muted)' }}>
+                    Action
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -368,6 +468,13 @@ export default function AccountsPage() {
                       >
                         Investigate
                       </button>
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <RecommendedAction
+                        acct={acct}
+                        onInvestigate={() => setInvestigateAcct(acct)}
+                        onRefresh={handleAccountRefresh}
+                      />
                     </td>
                   </tr>
                 ))}
