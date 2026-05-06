@@ -6,6 +6,7 @@ package config
 import (
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -505,6 +506,18 @@ type infraFileSchema struct {
 	VMs   []VM             `toml:"vm"`
 }
 
+// sameSubnet24 returns true if both a and b are IPv4 addresses in the same /24 subnet.
+// Used by LoadFromInfraFiles to auto-infer ProxyJump for LAN-only VMs.
+func sameSubnet24(a, b string) bool {
+	ipA := net.ParseIP(a)
+	ipB := net.ParseIP(b)
+	if ipA == nil || ipB == nil {
+		return false
+	}
+	mask := net.CIDRMask(24, 32)
+	return ipA.Mask(mask).Equal(ipB.Mask(mask))
+}
+
 // LoadFromInfraFiles reads all *.toml files in dir, each representing one physical
 // host ([host] section) with its child VMs ([[vm]] sections).
 // VMs without an explicit host_ref inherit it from their file's [host].name.
@@ -591,6 +604,16 @@ func LoadFromInfraFiles(dir string) (*Config, error) {
 							break
 						}
 					}
+				}
+			}
+			// Auto-infer ProxyJump: when no explicit proxy_jump_host is set but the
+			// file's host has a VRackIP, VMs whose dial address shares the host's LAN
+			// /24 subnet are unreachable from other DCs without jumping through the host.
+			// Explicit proxy_jump_host always takes precedence over this heuristic.
+			if f.VMs[i].ProxyJumpParams == nil && f.Host.VRackIP != "" && f.Host.LanIP != "" {
+				if sameSubnet24(f.VMs[i].Host, f.Host.LanIP) {
+					h := f.Host
+					f.VMs[i].ProxyJumpParams = &h
 				}
 			}
 			vms = append(vms, f.VMs[i])
