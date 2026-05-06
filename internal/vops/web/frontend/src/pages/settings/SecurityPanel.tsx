@@ -1,7 +1,7 @@
 /**
  * settings/SecurityPanel.tsx
  * Security & Access panel: SSH keys, API key generation, password hash utility,
- * and UFW Auto-Ban configuration.
+ * Intel API key management, and UFW Auto-Ban configuration.
  */
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -164,6 +164,104 @@ export function SecurityPanel() {
         )}
       </SectionCard>
     </div>
+  );
+}
+
+/* ── Security → Intel API Keys ───────────────────────────────── */
+
+/**
+ * IntelKeysPanel lets operators set or update the API keys for AbuseIPDB,
+ * VirusTotal, and Shodan. Keys are write-only — the backend never echoes
+ * them back. Leave a field blank to keep the existing key unchanged.
+ */
+export function IntelKeysPanel({ config }: { config: ConfigSnapshot }) {
+  const queryClient = useQueryClient();
+  const raw = typeof config.vops === 'string' ? config.vops : '';
+  const t = parseTOML(raw);
+
+  // _set flags: true when a key is already stored in vops.toml
+  const abuseSet    = String(t['vops.abuseipdb_set'])  === 'true';
+  const vtSet       = String(t['vops.virustotal_set']) === 'true';
+  const shodanSet   = String(t['vops.shodan_set'])     === 'true';
+
+  const [keys, setKeys] = useState({ abuseipdb: '', virustotal: '', shodan: '' });
+  const set = (k: keyof typeof keys) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setKeys((prev) => ({ ...prev, [k]: e.target.value }));
+
+  const saveMut = useMutation({
+    mutationFn: () =>
+      saveConfig('vops', {
+        abuseipdb:  keys.abuseipdb,
+        virustotal: keys.virustotal,
+        shodan:     keys.shodan,
+      }),
+    onSuccess: () => {
+      setKeys({ abuseipdb: '', virustotal: '', shodan: '' });
+      queryClient.invalidateQueries({ queryKey: ['config'] });
+    },
+  });
+
+  const anyFilled = keys.abuseipdb.trim() || keys.virustotal.trim() || keys.shodan.trim();
+
+  return (
+    <SectionCard
+      title="Intel API Keys"
+      subtitle="API keys for IP threat intelligence providers. Keys are stored in vops.toml and never shown after saving. Leave a field blank to keep the existing key. Clearing a key requires editing vops.toml directly."
+    >
+      <div className="space-y-3">
+        {([
+          { id: 'abuseipdb',  label: 'AbuseIPDB',  isSet: abuseSet,  placeholder: 'Paste AbuseIPDB API key…' },
+          { id: 'virustotal', label: 'VirusTotal',  isSet: vtSet,     placeholder: 'Paste VirusTotal API key…' },
+          { id: 'shodan',     label: 'Shodan',      isSet: shodanSet, placeholder: 'Paste Shodan API key…' },
+        ] as const).map(({ id, label, isSet, placeholder }) => (
+          <div key={id}>
+            <div className="flex items-center gap-2 mb-1">
+              <label
+                htmlFor={`intel-key-${id}`}
+                className="text-xs font-medium"
+                style={{ color: 'var(--vn-text-muted)' }}
+              >
+                {label}
+              </label>
+              <span
+                className="text-xs px-1.5 py-0.5 rounded"
+                style={{
+                  backgroundColor: isSet ? 'var(--vn-success-muted, rgba(34,197,94,0.12))' : 'var(--vn-surface-2)',
+                  color: isSet ? 'var(--vn-success)' : 'var(--vn-text-muted)',
+                  border: '1px solid ' + (isSet ? 'var(--vn-success)' : 'var(--vn-border)'),
+                }}
+              >
+                {isSet ? '✓ key set' : 'not set'}
+              </span>
+            </div>
+            <input
+              id={`intel-key-${id}`}
+              type="password"
+              autoComplete="new-password"
+              value={keys[id]}
+              onChange={set(id)}
+              placeholder={isSet ? '••••••• (leave blank to keep)' : placeholder}
+              className="vn-input w-full font-mono text-xs"
+            />
+          </div>
+        ))}
+      </div>
+
+      {saveMut.isError && (
+        <p className="text-xs" style={{ color: 'var(--vn-danger)' }}>
+          ✗ {(saveMut.error as Error).message}
+        </p>
+      )}
+
+      <SaveBar
+        isPending={saveMut.isPending}
+        isSuccess={saveMut.isSuccess}
+        isError={saveMut.isError}
+        error={saveMut.isError ? (saveMut.error as Error) : null}
+        onSave={() => saveMut.mutate()}
+        onCancel={anyFilled ? () => setKeys({ abuseipdb: '', virustotal: '', shodan: '' }) : undefined}
+      />
+    </SectionCard>
   );
 }
 

@@ -1627,6 +1627,10 @@ func importVOpsFields(data []byte) (map[string]any, error) {
 		"abuseipdb":          "",
 		"virustotal":         "",
 		"shodan":             "",
+		// _set flags: true when a key is stored — keys themselves are never returned.
+		"abuseipdb_set":  strings.TrimSpace(v.Intel.Keys.AbuseIPDB) != "",
+		"virustotal_set": strings.TrimSpace(v.Intel.Keys.VirusTotal) != "",
+		"shodan_set":     strings.TrimSpace(v.Intel.Keys.Shodan) != "",
 		"push_user":          v.Push.Defaults.User,
 		"push_key_path":      v.Push.Defaults.KeyPath,
 		"poll_interval_sec":  v.Push.PollIntervalSec,

@@ -12,7 +12,7 @@ import Spinner from '../../components/Spinner';
 import { FleetScanPanel, FleetSSHPanel, DatacentersPanel } from './InfraPanel';
 import { PortsPanel, ProxyControlsPanel, ChainProfilesPanel } from './ProxyPanel';
 import { VOpsPanel, BackupsPanel, PreferencesPanel } from './SystemPanel';
-import { SecurityPanel, AutoBanPanel } from './SecurityPanel';
+import { SecurityPanel, AutoBanPanel, IntelKeysPanel } from './SecurityPanel';
 import ServicesPage from '../CosmosNodes';
 
 /* ── Nav types ───────────────────────────────────────────────── */
@@ -75,8 +75,9 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Security & Access',
     desc: 'SSH keys, API keys, password management, and firewall',
     sections: [
-      { id: 'keys',     label: 'Keys & Credentials' },
-      { id: 'auto-ban', label: 'Auto-Ban' },
+      { id: 'keys',       label: 'Keys & Credentials' },
+      { id: 'intel-keys', label: 'Intel API Keys' },
+      { id: 'auto-ban',   label: 'Auto-Ban' },
     ],
   },
 ];
@@ -124,6 +125,8 @@ export default function SettingsPage() {
         return <PreferencesPanel />;
       case 'keys':
         return <SecurityPanel />;
+      case 'intel-keys':
+        return config ? <IntelKeysPanel config={config} /> : null;
       case 'auto-ban':
         return config ? <AutoBanPanel config={config} /> : null;
       default:
