@@ -111,9 +111,11 @@ function ChartPanel({ title, queryKey, chartType }: { title: string; queryKey: s
 
   return (
     <div>
-      <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--vn-text-muted)' }}>
-        {title}
-      </h3>
+      {title && (
+        <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--vn-text-muted)' }}>
+          {title}
+        </h3>
+      )}
       <ResponsiveContainer width="100%" height={250}>
         <LineChart data={rechartsData}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--vn-border)" />
@@ -182,7 +184,7 @@ function BarChartPanel({ title, queryKey, chartType }: { title: string; queryKey
   const points = (data as ChartPoint[]).slice(0, 10);
   return (
     <div>
-      <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--vn-text-muted)' }}>{title}</h3>
+      {title && <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--vn-text-muted)' }}>{title}</h3>}
       <ResponsiveContainer width="100%" height={220}>
         <BarChart data={points} layout="vertical" margin={{ left: 8, right: 24, top: 0, bottom: 0 }}>
           <XAxis type="number" tick={{ fontSize: 10, fill: 'var(--vn-text-subtle)' }} tickLine={false} axisLine={false} />
@@ -233,7 +235,7 @@ function PieChartPanel({ title, queryKey, chartType }: { title: string; queryKey
 
   return (
     <div>
-      <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--vn-text-muted)' }}>{title}</h3>
+      {title && <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--vn-text-muted)' }}>{title}</h3>}
       <ResponsiveContainer width="100%" height={220}>
         <PieChart>
           <Pie data={pieData} cx="50%" cy="45%" innerRadius={52} outerRadius={82} paddingAngle={2} dataKey="value">
@@ -245,6 +247,47 @@ function PieChartPanel({ title, queryKey, chartType }: { title: string; queryKey
           <Legend iconSize={8} iconType="circle" wrapperStyle={{ fontSize: '0.72rem', color: 'var(--vn-text-muted)' }} />
         </PieChart>
       </ResponsiveContainer>
+    </div>
+  );
+}
+
+/* ── Selectable Chart Card — dropdown to switch chart type ───── */
+
+const CHART_OPTIONS = [
+  { value: 'requests_over_time',   label: 'Requests over Time',    kind: 'line' as const },
+  { value: 'ips_over_time',        label: 'IPs over Time',         kind: 'line' as const },
+  { value: 'ratelimits_over_time', label: 'Rate Limits over Time', kind: 'line' as const },
+  { value: 'top_countries',        label: 'Top Countries',         kind: 'bar'  as const },
+  { value: 'status_breakdown',     label: 'Status Breakdown',      kind: 'bar'  as const },
+  { value: 'top_ips_by_requests',  label: 'Top IPs by Requests',   kind: 'bar'  as const },
+  { value: 'requests_by_country',  label: 'Requests by Country',   kind: 'bar'  as const },
+  { value: 'threat_distribution',  label: 'Threat Distribution',   kind: 'pie'  as const },
+] as const;
+
+type ChartOptionValue = typeof CHART_OPTIONS[number]['value'];
+
+function SelectableChartCard({ defaultType }: { defaultType: ChartOptionValue }) {
+  const [chartType, setChartType] = useState<ChartOptionValue>(defaultType);
+  const opt = CHART_OPTIONS.find(o => o.value === chartType)!;
+  return (
+    <div className="card">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+        <span className="text-sm font-medium" style={{ color: 'var(--vn-text-muted)' }}>{opt.label}</span>
+        <select
+          value={chartType}
+          onChange={e => setChartType(e.target.value as ChartOptionValue)}
+          style={{
+            fontSize: '0.72rem', padding: '0.2rem 0.45rem',
+            borderRadius: 'var(--vn-radius)', border: '1px solid var(--vn-border)',
+            background: 'var(--vn-surface-2)', color: 'var(--vn-text-muted)', cursor: 'pointer',
+          }}
+        >
+          {CHART_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      </div>
+      {opt.kind === 'line' && <ChartPanel title="" queryKey={`chart-${chartType}`} chartType={chartType} />}
+      {opt.kind === 'bar'  && <BarChartPanel title="" queryKey={`chart-${chartType}`} chartType={chartType} />}
+      {opt.kind === 'pie'  && <PieChartPanel title="" queryKey={`chart-${chartType}`} chartType={chartType} />}
     </div>
   );
 }
@@ -816,8 +859,8 @@ function ServersPanel() {
                   <tr
                     key={vm.name}
                     style={{ cursor: 'pointer' }}
-                    onClick={() => navigate(`/operations?focus=${encodeURIComponent(vm.name)}`)}
-                    title={`Open ${vm.name} in Operations Center`}
+                    onClick={() => navigate(`/ops?focus=${encodeURIComponent(vm.name)}`)}
+                    title={`Open ${vm.name} in OpsCenter`}
                   >
                     <td className="px-3 py-2">
                       <div className="font-medium text-xs">{vm.name}</div>
@@ -1036,20 +1079,10 @@ export default function DashboardPage() {
         </div>
       ) : null}
 
-      {/* Charts — 2×2 grid */}
+      {/* Charts — 2 blocks, each with a chart-type dropdown */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="card">
-          <ChartPanel title="Requests over Time (30d)" queryKey="chart-requests" chartType="requests_over_time" />
-        </div>
-        <div className="card">
-          <ChartPanel title="IPs over Time (30d)" queryKey="chart-ips" chartType="ips_over_time" />
-        </div>
-        <div className="card">
-          <BarChartPanel title="Top Countries" queryKey="chart-top-countries" chartType="top_countries" />
-        </div>
-        <div className="card">
-          <PieChartPanel title="Threat Distribution" queryKey="chart-threat-dist" chartType="threat_distribution" />
-        </div>
+        <SelectableChartCard defaultType="requests_over_time" />
+        <SelectableChartCard defaultType="top_countries" />
       </div>
 
       {/* Infrastructure Overview — 4 pills: Chains, Services, VMs, Alerts */}

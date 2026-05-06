@@ -110,7 +110,7 @@ function Shell({ children }: { children: React.ReactNode }) {
     { to: '/', label: 'Dashboard', end: true },
     { to: '/proxy', label: 'Proxy', end: false },
     { to: '/accounts', label: 'IP Accounts', end: false },
-    { to: '/ops', label: 'Operations Center', end: false },
+    { to: '/ops', label: 'OpsCenter', end: false },
   ];
 
   const moreLinks = [

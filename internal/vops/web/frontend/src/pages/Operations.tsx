@@ -24,6 +24,24 @@ import { useTasks } from '../contexts/TaskContext';
 import SettingsDrawer, { GearButton, ConfigPanel } from '../components/SettingsDrawer';
 import { FleetScanPanel, FleetSSHPanel, DatacentersPanel } from './settings/InfraPanel';
 
+/* ── Shell session keep-alive pool ──────────────────────────────
+   WebSocket sessions survive ServerDetailModal unmount for
+   SHELL_KEEPALIVE_MS so the user can switch between servers and
+   return to a live shell without reconnecting.
+   Change SHELL_KEEPALIVE_MS to adjust — a future settings field
+   can wire this to vops.toml [shell] keepalive_minutes.          */
+
+const SHELL_KEEPALIVE_MS = 5 * 60 * 1_000; // 5 minutes
+
+interface _ShellEntry {
+  ws: WebSocket;
+  lines: string[];
+  connected: boolean;
+  timer: ReturnType<typeof setTimeout> | null;
+}
+
+const _shellPool = new Map<string, _ShellEntry>();
+
 /* ═══════════════════════════════════════════════════════════════
    SVG Icons
    ═══════════════════════════════════════════════════════════════ */
@@ -725,28 +743,77 @@ function ShellModal({ host, vmName, onClose }: { host: string; vmName: string; o
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   EmbeddedShell — inline WebSocket terminal (no modal wrapper)
+   EmbeddedShell — pool-aware WebSocket terminal
    ═══════════════════════════════════════════════════════════════ */
 
 function EmbeddedShell({ vmName }: { vmName: string }) {
-  const [lines, setLines] = useState<string[]>([]);
+  const existing = _shellPool.get(vmName);
+  const [lines, setLines] = useState<string[]>(existing ? [...existing.lines] : []);
   const [input, setInput] = useState('');
-  const [connected, setConnected] = useState(false);
+  const [connected, setConnected] = useState(existing?.ws.readyState === WebSocket.OPEN);
   const [unavailable, setUnavailable] = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
+  const wsRef = useRef<WebSocket | null>(existing?.ws ?? null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const wsURL = `${proto}://${window.location.host}${BASE}/api/v1/vm/shell?vm=${encodeURIComponent(vmName)}`;
-    const ws = new WebSocket(wsURL);
-    wsRef.current = ws;
-    ws.onopen = () => { setConnected(true); setUnavailable(false); setLines([`Connected to ${vmName}`]); };
-    ws.onmessage = (event) => setLines(prev => [...prev, String(event.data)]);
-    ws.onerror = () => setUnavailable(true);
-    ws.onclose = (event) => { setConnected(false); if (event.code === 1006) setUnavailable(true); };
-    return () => { ws.close(); wsRef.current = null; };
-  }, [vmName]);
+    // If a pool entry exists, cancel its close timer and reuse the WS.
+    const entry = _shellPool.get(vmName);
+    if (entry?.timer) {
+      clearTimeout(entry.timer);
+      entry.timer = null;
+    }
+
+    if (entry && entry.ws.readyState === WebSocket.OPEN) {
+      wsRef.current = entry.ws;
+      setConnected(true);
+      setLines([...entry.lines]);
+    } else {
+      // Open a new session.
+      const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      const wsURL = `${proto}://${window.location.host}${BASE}/api/v1/vm/shell?vm=${encodeURIComponent(vmName)}`;
+      const ws = new WebSocket(wsURL);
+      wsRef.current = ws;
+      const newEntry: _ShellEntry = { ws, lines: [], connected: false, timer: null };
+      _shellPool.set(vmName, newEntry);
+
+      ws.onopen = () => {
+        const msg = `Connected to ${vmName}`;
+        newEntry.lines = [msg];
+        newEntry.connected = true;
+        setConnected(true);
+        setUnavailable(false);
+        setLines([msg]);
+      };
+      ws.onerror = () => setUnavailable(true);
+      ws.onclose = (event) => {
+        setConnected(false);
+        if (event.code === 1006) setUnavailable(true);
+      };
+    }
+
+    // Attach message handler pointing to current state updater.
+    const ws = wsRef.current!;
+    const poolEntry = _shellPool.get(vmName);
+    ws.onmessage = (event) => {
+      const line = String(event.data);
+      if (poolEntry) poolEntry.lines.push(line);
+      setLines(prev => [...prev, line]);
+    };
+
+    return () => {
+      // On unmount: schedule keep-alive timer instead of closing immediately.
+      const e = _shellPool.get(vmName);
+      if (e && e.ws.readyState === WebSocket.OPEN) {
+        if (e.timer) clearTimeout(e.timer);
+        e.timer = setTimeout(() => {
+          e.ws.close();
+          _shellPool.delete(vmName);
+        }, SHELL_KEEPALIVE_MS);
+      }
+      // Detach handler so stale updates don't fire after unmount.
+      if (wsRef.current) wsRef.current.onmessage = null;
+    };
+  }, [vmName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [lines.length]);
 
@@ -870,6 +937,8 @@ function ServerDetailModal({
   services: Service[];
   onClose: () => void;
 }) {
+  const [shellOpen, setShellOpen] = useState(false);
+
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', h);
@@ -903,30 +972,46 @@ function ServerDetailModal({
             </span>
             {vm.lan_ip && <code style={{ fontSize: '0.75rem', color: 'var(--vn-text-subtle)' }}>{vm.lan_ip}</code>}
           </div>
-          <button
-            onClick={onClose}
-            aria-label="Close server details"
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--vn-text-muted)', fontSize: '1.1rem', padding: '0.2rem 0.5rem', borderRadius: 'var(--vn-radius)', lineHeight: 1 }}
-          >
-            ✕
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {hostName && (
+              <button
+                onClick={() => setShellOpen(v => !v)}
+                title={shellOpen ? 'Hide shell' : 'Open shell'}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+                  fontSize: '0.72rem', padding: '0.25rem 0.65rem',
+                  borderRadius: 'var(--vn-radius)', border: `1px solid ${shellOpen ? 'var(--vn-primary)' : 'var(--vn-border)'}`,
+                  background: shellOpen ? 'color-mix(in srgb, var(--vn-primary) 12%, transparent)' : 'transparent',
+                  color: shellOpen ? 'var(--vn-primary)' : 'var(--vn-text-muted)', cursor: 'pointer',
+                }}
+              >
+                <IconShell /> Shell
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              aria-label="Close server details"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--vn-text-muted)', fontSize: '1.1rem', padding: '0.2rem 0.5rem', borderRadius: 'var(--vn-radius)', lineHeight: 1 }}
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         {/* VM controls & metrics via VMWidget */}
-        <div style={{ padding: '1rem', borderBottom: '1px solid var(--vn-border)' }}>
+        <div style={{ padding: '1rem', borderBottom: shellOpen ? '1px solid var(--vn-border)' : undefined }}>
           <VMWidget vm={vm} hostName={hostName} domain={domain} services={services} />
         </div>
 
-        {/* Inline terminal */}
-        <div style={{ padding: '0.85rem 1rem' }}>
-          <div style={{ fontSize: '0.73rem', fontWeight: 700, color: 'var(--vn-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.5rem' }}>
-            Terminal
+        {/* Inline terminal — lazy, button-triggered */}
+        {shellOpen && (
+          <div style={{ padding: '0.85rem 1rem' }}>
+            <div style={{ fontSize: '0.73rem', fontWeight: 700, color: 'var(--vn-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.5rem' }}>
+              Terminal
+            </div>
+            <EmbeddedShell vmName={vm.name} />
           </div>
-          {hostName
-            ? <EmbeddedShell vmName={vm.name} />
-            : <span style={{ fontSize: '0.8rem', color: 'var(--vn-text-subtle)' }}>No hypervisor host configured — shell unavailable.</span>
-          }
-        </div>
+        )}
       </div>
     </div>
   );
@@ -1785,7 +1870,7 @@ export default function OperationsPage() {
     <div>
       {/* Page header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-        <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700, color: 'var(--vn-text)' }}>Operations Center</h1>
+        <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700, color: 'var(--vn-text)' }}>OpsCenter</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <span style={{ fontSize: '0.75rem', color: 'var(--vn-text-subtle)' }}>
             Last updated: {formatTime(lastUpdated)}
