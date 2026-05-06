@@ -685,12 +685,24 @@ function ShellModal({ host, vmName, onClose }: { host: string; vmName: string; o
 
   useEffect(() => {
     const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const wsURL = `${proto}://${window.location.host}${BASE}/api/v1/vm/shell?vm=${encodeURIComponent(vmName)}`;
+    const wsURL = `${proto}://${window.location.host}${BASE}/api/v1/fleet/vmshell?vm=${encodeURIComponent(vmName)}`;
     const ws = new WebSocket(wsURL);
     wsRef.current = ws;
 
     ws.onopen = () => { setConnected(true); setUnavailable(false); setLines([`Connected to ${vmName} on ${host}`]); };
-    ws.onmessage = (event) => setLines(prev => [...prev, String(event.data)]);
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data as string) as { type: string; data: string };
+        if (msg.type === 'data') {
+          const parts = atob(msg.data).split('\n').filter(p => p.length > 0);
+          setLines(prev => [...prev, ...parts]);
+        } else if (msg.type === 'error') {
+          setLines(prev => [...prev, `[error] ${msg.data}`]);
+        }
+      } catch {
+        setLines(prev => [...prev, String(event.data)]);
+      }
+    };
     ws.onerror = () => setUnavailable(true);
     ws.onclose = (event) => { setConnected(false); if (event.code === 1006) setUnavailable(true); };
 
@@ -701,7 +713,7 @@ function ShellModal({ host, vmName, onClose }: { host: string; vmName: string; o
 
   const send = () => {
     if (!input.trim()) return;
-    wsRef.current?.send(input);
+    wsRef.current?.send(input + '\n');
     setLines(prev => [...prev, '$ ' + input]);
     setInput('');
   };
@@ -770,7 +782,7 @@ function EmbeddedShell({ vmName }: { vmName: string }) {
     } else {
       // Open a new session.
       const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-      const wsURL = `${proto}://${window.location.host}${BASE}/api/v1/vm/shell?vm=${encodeURIComponent(vmName)}`;
+      const wsURL = `${proto}://${window.location.host}${BASE}/api/v1/fleet/vmshell?vm=${encodeURIComponent(vmName)}`;
       const ws = new WebSocket(wsURL);
       wsRef.current = ws;
       const newEntry: _ShellEntry = { ws, lines: [], connected: false, timer: null };
@@ -795,9 +807,21 @@ function EmbeddedShell({ vmName }: { vmName: string }) {
     const ws = wsRef.current!;
     const poolEntry = _shellPool.get(vmName);
     ws.onmessage = (event) => {
-      const line = String(event.data);
-      if (poolEntry) poolEntry.lines.push(line);
-      setLines(prev => [...prev, line]);
+      try {
+        const msg = JSON.parse(event.data as string) as { type: string; data: string };
+        let parts: string[] = [];
+        if (msg.type === 'data') {
+          parts = atob(msg.data).split('\n').filter(p => p.length > 0);
+        } else if (msg.type === 'error') {
+          parts = [`[error] ${msg.data}`];
+        }
+        if (poolEntry) poolEntry.lines.push(...parts);
+        setLines(prev => [...prev, ...parts]);
+      } catch {
+        const line = String(event.data);
+        if (poolEntry) poolEntry.lines.push(line);
+        setLines(prev => [...prev, line]);
+      }
     };
 
     return () => {
@@ -819,7 +843,7 @@ function EmbeddedShell({ vmName }: { vmName: string }) {
 
   const send = () => {
     if (!input.trim()) return;
-    wsRef.current?.send(input);
+    wsRef.current?.send(input + '\n');
     setLines(prev => [...prev, '$ ' + input]);
     setInput('');
   };

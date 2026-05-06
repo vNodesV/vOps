@@ -352,6 +352,11 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 			s.requireSession(http.HandlerFunc(s.vmMgr.HandleShell)))
 	}
 
+	// WebSocket shell — bidirectional SSH PTY session to a fleet VM (ProxyJump-aware).
+	// Requires fleetSvc; gracefully returns 503 when fleet is not configured.
+	mux.Handle("GET /api/v1/fleet/vmshell",
+		s.requireSession(http.HandlerFunc(s.HandleVMShell)))
+
 	// Intel auto-ban routes.
 	mux.Handle("GET /api/v1/intel/banned",
 		s.requireSession(http.HandlerFunc(s.handleAPIBannedList)))
