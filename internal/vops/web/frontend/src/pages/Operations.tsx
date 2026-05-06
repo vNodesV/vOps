@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient, useQueries } from '@tanstack/react-query';
 import {
   getVMStatus, getFleetVMs, getServices, getVMHosts, getVMDomains,
@@ -724,6 +725,214 @@ function ShellModal({ host, vmName, onClose }: { host: string; vmName: string; o
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   EmbeddedShell — inline WebSocket terminal (no modal wrapper)
+   ═══════════════════════════════════════════════════════════════ */
+
+function EmbeddedShell({ vmName }: { vmName: string }) {
+  const [lines, setLines] = useState<string[]>([]);
+  const [input, setInput] = useState('');
+  const [connected, setConnected] = useState(false);
+  const [unavailable, setUnavailable] = useState(false);
+  const wsRef = useRef<WebSocket | null>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const wsURL = `${proto}://${window.location.host}${BASE}/api/v1/vm/shell?vm=${encodeURIComponent(vmName)}`;
+    const ws = new WebSocket(wsURL);
+    wsRef.current = ws;
+    ws.onopen = () => { setConnected(true); setUnavailable(false); setLines([`Connected to ${vmName}`]); };
+    ws.onmessage = (event) => setLines(prev => [...prev, String(event.data)]);
+    ws.onerror = () => setUnavailable(true);
+    ws.onclose = (event) => { setConnected(false); if (event.code === 1006) setUnavailable(true); };
+    return () => { ws.close(); wsRef.current = null; };
+  }, [vmName]);
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [lines.length]);
+
+  const send = () => {
+    if (!input.trim()) return;
+    wsRef.current?.send(input);
+    setLines(prev => [...prev, '$ ' + input]);
+    setInput('');
+  };
+
+  if (unavailable) {
+    return <span style={{ fontSize: '0.8rem', color: 'var(--vn-text-subtle)' }}>Shell unavailable — backend not yet configured.</span>;
+  }
+
+  return (
+    <div>
+      <div style={{
+        border: '1px solid var(--vn-border)', borderRadius: 'var(--vn-radius)',
+        background: 'var(--vn-surface-2)', height: 240, overflow: 'auto',
+        padding: '0.75rem', fontFamily: 'monospace', fontSize: '0.78rem', color: 'var(--vn-text)',
+      }}>
+        {!connected && !unavailable && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--vn-text-muted)' }}>
+            <Spinner size={14} label="Connecting…" /> Connecting…
+          </div>
+        )}
+        {lines.map((line, i) => <div key={i}>{line}</div>)}
+        <div ref={bottomRef} />
+      </div>
+      <input
+        value={input}
+        onChange={e => setInput(e.target.value)}
+        onKeyDown={e => e.key === 'Enter' && send()}
+        placeholder="Type command and press Enter"
+        style={{
+          width: '100%', marginTop: '0.4rem', padding: '0.45rem 0.6rem',
+          borderRadius: 'var(--vn-radius)', border: '1px solid var(--vn-border)',
+          background: 'var(--vn-surface)', color: 'var(--vn-text)',
+          fontFamily: 'monospace', fontSize: '0.78rem', boxSizing: 'border-box',
+        }}
+      />
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   VMCard — compact clickable server card for DatacenterBox grid
+   ═══════════════════════════════════════════════════════════════ */
+
+function VMCard({ vm, onClick }: { vm: VMStatus; onClick: () => void }) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && onClick()}
+      title={`Open ${vm.name} details`}
+      style={{
+        border: `1px solid ${!vm.online ? 'var(--vn-danger)' : 'var(--vn-border)'}`,
+        borderRadius: 'var(--vn-radius)',
+        background: 'var(--vn-surface-2)',
+        padding: '0.85rem',
+        cursor: 'pointer',
+        transition: 'border-color 0.12s',
+        outline: 'none',
+      }}
+      onMouseOver={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--vn-primary)'; }}
+      onMouseOut={e => { (e.currentTarget as HTMLElement).style.borderColor = !vm.online ? 'var(--vn-danger)' : 'var(--vn-border)'; }}
+      onFocus={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--vn-primary)'; }}
+      onBlur={e => { (e.currentTarget as HTMLElement).style.borderColor = !vm.online ? 'var(--vn-danger)' : 'var(--vn-border)'; }}
+    >
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+        <span style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--vn-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {vm.name}
+        </span>
+        <span style={{
+          fontSize: '0.68rem', padding: '0.1rem 0.45rem', borderRadius: '999px', flexShrink: 0, marginLeft: '0.4rem',
+          border: `1px solid ${vm.online ? 'var(--vn-success)' : 'var(--vn-danger)'}`,
+          color: vm.online ? 'var(--vn-success)' : 'var(--vn-danger)',
+        }}>
+          {vm.online ? 'online' : 'offline'}
+        </span>
+      </div>
+      <div style={{ fontSize: '0.72rem', color: 'var(--vn-text-subtle)', marginBottom: vm.online ? '0.6rem' : '0.25rem' }}>
+        {vm.os || (vm.online ? 'Linux' : '—')}
+        {vm.lan_ip && <> · <span style={{ fontFamily: 'monospace' }}>{vm.lan_ip}</span></>}
+      </div>
+      {vm.online && (
+        <div style={{ display: 'grid', gap: '0.25rem' }}>
+          <MiniBar value={vm.cpu_pct} label="CPU" />
+          <MiniBar value={vm.mem_pct} label="Mem" />
+          <MiniBar value={vm.storage_pct} label="Disk" warn={75} danger={90} />
+          {vm.apt_count > 0 && (
+            <div style={{ marginTop: '0.3rem', fontSize: '0.7rem', color: 'var(--vn-warning)' }}>
+              ⚠ {vm.apt_count} update{vm.apt_count > 1 ? 's' : ''} pending
+            </div>
+          )}
+        </div>
+      )}
+      {!vm.online && vm.error && (
+        <div style={{ fontSize: '0.72rem', color: 'var(--vn-danger)', marginTop: '0.1rem' }}>{vm.error}</div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ServerDetailModal — full-panel server detail + embedded shell
+   ═══════════════════════════════════════════════════════════════ */
+
+function ServerDetailModal({
+  vm,
+  hostName,
+  domain,
+  services,
+  onClose,
+}: {
+  vm: VMStatus;
+  hostName: string | undefined;
+  domain: LibvirtDomain | undefined;
+  services: Service[];
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [onClose]);
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 500, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '1.5rem 1rem', overflowY: 'auto' }}
+      onClick={onClose}
+    >
+      <div
+        style={{ width: '100%', maxWidth: 860, background: 'var(--vn-surface)', borderRadius: 'var(--vn-radius)', border: '1px solid var(--vn-border)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', marginBottom: '2rem' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.85rem 1rem', borderBottom: '1px solid var(--vn-border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+            <span style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--vn-text)' }}>{vm.name}</span>
+            {vm.datacenter && (
+              <span style={{ fontSize: '0.72rem', color: 'var(--vn-text-muted)', padding: '0.1rem 0.5rem', borderRadius: '999px', border: '1px solid var(--vn-border)' }}>
+                {vm.datacenter}
+              </span>
+            )}
+            <span style={{
+              fontSize: '0.72rem', padding: '0.1rem 0.5rem', borderRadius: '999px',
+              border: `1px solid ${vm.online ? 'var(--vn-success)' : 'var(--vn-danger)'}`,
+              color: vm.online ? 'var(--vn-success)' : 'var(--vn-danger)',
+            }}>
+              {vm.online ? '● online' : '○ offline'}
+            </span>
+            {vm.lan_ip && <code style={{ fontSize: '0.75rem', color: 'var(--vn-text-subtle)' }}>{vm.lan_ip}</code>}
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close server details"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--vn-text-muted)', fontSize: '1.1rem', padding: '0.2rem 0.5rem', borderRadius: 'var(--vn-radius)', lineHeight: 1 }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* VM controls & metrics via VMWidget */}
+        <div style={{ padding: '1rem', borderBottom: '1px solid var(--vn-border)' }}>
+          <VMWidget vm={vm} hostName={hostName} domain={domain} services={services} />
+        </div>
+
+        {/* Inline terminal */}
+        <div style={{ padding: '0.85rem 1rem' }}>
+          <div style={{ fontSize: '0.73rem', fontWeight: 700, color: 'var(--vn-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.5rem' }}>
+            Terminal
+          </div>
+          {hostName
+            ? <EmbeddedShell vmName={vm.name} />
+            : <span style={{ fontSize: '0.8rem', color: 'var(--vn-text-subtle)' }}>No hypervisor host configured — shell unavailable.</span>
+          }
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
    DeployWizardModal (adapted from VMs.tsx)
    ═══════════════════════════════════════════════════════════════ */
 
@@ -1357,17 +1566,13 @@ function VMWidget({
 function DatacenterBox({
   datacenter,
   vms,
-  vmHostMap,
-  domainMap,
-  services,
   inventoryHosts,
+  onSelectVM,
 }: {
   datacenter: string;
   vms: VMStatus[];
-  vmHostMap: Record<string, string>;
-  domainMap: Record<string, Record<string, LibvirtDomain>>;
-  services: Service[];
   inventoryHosts: HostInventory[];
+  onSelectVM: (vm: VMStatus) => void;
 }) {
   const [showDeploy, setShowDeploy] = useState(false);
   const [upgradeHost, setUpgradeHost] = useState<string | null>(null);
@@ -1429,22 +1634,11 @@ function DatacenterBox({
         </div>
       </div>
 
-      {/* VM grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1rem' }}>
-        {vms.map(vm => {
-          const hostName = vmHostMap[vm.name];
-          const domain = hostName ? domainMap[hostName]?.[vm.name] : undefined;
-          const vmServices = services.filter(s => s.vm_name === vm.name);
-          return (
-            <VMWidget
-              key={vm.name}
-              vm={vm}
-              hostName={hostName}
-              domain={domain}
-              services={vmServices}
-            />
-          );
-        })}
+      {/* VM cards grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '0.75rem' }}>
+        {vms.map(vm => (
+          <VMCard key={vm.name} vm={vm} onClick={() => onSelectVM(vm)} />
+        ))}
       </div>
     </div>
   );
@@ -1455,8 +1649,10 @@ function DatacenterBox({
    ═══════════════════════════════════════════════════════════════ */
 
 export default function OperationsPage() {
+  const [searchParams] = useSearchParams();
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [opsSettingsOpen, setOpsSettingsOpen] = useState(false);
+  const [selectedVMName, setSelectedVMName] = useState<string | null>(() => searchParams.get('focus'));
   const { addTask, updateTask } = useTasks();
   const qc = useQueryClient();
 
@@ -1553,6 +1749,18 @@ export default function OperationsPage() {
     return m;
   }, [vms]);
 
+  // Resolve selected VM details for ServerDetailModal
+  const selectedVM = React.useMemo(
+    () => (selectedVMName ? (vms.find(v => v.name === selectedVMName) ?? null) : null),
+    [selectedVMName, vms],
+  );
+  const selectedHostName = selectedVM ? vmHostMap[selectedVM.name] : undefined;
+  const selectedDomain = selectedHostName ? domainMap[selectedHostName]?.[selectedVM?.name ?? ''] : undefined;
+  const selectedServices = React.useMemo(
+    () => (selectedVM ? services.filter(s => s.vm_name === selectedVM.name) : []),
+    [selectedVM, services],
+  );
+
   const formatTime = (d: Date) =>
     d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
@@ -1631,10 +1839,8 @@ export default function OperationsPage() {
               key={dc}
               datacenter={dc}
               vms={dcVms}
-              vmHostMap={vmHostMap}
-              domainMap={domainMap}
-              services={services}
               inventoryHosts={hostInventory}
+              onSelectVM={(vm) => setSelectedVMName(vm.name)}
             />
           ))
       )}
@@ -1698,6 +1904,17 @@ export default function OperationsPage() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Server detail modal — opened by clicking a VMCard or via ?focus= URL param */}
+      {selectedVM && (
+        <ServerDetailModal
+          vm={selectedVM}
+          hostName={selectedHostName}
+          domain={selectedDomain}
+          services={selectedServices}
+          onClose={() => setSelectedVMName(null)}
+        />
       )}
     </div>
   );

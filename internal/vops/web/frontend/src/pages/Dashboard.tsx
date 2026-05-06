@@ -1,9 +1,15 @@
-import { useState } from 'react';
+import { useState, Fragment } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   LineChart,
   Line,
+  BarChart,
+  Bar,
+  Cell,
+  PieChart,
+  Pie,
+  Legend,
   XAxis,
   YAxis,
   Tooltip,
@@ -11,7 +17,7 @@ import {
   CartesianGrid,
 } from 'recharts';
 import { getStats, getChart, getFleetChains, triggerIngest, triggerBackupAndIngest, getIngestStats, getVMStatus, vmUpgradeURL, getVMHistory, getUnits } from '../api';
-import type { Stats, ChartSeries, VMStatus, VMMetricPoint, CosmosUnitWithStatus } from '../api/types';
+import type { Stats, ChartSeries, ChartPoint, VMStatus, VMMetricPoint, CosmosUnitWithStatus } from '../api/types';
 import StatCard from '../components/StatCard';
 import Badge from '../components/Badge';
 import Spinner from '../components/Spinner';
@@ -143,6 +149,101 @@ function ChartPanel({ title, queryKey, chartType }: { title: string; queryKey: s
             />
           ))}
         </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+/* ── Bar Chart Panel (horizontal, for ChartPoint[] data) ─────── */
+
+const CHART_BAR_COLORS = [
+  'rgba(99,102,241,1.0)', 'rgba(99,102,241,0.88)', 'rgba(99,102,241,0.76)',
+  'rgba(99,102,241,0.64)', 'rgba(99,102,241,0.52)', 'rgba(99,102,241,0.44)',
+  'rgba(99,102,241,0.36)', 'rgba(99,102,241,0.28)', 'rgba(99,102,241,0.22)',
+  'rgba(99,102,241,0.18)',
+];
+
+function BarChartPanel({ title, queryKey, chartType }: { title: string; queryKey: string; chartType: string }) {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: [queryKey],
+    queryFn: () => getChart(chartType) as Promise<ChartPoint[]>,
+    refetchInterval: 300_000,
+  });
+
+  if (isLoading) return <Spinner label={`Loading ${title}`} />;
+  if (isError || !Array.isArray(data) || data.length === 0) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 220, fontSize: '0.8rem', color: 'var(--vn-text-muted)' }}>
+        No data available
+      </div>
+    );
+  }
+
+  const points = (data as ChartPoint[]).slice(0, 10);
+  return (
+    <div>
+      <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--vn-text-muted)' }}>{title}</h3>
+      <ResponsiveContainer width="100%" height={220}>
+        <BarChart data={points} layout="vertical" margin={{ left: 8, right: 24, top: 0, bottom: 0 }}>
+          <XAxis type="number" tick={{ fontSize: 10, fill: 'var(--vn-text-subtle)' }} tickLine={false} axisLine={false} />
+          <YAxis type="category" dataKey="label" tick={{ fontSize: 11, fill: 'var(--vn-text-muted)' }} tickLine={false} axisLine={false} width={90} />
+          <Tooltip
+            contentStyle={{ backgroundColor: 'var(--vn-surface)', border: '1px solid var(--vn-border)', borderRadius: 'var(--vn-radius)', fontSize: 12 }}
+            cursor={{ fill: 'rgba(99,102,241,0.07)' }}
+          />
+          <Bar dataKey="value" radius={[0, 3, 3, 0]} maxBarSize={18}>
+            {points.map((_, i) => <Cell key={i} fill={CHART_BAR_COLORS[i] ?? CHART_BAR_COLORS[CHART_BAR_COLORS.length - 1]} />)}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+/* ── Pie Chart Panel (for ChartPoint[] distribution data) ─────── */
+
+const THREAT_COLORS: Record<string, string> = {
+  unknown:    'var(--vn-text-subtle)',
+  clean:      'var(--vn-success)',
+  suspicious: 'var(--vn-warning)',
+  malicious:  'var(--vn-danger)',
+};
+
+function PieChartPanel({ title, queryKey, chartType }: { title: string; queryKey: string; chartType: string }) {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: [queryKey],
+    queryFn: () => getChart(chartType) as Promise<ChartPoint[]>,
+    refetchInterval: 300_000,
+  });
+
+  if (isLoading) return <Spinner label={`Loading ${title}`} />;
+  if (isError || !Array.isArray(data) || data.length === 0) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 220, fontSize: '0.8rem', color: 'var(--vn-text-muted)' }}>
+        No data available
+      </div>
+    );
+  }
+
+  const pieData = (data as ChartPoint[]).map(p => ({
+    name: p.label,
+    value: p.value,
+    fill: THREAT_COLORS[p.label] ?? 'var(--vn-primary)',
+  }));
+
+  return (
+    <div>
+      <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--vn-text-muted)' }}>{title}</h3>
+      <ResponsiveContainer width="100%" height={220}>
+        <PieChart>
+          <Pie data={pieData} cx="50%" cy="45%" innerRadius={52} outerRadius={82} paddingAngle={2} dataKey="value">
+            {pieData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+          </Pie>
+          <Tooltip
+            contentStyle={{ backgroundColor: 'var(--vn-surface)', border: '1px solid var(--vn-border)', borderRadius: 'var(--vn-radius)', fontSize: 12 }}
+          />
+          <Legend iconSize={8} iconType="circle" wrapperStyle={{ fontSize: '0.72rem', color: 'var(--vn-text-muted)' }} />
+        </PieChart>
       </ResponsiveContainer>
     </div>
   );
@@ -637,6 +738,7 @@ function HistorySparkline({ vmName }: { vmName: string }) {
 }
 
 function ServersPanel() {
+  const navigate = useNavigate();
   const [upgradeTarget, setUpgradeTarget] = useState<VMStatus | null>(null);
 
   const { data, isLoading, isError } = useQuery({
@@ -664,6 +766,15 @@ function ServersPanel() {
     );
   }
 
+  // Group by datacenter, preserve insertion order within each group
+  const byDC: Record<string, VMStatus[]> = {};
+  for (const vm of vms) {
+    const dc = vm.datacenter || 'Unknown';
+    if (!byDC[dc]) byDC[dc] = [];
+    byDC[dc].push(vm);
+  }
+  const dcs = Object.keys(byDC).sort();
+
   return (
     <>
       <div className="card card-flush overflow-x-auto">
@@ -671,80 +782,107 @@ function ServersPanel() {
           <thead>
             <tr>
               {['Server', 'OS', 'CPU', 'Memory', 'Disk', 'Load', 'Updates', '6h History', 'Status', ''].map((h) => (
-                <th
-                  key={h}
-                  scope="col"
-                >
-                  {h}
-                </th>
+                <th key={h} scope="col">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {vms.map((vm) => (
-              <tr
-                key={vm.name}
-              >
-                <td className="px-3 py-2">
-                  <div className="font-medium text-xs">{vm.name}</div>
-                  <div className="text-xs" style={{ color: 'var(--vn-text-subtle)' }}>{vm.datacenter}</div>
-                </td>
-                <td className="px-3 py-2 text-xs whitespace-nowrap" style={{ color: 'var(--vn-text-muted)' }}>
-                  {vm.online ? (vm.os || 'Linux') : '—'}
-                </td>
-                <td className="px-3 py-2" style={{ minWidth: '90px' }}>
-                  {vm.online ? <MetricBar value={vm.cpu_pct} /> : <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>}
-                </td>
-                <td className="px-3 py-2" style={{ minWidth: '90px' }}>
-                  {vm.online ? <MetricBar value={vm.mem_pct} /> : <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>}
-                </td>
-                <td className="px-3 py-2" style={{ minWidth: '90px' }}>
-                  {vm.online ? <MetricBar value={vm.storage_pct} warn={75} danger={90} /> : <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>}
-                </td>
-                <td className="px-3 py-2 text-xs tabular-nums whitespace-nowrap" style={{ color: 'var(--vn-text-muted)' }}>
-                  {vm.online ? vm.load_avg || '—' : '—'}
-                </td>
-                <td className="px-3 py-2">
-                  {vm.online ? (
-                    vm.apt_count > 0 ? (
-                      <span className="inline-flex items-center gap-1 text-xs" style={{ color: 'var(--vn-warning)' }}>
-                        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'var(--vn-warning)' }} aria-hidden="true" />
-                        {vm.apt_count} pending
-                      </span>
-                    ) : (
-                      <span className="text-xs" style={{ color: 'var(--vn-success)' }}>✓ current</span>
-                    )
-                  ) : (
-                    <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>
-                  )}
-                </td>
-                <td className="px-3 py-2" style={{ minWidth: '110px' }}>
-                  {vm.online ? <HistorySparkline vmName={vm.name} /> : <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>}
-                </td>
-                <td className="px-3 py-2">
-                  <Badge status={vm.online ? 'online' : 'offline'} />
-                  {vm.error && (
-                    <span className="ml-1 text-xs" style={{ color: 'var(--vn-danger)' }} title={vm.error}>⚠</span>
-                  )}
-                </td>
-                <td className="px-3 py-2">
-                  {vm.online && vm.apt_count > 0 && (
-                    <button
-                      onClick={() => setUpgradeTarget(vm)}
-                      className="px-2 py-1 text-xs rounded cursor-pointer whitespace-nowrap
-                                 focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-                      style={{
-                        color: 'var(--vn-on-primary)',
-                        backgroundColor: 'var(--vn-primary)',
-                        border: 'none',
-                      }}
-                      aria-label={`Upgrade ${vm.name}`}
-                    >
-                      Upgrade
-                    </button>
-                  )}
-                </td>
-              </tr>
+            {dcs.map(dc => (
+              <Fragment key={dc}>
+                {/* Datacenter group header */}
+                <tr>
+                  <td
+                    colSpan={10}
+                    style={{
+                      padding: '0.35rem 0.75rem',
+                      background: 'var(--vn-surface-2)',
+                      fontSize: '0.69rem',
+                      fontWeight: 700,
+                      color: 'var(--vn-text-muted)',
+                      letterSpacing: '0.07em',
+                      textTransform: 'uppercase',
+                      borderBottom: '1px solid var(--vn-border)',
+                      userSelect: 'none',
+                    }}
+                  >
+                    {dc}
+                    <span style={{ fontWeight: 400, opacity: 0.65, marginLeft: '0.4rem' }}>
+                      · {byDC[dc].length} server{byDC[dc].length > 1 ? 's' : ''}
+                    </span>
+                  </td>
+                </tr>
+                {/* Server rows */}
+                {byDC[dc].map((vm) => (
+                  <tr
+                    key={vm.name}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => navigate(`/operations?focus=${encodeURIComponent(vm.name)}`)}
+                    title={`Open ${vm.name} in Operations Center`}
+                  >
+                    <td className="px-3 py-2">
+                      <div className="font-medium text-xs">{vm.name}</div>
+                      {vm.lan_ip && (
+                        <div className="text-xs" style={{ color: 'var(--vn-text-subtle)', fontFamily: 'monospace' }}>{vm.lan_ip}</div>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-xs whitespace-nowrap" style={{ color: 'var(--vn-text-muted)' }}>
+                      {vm.online ? (vm.os || 'Linux') : '—'}
+                    </td>
+                    <td className="px-3 py-2" style={{ minWidth: '90px' }}>
+                      {vm.online ? <MetricBar value={vm.cpu_pct} /> : <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>}
+                    </td>
+                    <td className="px-3 py-2" style={{ minWidth: '90px' }}>
+                      {vm.online ? <MetricBar value={vm.mem_pct} /> : <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>}
+                    </td>
+                    <td className="px-3 py-2" style={{ minWidth: '90px' }}>
+                      {vm.online ? <MetricBar value={vm.storage_pct} warn={75} danger={90} /> : <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>}
+                    </td>
+                    <td className="px-3 py-2 text-xs tabular-nums whitespace-nowrap" style={{ color: 'var(--vn-text-muted)' }}>
+                      {vm.online ? vm.load_avg || '—' : '—'}
+                    </td>
+                    <td className="px-3 py-2">
+                      {vm.online ? (
+                        vm.apt_count > 0 ? (
+                          <span className="inline-flex items-center gap-1 text-xs" style={{ color: 'var(--vn-warning)' }}>
+                            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'var(--vn-warning)' }} aria-hidden="true" />
+                            {vm.apt_count} pending
+                          </span>
+                        ) : (
+                          <span className="text-xs" style={{ color: 'var(--vn-success)' }}>✓ current</span>
+                        )
+                      ) : (
+                        <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2" style={{ minWidth: '110px' }}>
+                      {vm.online ? <HistorySparkline vmName={vm.name} /> : <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>}
+                    </td>
+                    <td className="px-3 py-2">
+                      <Badge status={vm.online ? 'online' : 'offline'} />
+                      {vm.error && (
+                        <span className="ml-1 text-xs" style={{ color: 'var(--vn-danger)' }} title={vm.error}>⚠</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
+                      {vm.online && vm.apt_count > 0 && (
+                        <button
+                          onClick={() => setUpgradeTarget(vm)}
+                          className="px-2 py-1 text-xs rounded cursor-pointer whitespace-nowrap
+                                     focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
+                          style={{
+                            color: 'var(--vn-on-primary)',
+                            backgroundColor: 'var(--vn-primary)',
+                            border: 'none',
+                          }}
+                          aria-label={`Upgrade ${vm.name}`}
+                        >
+                          Upgrade
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </Fragment>
             ))}
           </tbody>
         </table>
@@ -898,13 +1036,19 @@ export default function DashboardPage() {
         </div>
       ) : null}
 
-      {/* Charts */}
+      {/* Charts — 2×2 grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card">
           <ChartPanel title="Requests over Time (30d)" queryKey="chart-requests" chartType="requests_over_time" />
         </div>
         <div className="card">
           <ChartPanel title="IPs over Time (30d)" queryKey="chart-ips" chartType="ips_over_time" />
+        </div>
+        <div className="card">
+          <BarChartPanel title="Top Countries" queryKey="chart-top-countries" chartType="top_countries" />
+        </div>
+        <div className="card">
+          <PieChartPanel title="Threat Distribution" queryKey="chart-threat-dist" chartType="threat_distribution" />
         </div>
       </div>
 
