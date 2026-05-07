@@ -19,13 +19,9 @@ package web
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -34,6 +30,7 @@ import (
 	"github.com/vNodesV/vOps/internal/logging"
 	"github.com/vNodesV/vOps/internal/vops/ctxkeys"
 	opsdb "github.com/vNodesV/vOps/internal/vops/db"
+	opsvm "github.com/vNodesV/vOps/internal/vops/vm"
 )
 
 const (
@@ -63,6 +60,19 @@ func (s *Server) HandleVMShell(w http.ResponseWriter, r *http.Request) {
 	fleetVM := s.fleetSvc.FindVM(vmName)
 	if fleetVM == nil {
 		http.Error(w, "vm not found: "+vmName, http.StatusNotFound)
+		return
+	}
+
+	// OC-1: self-dial guard — reject VMs whose SSH host resolves to the loopback
+	// interface. Without this check, a misconfigured vm.host = "127.0.0.1" in
+	// the infra TOML would open a shell to the vOps process itself instead of
+	// the intended remote VM (silent wrong-host connection).
+	dialTarget := fleetVM.Host
+	if dialTarget == "" {
+		dialTarget = fleetVM.Name
+	}
+	if ip := net.ParseIP(dialTarget); (ip != nil && ip.IsLoopback()) || dialTarget == "localhost" {
+		http.Error(w, "vm shell rejected: host resolves to loopback (OC-1 guard)", http.StatusForbidden)
 		return
 	}
 
@@ -127,113 +137,11 @@ func (s *Server) HandleVMShell(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	idleMu := &sync.Mutex{}
-	idleTimer := time.AfterFunc(vmShellIdleTimeout, func() {
-		logging.Print("INF", "web.vmshell", "idle timeout", logging.F("vm", vmName))
-		cancel()
-	})
-	defer idleTimer.Stop()
-
-	resetIdle := func() {
-		idleMu.Lock()
-		idleTimer.Reset(vmShellIdleTimeout)
-		idleMu.Unlock()
-	}
-
-	var wg sync.WaitGroup
-
-	// WebSocket → SSH stdin.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		defer cancel()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
-			_, msg, err := conn.ReadMessage()
-			if err != nil {
-				if websocket.IsUnexpectedCloseError(err,
-					websocket.CloseNormalClosure,
-					websocket.CloseGoingAway,
-					websocket.CloseNoStatusReceived) {
-					logging.Print("WRN", "web.vmshell", "ws read error",
-						logging.F("vm", vmName), logging.F("err", err))
-				}
-				return
-			}
-			resetIdle()
-
-			// Intercept resize control messages.
-			if len(msg) > 0 && msg[0] == '{' {
-				var resize struct {
-					Type string `json:"type"`
-					Rows int    `json:"rows"`
-					Cols int    `json:"cols"`
-				}
-				if json.Unmarshal(msg, &resize) == nil && resize.Type == "resize" {
-					if resize.Rows > 0 && resize.Cols > 0 {
-						_ = shell.Resize(resize.Rows, resize.Cols)
-					}
-					continue
-				}
-			}
-
-			if _, err := shell.Write(msg); err != nil {
-				logging.Print("WRN", "web.vmshell", "ssh write error",
-					logging.F("vm", vmName), logging.F("err", err))
-				return
-			}
-		}
-	}()
-
-	// SSH stdout → WebSocket (base64-encoded JSON frames).
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		defer cancel()
-
-		pingTicker := time.NewTicker(vmShellPingPeriod)
-		defer pingTicker.Stop()
-
-		buf := make([]byte, 4096)
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-pingTicker.C:
-				_ = conn.SetWriteDeadline(time.Now().Add(vmShellWriteWait))
-				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-					return
-				}
-				continue
-			default:
-			}
-
-			n, err := shell.Read(buf)
-			if n > 0 {
-				resetIdle()
-				encoded := base64.StdEncoding.EncodeToString(buf[:n])
-				_ = conn.SetWriteDeadline(time.Now().Add(vmShellWriteWait))
-				if wErr := conn.WriteJSON(map[string]string{"type": "data", "data": encoded}); wErr != nil {
-					logging.Print("WRN", "web.vmshell", "ws write error",
-						logging.F("vm", vmName), logging.F("err", wErr))
-					return
-				}
-			}
-			if err != nil {
-				if err != io.EOF {
-					logging.Print("WRN", "web.vmshell", "ssh read error",
-						logging.F("vm", vmName), logging.F("err", err))
-				}
-				return
-			}
-		}
-	}()
-
-	wg.Wait()
+	// BridgeShellSession manages the idle timer, ping keepalives, and the
+	// ws↔ssh relay goroutines. It blocks until both goroutines exit.
+	opsvm.BridgeShellSession(ctx, cancel, conn, shell,
+		vmShellIdleTimeout, vmShellWriteWait, vmShellPingPeriod,
+		"vm", vmName)
 
 	_ = conn.WriteControl(
 		websocket.CloseMessage,
@@ -289,8 +197,15 @@ func (s *Server) auditVMShell(actor, action, vmName string, duration *time.Durat
 }
 
 // vmWSError sends a JSON error frame over the WebSocket and closes it.
+// wsErrMsg mirrors the shellMsg protocol used by BridgeShellSession so
+// the browser client receives a consistent envelope on both error and data.
+type wsErrMsg struct {
+	Type string `json:"type"`
+	Data string `json:"data"`
+}
+
 func vmWSError(conn *websocket.Conn, msg string) {
-	_ = conn.WriteJSON(map[string]string{"type": "error", "data": msg})
+	_ = conn.WriteJSON(wsErrMsg{Type: "error", Data: msg})
 	_ = conn.WriteControl(
 		websocket.CloseMessage,
 		websocket.FormatCloseMessage(websocket.CloseInternalServerErr, msg),

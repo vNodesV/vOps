@@ -1065,16 +1065,32 @@ func (s *Server) handleLoginSubmit(w http.ResponseWriter, r *http.Request) {
 
 	if !s.checkCredentials(username, password) {
 		s.recordLoginFailure(clientIP)
+		_ = db.InsertAuditLog(s.db.DB, db.AuditEntry{
+			Actor:      "unauthenticated",
+			Action:     "auth.login.fail",
+			TargetType: "session",
+			TargetName: clientIP,
+			Params:     `{}`,
+			Result:     "fail",
+		})
 		http.Redirect(w, r, s.cfg.VOps.BasePath+"/login?error=invalid", http.StatusFound)
 		return
 	}
 
 	s.clearLoginAttempts(clientIP)
-	token, err := s.newSession()
+	token, err := s.newSession(username)
 	if err != nil {
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
+	_ = db.InsertAuditLog(s.db.DB, db.AuditEntry{
+		Actor:      username,
+		Action:     "auth.login.ok",
+		TargetType: "session",
+		TargetName: clientIP,
+		Params:     `{}`,
+		Result:     "ok",
+	})
 	http.SetCookie(w, &http.Cookie{
 		Name:     "vops_session",
 		Value:    token,

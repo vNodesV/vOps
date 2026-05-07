@@ -2,13 +2,9 @@ package vm
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -120,110 +116,11 @@ func (h *Handlers) HandleShell(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Idle timer — reset on every read/write.
-	idleMu := &sync.Mutex{}
-	idleTimer := time.AfterFunc(shellIdleTimeout, func() {
-		logging.Print("INF", "vm.shell", "idle timeout", logging.F("host", hostName))
-		cancel()
-	})
-	defer idleTimer.Stop()
-
-	resetIdle := func() {
-		idleMu.Lock()
-		idleTimer.Reset(shellIdleTimeout)
-		idleMu.Unlock()
-	}
-
-	var wg sync.WaitGroup
-
-	// ws → ssh: read WebSocket messages and write to SSH stdin.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		defer cancel()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
-			_, msg, err := conn.ReadMessage()
-			if err != nil {
-				if websocket.IsUnexpectedCloseError(err,
-					websocket.CloseNormalClosure,
-					websocket.CloseGoingAway,
-					websocket.CloseNoStatusReceived) {
-					logging.Print("WRN", "vm.shell", "ws read error", logging.F("host", hostName), logging.F("err", err))
-				}
-				return
-			}
-			resetIdle()
-
-			// Check for resize message (JSON with type "resize").
-			if len(msg) > 0 && msg[0] == '{' {
-				var resize struct {
-					Type string `json:"type"`
-					Rows int    `json:"rows"`
-					Cols int    `json:"cols"`
-				}
-				if json.Unmarshal(msg, &resize) == nil && resize.Type == "resize" {
-					if resize.Rows > 0 && resize.Cols > 0 {
-						_ = shell.Resize(resize.Rows, resize.Cols)
-					}
-					continue
-				}
-			}
-
-			if _, err := shell.Write(msg); err != nil {
-				logging.Print("WRN", "vm.shell", "ssh write error", logging.F("host", hostName), logging.F("err", err))
-				return
-			}
-		}
-	}()
-
-	// ssh → ws: read SSH output and send as base64 JSON to WebSocket.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		defer cancel()
-
-		pingTicker := time.NewTicker(shellPingPeriod)
-		defer pingTicker.Stop()
-
-		buf := make([]byte, shellReadBufSize)
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-pingTicker.C:
-				_ = conn.SetWriteDeadline(time.Now().Add(shellWriteWait))
-				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-					return
-				}
-				continue
-			default:
-			}
-
-			n, err := shell.Read(buf)
-			if n > 0 {
-				resetIdle()
-				encoded := base64.StdEncoding.EncodeToString(buf[:n])
-				_ = conn.SetWriteDeadline(time.Now().Add(shellWriteWait))
-				if wErr := conn.WriteJSON(shellMsg{Type: "data", Data: encoded}); wErr != nil {
-					logging.Print("WRN", "vm.shell", "ws write error", logging.F("host", hostName), logging.F("err", wErr))
-					return
-				}
-			}
-			if err != nil {
-				if err != io.EOF {
-					logging.Print("WRN", "vm.shell", "ssh read error", logging.F("host", hostName), logging.F("err", err))
-				}
-				return
-			}
-		}
-	}()
-
-	wg.Wait()
+	// BridgeShellSession manages the idle timer, ping keepalives, and the
+	// ws↔ssh relay goroutines. It blocks until both goroutines exit.
+	BridgeShellSession(ctx, cancel, conn, shell,
+		shellIdleTimeout, shellWriteWait, shellPingPeriod,
+		"host", hostName)
 
 	// Send close frame to the client.
 	_ = conn.WriteControl(

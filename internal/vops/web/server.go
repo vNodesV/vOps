@@ -28,6 +28,7 @@ import (
 
 	"github.com/vNodesV/vOps/internal/fleet"
 	"github.com/vNodesV/vOps/internal/fleet/api"
+	"github.com/vNodesV/vOps/internal/logging"
 	"github.com/vNodesV/vOps/internal/vops/config"
 	"github.com/vNodesV/vOps/internal/vops/ctxkeys"
 	"github.com/vNodesV/vOps/internal/vops/db"
@@ -66,7 +67,8 @@ type Server struct {
 	debug        *DebugRing // SSH command debug recorder
 
 	// Session state for dashboard login.
-	sessions   map[string]time.Time // token → expiry
+	sessions    map[string]time.Time   // token → expiry
+	sessionUsers map[string]string     // token → authenticated username
 	sessionMu  sync.RWMutex
 	sessionKey []byte // 32-byte HMAC key, generated at startup
 
@@ -122,6 +124,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		commit:        appCommit,
 		buildDate:     appBuildDate,
 		sessions:      make(map[string]time.Time),
+		sessionUsers:  make(map[string]string),
 		sessionKey:    sessionKey,
 		loginAttempts: make(map[string]*loginAttempt),
 		debug:         &DebugRing{},
@@ -366,6 +369,10 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		s.requireSession(http.HandlerFunc(s.handleAPIBannedUnban)))
 
 	// Services registry routes.
+	// NOTE: These routes expose full CRUD for the services table, but no
+	// background ingestion loop yet populates it automatically. Services are
+	// managed exclusively via the API / SPA. See BRIEF.md §Services for the
+	// planned polling integration.
 	mux.Handle("GET /api/v1/services",
 		s.requireSession(http.HandlerFunc(s.svcMgr.HandleList)))
 	mux.Handle("POST /api/v1/services",
@@ -461,7 +468,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 
 	s.httpSrv = &http.Server{
 		Addr:         fmt.Sprintf("%s:%d", cfg.VOps.BindAddress, cfg.VOps.Port),
-		Handler:      s.debugHTTPMiddleware(securityHeaders(mux)),
+		Handler:      s.debugHTTPMiddleware(withRequestID(securityHeaders(mux))),
 		ReadTimeout:  readTimeout,
 		WriteTimeout: writeTimeout,
 	}
@@ -494,6 +501,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 			for token, expiry := range s.sessions {
 				if now.After(expiry) {
 					delete(s.sessions, token)
+					delete(s.sessionUsers, token)
 				}
 			}
 			s.sessionMu.Unlock()
@@ -531,15 +539,21 @@ func (s *Server) requireSession(next http.Handler) http.Handler {
 			http.Redirect(w, r, s.cfg.VOps.BasePath+"/login", http.StatusFound)
 			return
 		}
-		// Inject the session token as the audit actor so downstream handlers
-		// and vm operations can attribute actions to the authenticated operator.
-		ctx := context.WithValue(r.Context(), ctxkeys.Actor, cookie.Value)
+		// Inject the authenticated username (not the opaque token) as the
+		// audit actor so downstream handlers attribute actions to the operator.
+		s.sessionMu.RLock()
+		username := s.sessionUsers[cookie.Value]
+		s.sessionMu.RUnlock()
+		if username == "" {
+			username = "unknown"
+		}
+		ctx := context.WithValue(r.Context(), ctxkeys.Actor, username)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
-// newSession creates a new HMAC-signed session token with 24h TTL.
-func (s *Server) newSession() (string, error) {
+// newSession creates a new HMAC-signed session token with 24h TTL for username.
+func (s *Server) newSession(username string) (string, error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
 		return "", fmt.Errorf("web: newSession rand: %w", err)
@@ -549,6 +563,7 @@ func (s *Server) newSession() (string, error) {
 	token := hex.EncodeToString(raw) + "." + hex.EncodeToString(mac.Sum(nil))
 	s.sessionMu.Lock()
 	s.sessions[token] = time.Now().Add(24 * time.Hour)
+	s.sessionUsers[token] = username
 	s.sessionMu.Unlock()
 	return token, nil
 }
@@ -575,6 +590,7 @@ func (s *Server) validSession(token string) bool {
 func (s *Server) deleteSession(token string) {
 	s.sessionMu.Lock()
 	delete(s.sessions, token)
+	delete(s.sessionUsers, token)
 	s.sessionMu.Unlock()
 }
 
@@ -735,6 +751,19 @@ func (s *Server) requireAPIKey(next http.Handler) http.Handler {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// withRequestID ensures every request carries a correlation ID in both the
+// incoming request header (X-Request-ID) and the outgoing response header.
+// If the upstream reverse proxy forwards an existing ID it is reused; otherwise
+// a new compact hex ID is generated. Handlers can read it via
+// logging.EnsureRequestID(r) without redundant generation.
+func withRequestID(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id := logging.EnsureRequestID(r)
+		logging.SetResponseRequestID(w, id)
 		next.ServeHTTP(w, r)
 	})
 }
