@@ -86,6 +86,9 @@ After reload, test shell:
 
 - ✅ Go origin check fixed — v1.4.13 built and deployed on QC1
 - ✅ Apache config updated in repo (`docs/apache.web.conf`)
+- ✅ **Apache config further patched** — `c542e68` (agentic-eval B-1/B-2/B-3): added `CacheDisable On`,
+  `ProxyPreserveHost On` moved into `<Location /vops/>`, dead `<Proxy>` block removed.
+  **Deploy from `docs/apache.web.conf` HEAD — not from the snippet above.**
 - ⏳ **Apache2 reload on QC1 pending** — user must run the 3 sudo commands above
 - ⏳ Shell end-to-end test pending (blocked on Apache reload)
 
