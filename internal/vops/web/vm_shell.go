@@ -246,9 +246,13 @@ func (s *Server) HandleVMShell(w http.ResponseWriter, r *http.Request) {
 }
 
 // vmWSUpgrader returns a WebSocket upgrader that validates Origin against the
-// server's configured bind address to prevent cross-origin hijacking.
+// request Host header to prevent cross-origin hijacking.
+//
+// Using r.Host (rather than the configured bind address) ensures correctness
+// under reverse-proxy deployments where Apache/nginx forwards the original
+// Host header via ProxyPreserveHost — r.Host equals the browser's origin host
+// ("vnodesv.net"), not the backend's bind address ("127.0.0.1:8889").
 func (s *Server) vmWSUpgrader() *websocket.Upgrader {
-	allowed := fmt.Sprintf("%s:%d", s.cfg.VOps.BindAddress, s.cfg.VOps.Port)
 	return &websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
 			origin := r.Header.Get("Origin")
@@ -256,7 +260,11 @@ func (s *Server) vmWSUpgrader() *websocket.Upgrader {
 				host, _, _ := net.SplitHostPort(r.RemoteAddr)
 				return host == "127.0.0.1" || host == "::1"
 			}
-			return origin == "http://"+allowed || origin == "https://"+allowed
+			target := r.Host
+			if target == "" {
+				target = fmt.Sprintf("%s:%d", s.cfg.VOps.BindAddress, s.cfg.VOps.Port)
+			}
+			return origin == "http://"+target || origin == "https://"+target
 		},
 	}
 }

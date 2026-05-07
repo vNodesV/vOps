@@ -27,9 +27,14 @@ const (
 )
 
 // wsUpgrader returns a websocket.Upgrader whose CheckOrigin validates the
-// request Origin against h.allowedOrigin (the server's configured bind address).
-// This prevents cross-origin WebSocket hijacking (H-8).
-// When allowedOrigin is empty the check falls back to r.Host (request header).
+// request Origin against r.Host to prevent cross-origin WebSocket hijacking.
+//
+// r.Host is used as the primary check: when deployed behind a reverse proxy
+// with ProxyPreserveHost On, r.Host equals the browser's origin host
+// ("vnodesv.net"), not the backend bind address ("127.0.0.1:8889").
+// For direct connections r.Host also equals the browser's URL host, so the
+// check is correct in both cases. h.allowedOrigin is only used as a fallback
+// when r.Host is empty (non-standard; should never occur in practice).
 func (h *Handlers) wsUpgrader() *websocket.Upgrader {
 	return &websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
@@ -39,9 +44,9 @@ func (h *Handlers) wsUpgrader() *websocket.Upgrader {
 				host, _, _ := net.SplitHostPort(r.RemoteAddr)
 				return host == "127.0.0.1" || host == "::1"
 			}
-			target := h.allowedOrigin
+			target := r.Host
 			if target == "" {
-				target = r.Host
+				target = h.allowedOrigin
 			}
 			return origin == "http://"+target || origin == "https://"+target
 		},
