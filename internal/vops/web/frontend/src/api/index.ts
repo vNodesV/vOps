@@ -327,16 +327,6 @@ export const getUnitStatus = (name: string) =>
     `/api/v1/units/${encodeURIComponent(name)}/status`,
   );
 
-export const getUnitTxHistory = (
-  name: string,
-  address: string,
-  mode: 'account' | 'staking' = 'account',
-  limit = 20,
-) =>
-  apiFetch<import('./types').TxHistoryResponse>(
-    `/api/v1/units/${encodeURIComponent(name)}/txs?address=${encodeURIComponent(address)}&mode=${mode}&limit=${limit}`,
-  );
-
 // Multi-vProx instance management
 export const getMultiProxInstances = () =>
   apiFetch<{ instances: import('./types').VProxInstance[] }>('/api/v1/multiprox');

@@ -335,35 +335,6 @@ export interface CosmosUnitWithStatus extends CosmosUnit {
   status?: UnitStatus;
 }
 
-// ── Tx history (Cosmos SDK REST /cosmos/tx/v1beta1/txs) ───────────────────
-
-export interface TxMessage {
-  '@type': string;
-  [key: string]: unknown;
-}
-
-export interface TxResponse {
-  height: string;
-  txhash: string;
-  code: number;
-  tx?: {
-    body?: {
-      messages?: TxMessage[];
-      memo?: string;
-    };
-  };
-  timestamp: string;
-  gas_used?: string;
-  gas_wanted?: string;
-  raw_log?: string;
-}
-
-export interface TxHistoryResponse {
-  tx_responses?: TxResponse[];
-  pagination?: { total?: string; next_key?: string | null };
-  error?: string;
-}
-
 
 export interface VProxInstance {
   id: number;

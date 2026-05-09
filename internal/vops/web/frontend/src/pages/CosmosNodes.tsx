@@ -10,11 +10,10 @@ import {
   getRegisteredChains,
   registerChain,
   unregisterChain,
-  getUnitTxHistory,
 } from '../api';
 import { BASE } from '../api/client';
 import { openSSEStream } from '../api/sse';
-import type { CosmosUnit, CosmosUnitWithStatus, NodeType, NetworkType, UnitStatus, RegisteredChain, TxResponse } from '../api/types';
+import type { CosmosUnit, CosmosUnitWithStatus, NodeType, NetworkType, UnitStatus, RegisteredChain } from '../api/types';
 import { fmtDate, timeAgo } from '../lib/time';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -95,127 +94,6 @@ function ValidatorUptime({ unitName }: { unitName: string }) {
           );
         })}
       </div>
-    </div>
-  );
-}
-
-// ── TxHistoryPanel ────────────────────────────────────────────────────────────
-// Queries the unit's own Cosmos LCD (/cosmos/tx/v1beta1/txs) via the backend
-// proxy — uses Cosmos SDK REST format, not ping.pub or CometBFT tx_search.
-
-function shortType(msgType: string): string {
-  const last = msgType.split('.').pop() ?? msgType;
-  return last.replace(/^Msg/, '');
-}
-
-function TxHistoryPanel({ unit }: { unit: CosmosUnit }) {
-  const [address, setAddress] = useState(unit.valoper ?? '');
-  const [mode, setMode] = useState<'account' | 'staking'>('account');
-  const [txs, setTxs] = useState<TxResponse[] | null>(null);
-  const [total, setTotal] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState('');
-
-  const load = async () => {
-    if (!address.trim()) { setErr('Enter an address'); return; }
-    setLoading(true);
-    setErr('');
-    try {
-      const res = await getUnitTxHistory(unit.name, address.trim(), mode);
-      if (res.error) { setErr(res.error); setTxs(null); return; }
-      setTxs(res.tx_responses ?? []);
-      setTotal(res.pagination?.total ?? null);
-    } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : 'Failed to load tx history');
-      setTxs(null);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const rowStyle: React.CSSProperties = {
-    display: 'grid',
-    gridTemplateColumns: '5rem 5.5rem 1fr 8rem',
-    gap: '0 10px',
-    padding: '4px 0',
-    borderBottom: '1px solid #1f2937',
-    fontSize: 11,
-    alignItems: 'center',
-  };
-
-  return (
-    <div style={{ marginTop: 10, borderTop: '1px solid #1f2937', paddingTop: 10 }}>
-      <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 6, fontWeight: 600 }}>Tx History</div>
-
-      {/* Controls */}
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
-        <input
-          value={address}
-          onChange={e => setAddress(e.target.value)}
-          placeholder="address…"
-          style={{ fontFamily: 'monospace', fontSize: 11, padding: '3px 6px', background: '#1e293b', border: '1px solid #374151', borderRadius: 4, color: '#d1d5db', width: 280 }}
-        />
-        <select
-          value={mode}
-          onChange={e => setMode(e.target.value as 'account' | 'staking')}
-          style={{ fontSize: 11, padding: '3px 6px', background: '#1e293b', border: '1px solid #374151', borderRadius: 4, color: '#9ca3af' }}
-        >
-          <option value="account">Account</option>
-          <option value="staking">Staking</option>
-        </select>
-        <button
-          onClick={load}
-          disabled={loading}
-          style={{ fontSize: 11, padding: '3px 10px', background: '#1d4ed8', border: 'none', borderRadius: 4, color: '#fff', cursor: 'pointer' }}
-        >
-          {loading ? '…' : 'Load'}
-        </button>
-        {total != null && (
-          <span style={{ fontSize: 11, color: '#6b7280' }}>{total} total</span>
-        )}
-      </div>
-
-      {err && <div style={{ fontSize: 11, color: '#f87171', marginBottom: 6 }}>{err}</div>}
-
-      {txs !== null && txs.length === 0 && (
-        <div style={{ fontSize: 11, color: '#6b7280' }}>No transactions found</div>
-      )}
-
-      {txs !== null && txs.length > 0 && (
-        <div>
-          {/* Header */}
-          <div style={{ ...rowStyle, color: '#6b7280', fontWeight: 600, borderBottom: '1px solid #374151' }}>
-            <span>Height</span>
-            <span>Status</span>
-            <span>Hash</span>
-            <span>Type</span>
-          </div>
-          {txs.map(tx => {
-            const ok = tx.code === 0;
-            const msgType = tx.tx?.body?.messages?.[0]?.['@type'] as string | undefined;
-            const moreTypes = (tx.tx?.body?.messages?.length ?? 0) > 1
-              ? ` +${(tx.tx?.body?.messages?.length ?? 1) - 1}` : '';
-            return (
-              <div key={tx.txhash} style={rowStyle}>
-                <span style={{ color: '#60a5fa', fontFamily: 'monospace' }}>
-                  {parseInt(tx.height, 10).toLocaleString()}
-                </span>
-                <span style={{ color: ok ? '#4ade80' : '#f87171' }}>
-                  {ok ? '✓ ok' : `✗ ${tx.code}`}
-                </span>
-                <span style={{ fontFamily: 'monospace', color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                  title={tx.txhash}>
-                  {tx.txhash.slice(0, 16)}…
-                </span>
-                <span style={{ color: '#d1d5db', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                  title={msgType}>
-                  {msgType ? shortType(msgType) + moreTypes : '—'}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }
@@ -790,9 +668,6 @@ function UnitCard({
             <div style={{ marginTop: 10, borderTop: '1px solid #1f2937', paddingTop: 10 }}>
               <ValidatorUptime unitName={unit.name} />
             </div>
-          )}
-          {unit.api_port > 0 && (
-            <TxHistoryPanel unit={unit} />
           )}
         </div>
       )}

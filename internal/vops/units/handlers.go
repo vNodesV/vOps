@@ -4,30 +4,21 @@
 package units
 
 import (
-	"context"
 	"database/sql"
 	"encoding/json"
-	"fmt"
-	"io"
 	"net/http"
-	"net/url"
-	"strconv"
 	"strings"
 	"time"
 )
 
-var lcdClient = &http.Client{Timeout: 12 * time.Second}
-
 // Handlers provides CRUD operations for the units registry.
 type Handlers struct {
-	db        *sql.DB
-	lanIPFunc func(string) string // resolves VM name → LAN IP
+	db *sql.DB
 }
 
 // NewHandlers creates units registry handlers backed by db.
-// lanIPFunc resolves a VM name to its LAN IP; pass nil to disable tx-history proxy.
-func NewHandlers(db *sql.DB, lanIPFunc func(string) string) *Handlers {
-	return &Handlers{db: db, lanIPFunc: lanIPFunc}
+func NewHandlers(db *sql.DB) *Handlers {
+	return &Handlers{db: db}
 }
 
 // Unit mirrors the units table.
@@ -360,99 +351,6 @@ func (h *Handlers) HandleStatusHistory(w http.ResponseWriter, r *http.Request) {
 		hist = append(hist, st)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"history": hist})
-}
-
-// ── GET /api/v1/units/{name}/txs ─────────────────────────────────────────────
-//
-// Proxies a tx-history query to the unit's own Cosmos LCD (api_port, default 1317)
-// using the Cosmos SDK REST format — NOT the ping.pub API or CometBFT tx_search.
-//
-// Query params:
-//
-//	address  – bech32 sender address to query (defaults to the unit's valoper)
-//	mode     – "account" (all txs) or "staking" (staking module only); default "account"
-//	limit    – number of results, 1–50; default 20
-func (h *Handlers) HandleTxHistory(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name required"})
-		return
-	}
-
-	address := strings.TrimSpace(r.URL.Query().Get("address"))
-	mode := r.URL.Query().Get("mode")
-	if mode == "" {
-		mode = "account"
-	}
-	limit := 20
-	if n, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && n > 0 && n <= 50 {
-		limit = n
-	}
-
-	// Resolve unit → LAN IP + api_port.
-	if h.lanIPFunc == nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "tx proxy not configured"})
-		return
-	}
-	var vmName string
-	var apiPort int
-	var valoper string
-	row := h.db.QueryRow(`SELECT vm_name, api_port, valoper FROM units WHERE name = ?`, name)
-	if err := row.Scan(&vmName, &apiPort, &valoper); err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "unit not found"})
-		return
-	}
-	if apiPort == 0 {
-		apiPort = 1317
-	}
-	if address == "" {
-		address = valoper
-	}
-	lanIP := h.lanIPFunc(vmName)
-	if lanIP == "" {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "VM LAN IP not resolved"})
-		return
-	}
-
-	// Build the Cosmos SDK REST URL.
-	// Cosmos SDK REST accepts repeated `events` params for AND-filtering.
-	base := fmt.Sprintf("http://%s:%d/cosmos/tx/v1beta1/txs", lanIP, apiPort)
-	q := url.Values{}
-	q.Set("events", fmt.Sprintf("message.sender='%s'", address))
-	if mode == "staking" {
-		q.Add("events", "message.module='staking'")
-	}
-	q.Set("pagination.limit", strconv.Itoa(limit))
-	q.Set("order_by", "ORDER_BY_DESC")
-
-	endpoint := base + "?" + q.Encode()
-
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "build request: " + err.Error()})
-		return
-	}
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := lcdClient.Do(req)
-	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "LCD request failed: " + err.Error()})
-		return
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 512*1024))
-	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "read response: " + err.Error()})
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(resp.StatusCode)
-	_, _ = w.Write(body)
 }
 
 // HandleCurrentStatus returns the most recent status poll for a unit.
