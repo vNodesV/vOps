@@ -152,7 +152,6 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	}
 
 	s.svcMgr = services.NewHandlers(d.DB)
-	s.unitsMgr = units.NewHandlers(d.DB)
 	mpKey := multiprox.LoadOrGenerateKey(s.home + "/config/vops.key")
 	s.multiproxMgr = multiprox.New(d.DB, mpKey)
 
@@ -167,6 +166,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		}
 		return vm.DisplayLanIP()
 	}
+	s.unitsMgr = units.NewHandlers(d.DB, lanIPFunc)
 	s.unitsPoller = units.NewPoller(d.DB, lanIPFunc, 30*time.Second)
 
 	mux := http.NewServeMux()
@@ -419,6 +419,8 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		s.requireSession(http.HandlerFunc(s.unitsMgr.HandleCurrentStatus)))
 	mux.Handle("GET /api/v1/units/{name}/status/history",
 		s.requireSession(http.HandlerFunc(s.unitsMgr.HandleStatusHistory)))
+	mux.Handle("GET /api/v1/units/{name}/txs",
+		s.requireSession(http.HandlerFunc(s.unitsMgr.HandleTxHistory)))
 	mux.Handle("GET /api/v1/units/{name}/logs",
 		s.requireSession(http.HandlerFunc(s.handleUnitLogStream)))
 	mux.Handle("POST /api/v1/units/{name}/deploy",
