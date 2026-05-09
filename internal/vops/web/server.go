@@ -59,21 +59,21 @@ type Server struct {
 	commit       string // git commit SHA (short), set at startup
 	buildDate    string // build date (YYYY-MM-DD), set at startup
 	httpSrv      *http.Server
-	fleet        *api.Handlers      // nil when fleet module is not configured
+	fleet        *api.Handlers // nil when fleet module is not configured
 	fleetSvc     *fleet.Service
-	vmMgr        *vm.Handlers       // nil when no hypervisor hosts are configured
+	vmMgr        *vm.Handlers // nil when no hypervisor hosts are configured
 	svcMgr       *services.Handlers
 	unitsMgr     *units.Handlers
 	multiproxMgr *multiprox.Handlers
 	unitsPoller  *units.Poller
 	vmCache      *fleetstatus.VMCache // nil when fleet module is not configured
-	debug        *DebugRing          // SSH command debug recorder
+	debug        *DebugRing           // SSH command debug recorder
 
 	// Session state for dashboard login.
-	sessions    map[string]time.Time   // token → expiry
-	sessionUsers map[string]string     // token → authenticated username
-	sessionMu  sync.RWMutex
-	sessionKey []byte // 32-byte HMAC key, generated at startup
+	sessions     map[string]time.Time // token → expiry
+	sessionUsers map[string]string    // token → authenticated username
+	sessionMu    sync.RWMutex
+	sessionKey   []byte // 32-byte HMAC key, generated at startup
 
 	// Brute-force protection: per-IP failed login tracking.
 	loginMu       sync.Mutex
@@ -170,6 +170,9 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		)
 		s.vmMgr.SetDebug(s.debug)
 		s.vmMgr.SetAllowedOrigin(fmt.Sprintf("%s:%d", cfg.VOps.BindAddress, cfg.VOps.Port))
+		if cfg.VOps.Push.Defaults.KnownHostsPath == "" {
+			logging.Print("WRN", "vops/startup", "fleet SSH host key verification is disabled — set known_hosts_path in vops.toml to harden fleet connections")
+		}
 	}
 
 	s.svcMgr = services.NewHandlers(d.DB)
