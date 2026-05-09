@@ -28,8 +28,10 @@ func Open(path string) (*DB, error) {
 		return nil, fmt.Errorf("db: open %s: %w", path, err)
 	}
 
-	// SQLite is single-writer; one conn avoids SQLITE_BUSY contention.
-	sqlDB.SetMaxOpenConns(1)
+	// WAL mode allows concurrent readers; allow up to 10 connections.
+	// _busy_timeout=5000 handles the rare write-write contention case.
+	sqlDB.SetMaxOpenConns(10)
+	sqlDB.SetMaxIdleConns(5)
 
 	if err := Migrate(sqlDB); err != nil {
 		sqlDB.Close()
