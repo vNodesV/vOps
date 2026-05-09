@@ -40,7 +40,8 @@ type Handlers struct {
 	svc      *fleet.Service
 	db       *sql.DB // may be nil when metrics storage is not wired
 	debug    DebugEmitter
-	infraDir string // path to config/infra/ directory for VM registration
+	infraDir string        // path to config/infra/ directory for VM registration
+	vmCache  *status.VMCache // nil until SetVMCache is called
 }
 
 // New returns a Handlers backed by svc. db is optional; when non-nil, VM
@@ -53,6 +54,10 @@ func (h *Handlers) SetDebug(d DebugEmitter) { h.debug = d }
 // SetInfraDir sets the path to the config/infra/ directory so that
 // HandleRegisterDiscoveredVM can append [[vm]] stanzas to the right file.
 func (h *Handlers) SetInfraDir(dir string) { h.infraDir = dir }
+
+// SetVMCache wires a background VMCache so that HandleVMStatus reads from the
+// cache instead of polling VMs live on every HTTP request.
+func (h *Handlers) SetVMCache(c *status.VMCache) { h.vmCache = c }
 
 // debugRun executes cmd on client, emitting a debug event if debug mode is on.
 // It is a transparent wrapper around client.Run that adds timing + logging.
@@ -131,19 +136,18 @@ func (h *Handlers) probeVMIP(hc *fleetssh.Client, dialAddr, vmName string) strin
 // HandleVMStatus polls all VMs concurrently via SSH and returns live metrics.
 // The response includes a "hosts" array for tree grouping in the dashboard.
 func (h *Handlers) HandleVMStatus(w http.ResponseWriter, r *http.Request) {
-	results := status.PollAllVMs(h.svc.Config())
+	var results []status.VMStatus
 
-	// Store metrics in history table when DB is wired.
-	if h.db != nil {
-		for _, vm := range results {
-			if !vm.Online {
-				continue
-			}
-			_ = opsdb.InsertVMMetric(h.db, vm.Name,
-				vm.CPUPct, vm.MemPct, vm.StoragePct,
-				vm.LoadAvg, vm.AptCount,
-			)
+	if h.vmCache != nil {
+		cached, _ := h.vmCache.Get()
+		if cached != nil {
+			results = cached
 		}
+	}
+
+	// Cache miss on first startup — fall back to a live poll.
+	if results == nil {
+		results = status.PollAllVMs(h.svc.Config())
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{

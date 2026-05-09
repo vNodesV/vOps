@@ -28,6 +28,8 @@ import (
 
 	"github.com/vNodesV/vOps/internal/fleet"
 	"github.com/vNodesV/vOps/internal/fleet/api"
+	fleetconfig "github.com/vNodesV/vOps/internal/fleet/config"
+	fleetstatus "github.com/vNodesV/vOps/internal/fleet/status"
 	"github.com/vNodesV/vOps/internal/logging"
 	"github.com/vNodesV/vOps/internal/vops/config"
 	"github.com/vNodesV/vOps/internal/vops/ctxkeys"
@@ -57,14 +59,15 @@ type Server struct {
 	commit       string // git commit SHA (short), set at startup
 	buildDate    string // build date (YYYY-MM-DD), set at startup
 	httpSrv      *http.Server
-	fleet        *api.Handlers // nil when fleet module is not configured
+	fleet        *api.Handlers      // nil when fleet module is not configured
 	fleetSvc     *fleet.Service
-	vmMgr        *vm.Handlers // nil when no hypervisor hosts are configured
+	vmMgr        *vm.Handlers       // nil when no hypervisor hosts are configured
 	svcMgr       *services.Handlers
 	unitsMgr     *units.Handlers
 	multiproxMgr *multiprox.Handlers
 	unitsPoller  *units.Poller
-	debug        *DebugRing // SSH command debug recorder
+	vmCache      *fleetstatus.VMCache // nil when fleet module is not configured
+	debug        *DebugRing          // SSH command debug recorder
 
 	// Session state for dashboard login.
 	sessions    map[string]time.Time   // token → expiry
@@ -135,6 +138,24 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		s.fleet.SetDebug(s.debug)
 		s.fleet.SetInfraDir(cfg.VOps.Push.InfraDir)
 		s.fleetSvc = fleetSvc
+
+		// Background VM status cache — polls all VMs every 60 s so that
+		// HandleVMStatus returns instantly instead of SSHing on every request.
+		s.vmCache = fleetstatus.NewVMCache()
+		if d.DB != nil {
+			s.vmCache.SetOnPoll(func(vms []fleetstatus.VMStatus) {
+				for _, vm := range vms {
+					if !vm.Online {
+						continue
+					}
+					_ = db.InsertVMMetric(d.DB, vm.Name,
+						vm.CPUPct, vm.MemPct, vm.StoragePct,
+						vm.LoadAvg, vm.AptCount,
+					)
+				}
+			})
+		}
+		s.fleet.SetVMCache(s.vmCache)
 		// Always create the VM manager so routes are available even when no
 		// hypervisor hosts are configured yet; it returns empty lists until
 		// infra is saved and fleet config is reloaded.
@@ -523,6 +544,14 @@ func (s *Server) SetProxyController(c *vprox.Controller) {
 // server is shut down or encounters a fatal error.
 func (s *Server) Start() error {
 	s.unitsPoller.Start()
+	if s.vmCache != nil {
+		s.vmCache.Start(func() *fleetconfig.Config {
+			if s.fleetSvc == nil {
+				return nil
+			}
+			return s.fleetSvc.Config()
+		}, 60*time.Second)
+	}
 	return s.httpSrv.ListenAndServe()
 }
 
@@ -790,6 +819,9 @@ func securityHeaders(next http.Handler) http.Handler {
 // to complete or the context to expire. Also stops background pollers.
 func (s *Server) Shutdown(ctx context.Context) error {
 	s.unitsPoller.Stop()
+	if s.vmCache != nil {
+		s.vmCache.Stop()
+	}
 	return s.httpSrv.Shutdown(ctx)
 }
 
