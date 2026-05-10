@@ -81,8 +81,11 @@ export default function TopologyPage() {
     const dc = h.datacenter ?? 'Unknown DC';
     (hostsByDC[dc] ??= []).push(h);
   }
-  // Add hosts from VM list that might not be in hosts array.
+  // Add fallback DC entries only for VMs that have no host_ref (truly unlinked VMs).
+  // VMs with host_ref already belong to their host's DC — adding their vm.datacenter here
+  // would create ghost DC groups when vm.datacenter differs from the host's datacenter.
   for (const vm of vms) {
+    if (vm.host_ref) continue;
     const dc = vm.datacenter ?? 'Unknown DC';
     if (!hostsByDC[dc]) hostsByDC[dc] = [];
   }

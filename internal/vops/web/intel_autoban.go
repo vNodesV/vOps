@@ -23,6 +23,7 @@ type BannedIP struct {
 	BannedAt  time.Time `json:"banned_at"`
 	ExpiresAt time.Time `json:"expires_at"`
 	Reason    string    `json:"reason"`
+	Permanent bool      `json:"permanent"`
 }
 
 // autoBanStore holds active auto-bans in memory, protected by a mutex.
@@ -78,19 +79,26 @@ func (s *autoBanStore) isWhitelisted(ip string) bool {
 	return false
 }
 
-// BanIP records the ban and fires UFW insert 1 deny. Schedules auto-expiry.
+// BanIP records the ban and fires UFW insert 1 deny.
+// When permanent is true the ban never auto-expires; ExpiresAt is the zero value.
+// Otherwise a timer is scheduled for auto-expiry after duration.
 // Re-banning an already-banned IP resets its timer.
 // UFW exec is performed inside the lock to prevent TOCTOU races with UnbanIP.
-func (s *autoBanStore) BanIP(ip string, duration time.Duration, reason string) error {
+func (s *autoBanStore) BanIP(ip string, duration time.Duration, reason string, permanent bool) error {
 	if net.ParseIP(ip) == nil {
 		return fmt.Errorf("autoban: invalid IP: %q", ip)
 	}
 	now := time.Now()
-	entry := BannedIP{IP: ip, BannedAt: now, ExpiresAt: now.Add(duration), Reason: reason}
+	var expiresAt time.Time
+	if !permanent {
+		expiresAt = now.Add(duration)
+	}
+	entry := BannedIP{IP: ip, BannedAt: now, ExpiresAt: expiresAt, Reason: reason, Permanent: permanent}
 
 	s.mu.Lock()
 	if t, ok := s.timers[ip]; ok {
 		t.Stop()
+		delete(s.timers, ip)
 	}
 	// UFW exec inside the lock serializes with UnbanIP, preventing a race
 	// where UnbanIP clears the map and removes the UFW rule between our
@@ -99,15 +107,17 @@ func (s *autoBanStore) BanIP(ip string, duration time.Duration, reason string) e
 		logging.Print("ERR", "autoban", "ufw insert failed", logging.F("ip", ip), logging.F("err", err))
 	}
 	s.banned[ip] = entry
-	t := time.AfterFunc(duration, func() {
-		if err := s.UnbanIP(ip); err != nil {
-			logging.Print("ERR", "autoban", "timer unban failed", logging.F("ip", ip), logging.F("err", err))
-		}
-	})
-	s.timers[ip] = t
+	if !permanent {
+		t := time.AfterFunc(duration, func() {
+			if err := s.UnbanIP(ip); err != nil {
+				logging.Print("ERR", "autoban", "timer unban failed", logging.F("ip", ip), logging.F("err", err))
+			}
+		})
+		s.timers[ip] = t
+	}
 	s.mu.Unlock()
 
-	logging.Print("INF", "autoban", "banned", logging.F("ip", ip), logging.F("duration", duration), logging.F("reason", reason))
+	logging.Print("INF", "autoban", "banned", logging.F("ip", ip), logging.F("duration", duration), logging.F("permanent", permanent), logging.F("reason", reason))
 	return nil
 }
 
@@ -162,9 +172,14 @@ func (s *Server) handleAPIBannedList(w http.ResponseWriter, _ *http.Request) {
 	bans := s.autoBan.List()
 	entries := make([]bannedEntry, 0, len(bans))
 	for _, b := range bans {
-		rem := int(time.Until(b.ExpiresAt).Seconds())
-		if rem < 0 {
-			rem = 0
+		var rem int
+		if b.Permanent {
+			rem = -1 // sentinel: never expires
+		} else {
+			rem = int(time.Until(b.ExpiresAt).Seconds())
+			if rem < 0 {
+				rem = 0
+			}
 		}
 		entries = append(entries, bannedEntry{BannedIP: b, RemainingSeconds: rem})
 	}
@@ -187,7 +202,7 @@ func (s *Server) handleAPIBannedUnban(w http.ResponseWriter, r *http.Request) {
 
 // autoBanSweep queries the DB and bans IPs that exceed the ratelimit threshold.
 // Called from a background goroutine in the server.
-func (s *Server) autoBanSweep(threshold int, banDuration time.Duration) {
+func (s *Server) autoBanSweep(threshold int, banDuration time.Duration, permanent bool) {
 	accounts, err := s.db.ListIPAccountsExceedingRatelimit(int64(threshold), 100)
 	if err != nil {
 		logging.Print("ERR", "autoban", "sweep DB error", logging.F("err", err))
@@ -198,7 +213,7 @@ func (s *Server) autoBanSweep(threshold int, banDuration time.Duration) {
 			continue
 		}
 		reason := fmt.Sprintf("auto-ban: %d rate-limit events (threshold: %d)", acc.RatelimitEvents, threshold)
-		if err := s.autoBan.BanIP(acc.IP, banDuration, reason); err != nil {
+		if err := s.autoBan.BanIP(acc.IP, banDuration, reason, permanent); err != nil {
 			logging.Print("ERR", "autoban", "failed to ban", logging.F("ip", acc.IP), logging.F("err", err))
 		}
 	}

@@ -10,7 +10,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from 'recharts';
-import { getStats, getChart, getFleetChains, triggerIngest, triggerBackupAndIngest, getIngestStats, getVMStatus, vmUpgradeURL, getVMHistory, getUnits } from '../api';
+import { getStats, getChart, getFleetChains, triggerBackupAndIngest, getIngestStats, getVMStatus, vmUpgradeURL, getVMHistory, getUnits } from '../api';
 import type { Stats, ChartSeries, VMStatus, VMMetricPoint, CosmosUnitWithStatus } from '../api/types';
 import StatCard from '../components/StatCard';
 import Badge from '../components/Badge';
@@ -815,29 +815,18 @@ function IngestBar() {
     retry: false,
   });
 
-  const ingestMut = useMutation({
-    mutationFn: triggerIngest,
-    onSuccess: (d) => {
-      queryClient.invalidateQueries({ queryKey: ['ingest-stats'] });
-      queryClient.invalidateQueries({ queryKey: ['stats'] });
-      setFeedback({ type: 'ok', msg: `${d.count} events ingested` });
-      setTimeout(() => setFeedback(null), 4000);
-    },
-    onError: (e: Error) => { setFeedback({ type: 'err', msg: e.message }); },
-  });
-
-  const backupMut = useMutation({
+  const importsMut = useMutation({
     mutationFn: triggerBackupAndIngest,
     onSuccess: (d) => {
       queryClient.invalidateQueries({ queryKey: ['ingest-stats'] });
       queryClient.invalidateQueries({ queryKey: ['stats'] });
-      setFeedback({ type: 'ok', msg: `${d.processed} archives processed` });
+      setFeedback({ type: 'ok', msg: `${d.processed} archives imported` });
       setTimeout(() => setFeedback(null), 4000);
     },
     onError: (e: Error) => { setFeedback({ type: 'err', msg: e.message }); },
   });
 
-  const busy = ingestMut.isPending || backupMut.isPending;
+  const busy = importsMut.isPending;
   const s = statsQ.data;
 
   return (
@@ -848,7 +837,7 @@ function IngestBar() {
       background: 'var(--vn-surface)', fontSize: '0.78rem',
     }}>
       <span style={{ color: 'var(--vn-text-muted)', fontWeight: 600, flexShrink: 0 }}>
-        Archive Ingest
+        IMPORTS
       </span>
 
       {s && (
@@ -874,25 +863,18 @@ function IngestBar() {
 
       <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
         <button
-          onClick={() => backupMut.mutate()}
+          onClick={() => importsMut.mutate()}
           disabled={busy}
-          title="Run vprox --new-backup then ingest"
-          className="btn btn-secondary btn-sm"
-        >
-          {backupMut.isPending ? 'Backing up…' : '💾 Backup & Ingest'}
-        </button>
-        <button
-          onClick={() => ingestMut.mutate()}
-          disabled={busy}
+          title="Run vprox --new-backup then ingest all new archives"
           className="btn btn-primary btn-sm disabled:opacity-50"
         >
-          {ingestMut.isPending ? 'Ingesting…' : 'Trigger Ingest'}
+          {importsMut.isPending ? 'Importing…' : '⬇ IMPORTS'}
         </button>
-        <GearButton onClick={() => setSettingsOpen(true)} label="Ingest & backup settings" />
+        <GearButton onClick={() => setSettingsOpen(true)} label="Import & backup settings" />
       </div>
 
       {settingsOpen && (
-        <SettingsDrawer title="Ingest & Backup Settings" onClose={() => setSettingsOpen(false)}>
+        <SettingsDrawer title="Import & Backup Settings" onClose={() => setSettingsOpen(false)}>
           <ConfigPanel>{(cfg) => <BackupsPanel config={cfg} />}</ConfigPanel>
         </SettingsDrawer>
       )}

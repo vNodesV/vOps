@@ -273,11 +273,18 @@ export function AutoBanPanel({ config }: { config: ConfigSnapshot }) {
   const raw = typeof config.vops === 'string' ? config.vops : '';
   const t = parseTOML(raw);
 
+  // Support both ban_duration_seconds (new) and ban_duration_minutes (legacy migration)
+  const legacyMinutes = t['vops.intel.ban_duration_minutes'];
+  const defaultSeconds = legacyMinutes
+    ? String(Number(legacyMinutes) * 60)
+    : (t['vops.intel.ban_duration_seconds'] ?? '3600');
+
   const [fields, setFields] = useState({
-    auto_ban_enabled:     t['vops.intel.auto_ban_enabled']     ?? 'true',
-    auto_ban_threshold:   t['vops.intel.auto_ban_threshold']   ?? '5',
-    ban_duration_minutes: t['vops.intel.ban_duration_minutes'] ?? '60',
-    ban_whitelist:        t['vops.intel.ban_whitelist']        ?? '',
+    auto_ban_enabled:   t['vops.intel.auto_ban_enabled']   ?? 'true',
+    auto_ban_threshold: t['vops.intel.auto_ban_threshold'] ?? '5',
+    ban_duration_seconds: defaultSeconds,
+    ban_permanent:      t['vops.intel.ban_permanent']      ?? 'false',
+    ban_whitelist:      t['vops.intel.ban_whitelist']      ?? '',
   });
 
   const set = (k: keyof typeof fields) => (v: string) => setFields((f) => ({ ...f, [k]: v }));
@@ -297,19 +304,22 @@ export function AutoBanPanel({ config }: { config: ConfigSnapshot }) {
       // Auto-ban fields (overrides)
       auto_ban_enabled:     fields.auto_ban_enabled === 'true',
       auto_ban_threshold:   Number(fields.auto_ban_threshold)   || 5,
-      ban_duration_minutes: Number(fields.ban_duration_minutes) || 60,
+      ban_duration_seconds: Number(fields.ban_duration_seconds) || 3600,
+      ban_permanent:        fields.ban_permanent === 'true',
       ban_whitelist:        fields.ban_whitelist,
     }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['config'] }),
   });
 
   const DURATION_PRESETS = [
-    { label: '15m', value: '15' },
-    { label: '30m', value: '30' },
-    { label: '1h',  value: '60' },
-    { label: '6h',  value: '360' },
-    { label: '24h', value: '1440' },
+    { label: '30s', value: '30' },
+    { label: '1m',  value: '60' },
+    { label: '5m',  value: '300' },
+    { label: '30m', value: '1800' },
+    { label: '60m', value: '3600' },
   ];
+
+  const isPermanent = fields.ban_permanent === 'true';
 
   return (
     <SectionCard
@@ -358,35 +368,61 @@ export function AutoBanPanel({ config }: { config: ConfigSnapshot }) {
             className="vn-input w-full"
           />
           <p className="text-xs mt-0.5" style={{ color: 'var(--vn-text-subtle)' }}>
-            Number of rate-limit events before IP is banned (1–100)
+            Rate-limit events before ban (1–100)
           </p>
         </div>
 
-        {/* Ban Duration with quick-select presets */}
+        {/* Ban Duration */}
         <div>
-          <label className="block text-xs mb-0.5" style={{ color: 'var(--vn-text-muted)' }}>
-            Ban Duration (minutes)
-          </label>
+          <div className="flex items-center justify-between mb-0.5">
+            <label className="block text-xs" style={{ color: 'var(--vn-text-muted)' }}>
+              Ban Duration (seconds)
+            </label>
+            {/* Permanent toggle */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>Permanent</span>
+              <button
+                onClick={() => set('ban_permanent')(isPermanent ? 'false' : 'true')}
+                className="relative inline-flex h-4 w-7 items-center rounded-full transition-colors"
+                style={{
+                  backgroundColor: isPermanent ? 'var(--vn-danger)' : 'var(--vn-border)',
+                }}
+                role="switch"
+                aria-checked={isPermanent}
+                title={isPermanent ? 'Bans never auto-expire' : 'Bans auto-expire after duration'}
+              >
+                <span
+                  className="inline-block h-3 w-3 rounded-full transition-transform"
+                  style={{
+                    backgroundColor: 'white',
+                    transform: isPermanent ? 'translateX(14px)' : 'translateX(2px)',
+                  }}
+                />
+              </button>
+            </div>
+          </div>
           <input
             type="number"
             min={1}
-            value={fields.ban_duration_minutes}
-            onChange={(e) => set('ban_duration_minutes')(e.target.value)}
-            className="vn-input w-full"
+            value={fields.ban_duration_seconds}
+            onChange={(e) => set('ban_duration_seconds')(e.target.value)}
+            disabled={isPermanent}
+            className="vn-input w-full disabled:opacity-40"
           />
           <div className="flex gap-1 mt-1 flex-wrap">
             {DURATION_PRESETS.map((p) => (
               <button
                 key={p.value}
-                onClick={() => set('ban_duration_minutes')(p.value)}
-                className="text-xs px-2 py-0.5 rounded cursor-pointer transition-colors"
+                onClick={() => { set('ban_duration_seconds')(p.value); set('ban_permanent')('false'); }}
+                disabled={isPermanent}
+                className="text-xs px-2 py-0.5 rounded cursor-pointer transition-colors disabled:opacity-40"
                 style={{
                   backgroundColor:
-                    fields.ban_duration_minutes === p.value
+                    !isPermanent && fields.ban_duration_seconds === p.value
                       ? 'var(--vn-primary)'
                       : 'var(--vn-surface-2)',
                   color:
-                    fields.ban_duration_minutes === p.value
+                    !isPermanent && fields.ban_duration_seconds === p.value
                       ? 'var(--vn-on-primary)'
                       : 'var(--vn-text-muted)',
                   border: '1px solid var(--vn-border)',
@@ -396,6 +432,11 @@ export function AutoBanPanel({ config }: { config: ConfigSnapshot }) {
               </button>
             ))}
           </div>
+          {isPermanent && (
+            <p className="text-xs mt-1" style={{ color: 'var(--vn-danger)' }}>
+              ⚠ Bans never auto-expire — manual unban required
+            </p>
+          )}
         </div>
       </div>
 

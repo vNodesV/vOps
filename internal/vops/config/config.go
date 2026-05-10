@@ -120,9 +120,19 @@ type IntelConfig struct {
 	// Default: 5.
 	AutoBanThreshold int `toml:"auto_ban_threshold"`
 
-	// BanDurationMinutes is how long (minutes) an auto-ban stays in effect.
-	// Default: 60.
+	// BanDurationSeconds is how long (seconds) an auto-ban stays in effect.
+	// Default: 3600 (1 hour). If zero on load and BanDurationMinutes is set,
+	// the value is auto-migrated (BanDurationMinutes × 60).
+	BanDurationSeconds int `toml:"ban_duration_seconds"`
+
+	// BanDurationMinutes is kept for backwards-compatibility with older configs.
+	// When BanDurationSeconds is unset, this value is auto-migrated on load.
+	// Prefer ban_duration_seconds in new configs.
 	BanDurationMinutes int `toml:"ban_duration_minutes"`
+
+	// BanPermanent, when true, causes auto-bans to never auto-expire.
+	// The ban stays until manually removed via the UI or API.
+	BanPermanent bool `toml:"ban_permanent"`
 
 	// BanWhitelist is a list of IPs that will never be auto-banned regardless of
 	// how many rate-limit events they generate.
@@ -220,7 +230,7 @@ func DefaultConfig(home string) Config {
 				RateLimitRPM:       10,
 				AutoBanEnabled:     true,
 				AutoBanThreshold:   5,
-				BanDurationMinutes: 60,
+				BanDurationSeconds: 3600,
 			},
 			Server: ServerConfig{
 				ReadTimeoutSec:  30,
@@ -279,8 +289,13 @@ func Load(path string) (Config, error) {
 	if cfg.VOps.Intel.AutoBanThreshold <= 0 {
 		cfg.VOps.Intel.AutoBanThreshold = 5
 	}
-	if cfg.VOps.Intel.BanDurationMinutes <= 0 {
-		cfg.VOps.Intel.BanDurationMinutes = 60
+	// Migrate ban_duration_minutes → ban_duration_seconds for older configs.
+	if cfg.VOps.Intel.BanDurationSeconds == 0 && cfg.VOps.Intel.BanDurationMinutes > 0 {
+		cfg.VOps.Intel.BanDurationSeconds = cfg.VOps.Intel.BanDurationMinutes * 60
+	}
+	// Apply default when neither field was set and ban is not permanent.
+	if !cfg.VOps.Intel.BanPermanent && cfg.VOps.Intel.BanDurationSeconds <= 0 {
+		cfg.VOps.Intel.BanDurationSeconds = 3600
 	}
 	if cfg.VOps.Server.ReadTimeoutSec <= 0 {
 		cfg.VOps.Server.ReadTimeoutSec = 30

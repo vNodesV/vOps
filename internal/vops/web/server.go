@@ -492,15 +492,16 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		if threshold <= 0 {
 			threshold = defaultAutoBanThreshold
 		}
-		banDur := time.Duration(cfg.VOps.Intel.BanDurationMinutes) * time.Minute
-		if banDur <= 0 {
+		banDur := time.Duration(cfg.VOps.Intel.BanDurationSeconds) * time.Second
+		if banDur <= 0 && !cfg.VOps.Intel.BanPermanent {
 			banDur = defaultBanDuration
 		}
+		isPermanent := cfg.VOps.Intel.BanPermanent
 		go func() {
 			t := time.NewTicker(2 * time.Minute)
 			defer t.Stop()
 			for range t.C {
-				s.autoBanSweep(threshold, banDur)
+				s.autoBanSweep(threshold, banDur, isPermanent)
 			}
 		}()
 	}

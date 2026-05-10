@@ -406,7 +406,8 @@ build-vops: _frontend
 			rnd=$$(mktemp); \
 			sed "s|__HOME__|$(HOME)|g; s|__USER__|$(USER)|g; s|__VOPS_USER__|$(VOPS_USER)|g" "$$tpl" > "$$rnd"; \
 			if ! cmp -s "$$rnd" "$$sys"; then \
-				sudo cp "$$rnd" "$$sys"; echo "  ✓ $$svc updated (drifted from template)"; reload=1; \
+				sudo cp "$$sys" "$${sys}.bak.$$(date +%s)"; \
+				sudo cp "$$rnd" "$$sys"; echo "  ✓ $$svc updated (drifted from template; prior backed up as $${sys}.bak.*)"; reload=1; \
 			else \
 				echo "  ✓ $$svc up to date"; \
 			fi; \
