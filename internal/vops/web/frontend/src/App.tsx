@@ -24,6 +24,7 @@ import ProxyPage from './pages/proxy';
 import DebugPanel from './components/DebugPanel';
 import SettingsDrawer, { GearButton } from './components/SettingsDrawer';
 import { VOpsPanel, BackupsPanel, PreferencesPanel } from './pages/settings/SystemPanel';
+import GlobalProgressBar from './components/GlobalProgressBar';
 import Spinner from './components/Spinner';
 import { logout, getDebugMode, setDebugMode, getConfig, savePreferences } from './api';
 import { BASE } from './api/client';
@@ -121,6 +122,7 @@ function Shell({ children }: { children: React.ReactNode }) {
 
   return (
     <>
+      <GlobalProgressBar />
       <a className="skip-to-content" href="#main-content">Skip to main content</a>
 
       {/* ── Top nav ────────────────────────────────────────────── */}

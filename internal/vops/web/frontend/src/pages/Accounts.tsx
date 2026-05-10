@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { getAccounts, syncUFW, blockIP, unblockIP } from '../api';
 import type { IPAccount } from '../api/types';
 import Badge from '../components/Badge';
@@ -243,7 +243,7 @@ export default function AccountsPage() {
 
   // Fetch accounts
   const offset = (page - 1) * (limit || 0);
-  const { data: accounts, isLoading, isError, error } = useQuery({
+  const { data: accounts, isLoading, isFetching, isError, error } = useQuery({
     queryKey: ['accounts', { limit: limit || 10000, offset, search, sort, dir }],
     queryFn: () =>
       getAccounts({
@@ -253,6 +253,7 @@ export default function AccountsPage() {
         sort,
         dir,
       }),
+    placeholderData: keepPreviousData,
   });
 
   // UFW sync mutation
@@ -393,7 +394,7 @@ export default function AccountsPage() {
         </div>
       ) : (
         <>
-          <div className="card card-flush overflow-x-auto rounded-lg">
+          <div className="card card-flush overflow-x-auto rounded-lg" style={isFetching && !isLoading ? { opacity: 0.6, transition: 'opacity 0.2s' } : undefined}>
             <table className="vn-table w-full text-sm">
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--vn-border)' }}>

@@ -204,6 +204,23 @@ code {
 ::-webkit-scrollbar-track { background: var(--vn-bg); }
 ::-webkit-scrollbar-thumb { background: var(--vn-border); border-radius: 3px; }
 
+/* ═══ GLOBAL PROGRESS BAR ════════════════════════════════════════ */
+@keyframes progress-shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+.global-progress-bar {
+  position: fixed; top: 0; left: 0; right: 0; height: 3px;
+  z-index: 9999; pointer-events: none;
+  background: color-mix(in srgb, var(--vn-primary) 20%, transparent);
+}
+.global-progress-bar__fill {
+  height: 100%; width: 25%; border-radius: 0 2px 2px 0;
+  background: var(--vn-primary);
+  box-shadow: 0 0 6px var(--vn-primary);
+  animation: progress-shimmer 1.4s ease-in-out infinite;
+}
+
 /* ═══ PAGE NAV ═══════════════════════════════════════════════════ */
 .page-nav {
   border-bottom: 1px solid var(--vn-green-border);
