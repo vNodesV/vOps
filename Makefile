@@ -78,9 +78,10 @@ EFFECTIVE_GOROOT  := $(if $(_TOOLCHAIN_GOROOT),$(_TOOLCHAIN_GOROOT),$(GOROOT))
 
 # Public targets only — internal helpers (_dirs, _geo, config-*, _env, _frontend, …) are intentionally
 # excluded from .PHONY so they don't pollute tab-completion.
-.PHONY: all help install build build-vops release-vops \
+.PHONY: all help install build build-vops build-vops-reset release-vops \
         clean ufw reset-services service-vops service-vprox system-user-vops \
-        bump-patch bump-minor bump-major toml-upgrade upgrade-1.2.1-1.4.4
+        bump-patch bump-minor bump-major toml-upgrade upgrade-1.2.1-1.4.4 \
+        _config-reset
 
 all: help
 
@@ -92,7 +93,8 @@ help:
 	@echo ""
 	@echo "  make install          Build + install vOps: binary, config, service"
 	@echo "  make build            Build vOps binary → .build/vOps"
-	@echo "  make build-vops       Build vOps binary → .build/vOps (rebuilds frontend if Node available)"
+	@echo "  make build-vops       Build vOps binary + sync service files (⚠ never touches config files)"
+	@echo "  make build-vops-reset Build vOps binary + reset config files from samples (backs up first)"
 	@echo "  make service-vops     Render + optionally install vOps.service from template"
 	@echo "  make service-vprox    Render + optionally install vProx.service from template"
 	@echo "  make reset-services   Stop + remove stale service units (vProx, vLog) before fresh deploy"
@@ -381,6 +383,9 @@ _frontend:
 		echo "✓ Frontend built → internal/vops/web/dist/"; \
 	fi
 
+## Build vOps binary (frontend + Go compile, service sync).
+## ⚠ NEVER touches any config TOML files — existing configs are always preserved.
+## Use make build-vops-reset to also reset configs to sample defaults.
 build-vops: _frontend
 	@echo "Building $(VOPS_NAME) (service keeps running during compile)..."
 	mkdir -p "$(BUILD_DIR)"
@@ -422,6 +427,35 @@ build-vops: _frontend
 	fi
 	@echo "Restarting $(VOPS_NAME) service..."
 	@sudo systemctl start "$(VOPS_NAME)" 2>/dev/null && echo "  ✓ $(VOPS_NAME) started" || echo "  ○ Could not start $(VOPS_NAME) — start manually: sudo service $(VOPS_NAME) start"
+
+## Reset all config TOML files from samples — backs up existing files first.
+## ⚠ DESTRUCTIVE: overwrites live config values. Use to restore defaults.
+## Called automatically by build-vops-reset.
+_config-reset: _dirs
+	@echo "── Resetting config from samples ────────────────────────────────────────"
+	@_ts="$$(date +%s)"; \
+	_reset() { \
+		local src="$$1" dst="$$2"; \
+		if [[ -f "$$dst" ]]; then \
+			cp "$$dst" "$${dst%.toml}.bak.$$_ts"; \
+			echo "  ↳ backed up → $${dst%.toml}.bak.$$_ts"; \
+		fi; \
+		if [[ -f "$$src" ]]; then \
+			sed "s/{{SAMPLE_REV}}/$(SAMPLE_REV)/" "$$src" > "$$dst"; \
+			echo "  ✓ reset → $$dst"; \
+		else \
+			echo "  ⚠ sample not found: $$src — skipped"; \
+		fi; \
+	}; \
+	_reset ".samples/vops/vops.sample"         "$(CFG_DIR)/vops/vops.toml"; \
+	_reset ".samples/vprox/settings.sample"    "$(CFG_DIR)/vprox/settings.toml"; \
+	_reset ".samples/backup/backup.sample"     "$(CFG_DIR)/backup/backup.toml"; \
+	_reset ".samples/chains/services.sample"   "$(CFG_DIR)/chains/services.toml"
+	@echo "✓ Config reset complete — edit restored files to reconfigure"
+
+## Build vOps binary AND reset all config files from samples (⚠ overwrites live config).
+## Backs up each existing TOML before overwriting. Use when intentionally starting fresh.
+build-vops-reset: _config-reset build-vops
 
 ## Stop, disable, and remove stale vProx/vLog service units before fresh vOps deploy.
 ## vOps.service is only stopped+disabled — the unit file is NOT removed (reinstall with make service-vops).
