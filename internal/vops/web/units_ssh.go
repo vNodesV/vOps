@@ -163,6 +163,16 @@ func (s *Server) handleUnitDeploy(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&req)
 	}
 
+	// Copy the sudo password into a mutable byte slice so we can zero it after
+	// the SSH runner is set up, limiting its time in memory.
+	sudoPass := []byte(req.SudoPassword)
+	req.SudoPassword = ""
+	defer func() {
+		for i := range sudoPass {
+			sudoPass[i] = 0
+		}
+	}()
+
 	// Look up unit details.
 	row := s.db.DB.QueryRow(
 		`SELECT vm_name, service_name, cosmovisor_path FROM units WHERE name = ?`, name)
@@ -234,8 +244,8 @@ func (s *Server) handleUnitDeploy(w http.ResponseWriter, r *http.Request) {
 	sendEvent("connected", fmt.Sprintf("Connected to %s", vmName))
 
 	runSudo := func(cmd string) (string, error) {
-		if req.SudoPassword != "" {
-			return client.RunInput("sudo -S "+cmd, req.SudoPassword+"\n")
+		if len(sudoPass) > 0 {
+			return client.RunInput("sudo -S "+cmd, string(sudoPass)+"\n")
 		}
 		return client.Run("sudo -n " + cmd)
 	}

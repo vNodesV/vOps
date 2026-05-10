@@ -208,7 +208,6 @@ base_path = "  /vops/  "
 
 func TestLoadAPIKeys(t *testing.T) {
 	toml := `[vops]
-api_key = "test-api-key"
 
 [vops.intel.keys]
 virustotal = "vt-key"
@@ -222,9 +221,6 @@ shodan = "shodan-key"
 	cfg, err := config.Load(f)
 	if err != nil {
 		t.Fatal(err)
-	}
-	if cfg.VOps.APIKey != "test-api-key" {
-		t.Errorf("APIKey = %q", cfg.VOps.APIKey)
 	}
 	if cfg.VOps.Intel.Keys.VirusTotal != "vt-key" {
 		t.Errorf("VirusTotal key = %q", cfg.VOps.Intel.Keys.VirusTotal)

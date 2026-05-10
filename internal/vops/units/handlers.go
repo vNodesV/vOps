@@ -7,9 +7,28 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 )
+
+// safeCosmosPath validates an absolute Unix path for cosmovisor_path.
+// Permits only printable path characters; blocks shell metacharacters, spaces,
+// and dot-dot traversal to prevent command injection via fmt.Sprintf'd SSH commands.
+var safeCosmosPath = regexp.MustCompile(`^[a-zA-Z0-9/._~-]{1,255}$`)
+
+func validCosmovisorPath(p string) bool {
+	if p == "" {
+		return true // empty is fine — deploy handler applies a safe default
+	}
+	if !strings.HasPrefix(p, "/") && !strings.HasPrefix(p, "~/") {
+		return false // must be an absolute or home-relative path
+	}
+	if strings.Contains(p, "..") {
+		return false
+	}
+	return safeCosmosPath.MatchString(p)
+}
 
 // Handlers provides CRUD operations for the units registry.
 type Handlers struct {
@@ -186,6 +205,10 @@ func (h *Handlers) HandleCreate(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name is required"})
 		return
 	}
+	if !validCosmovisorPath(u.CosmovisorPath) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cosmovisor_path contains invalid characters"})
+		return
+	}
 	if u.NodeType == "" {
 		u.NodeType = "node"
 	}
@@ -240,6 +263,10 @@ func (h *Handlers) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 	var u Unit
 	if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		return
+	}
+	if !validCosmovisorPath(u.CosmovisorPath) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cosmovisor_path contains invalid characters"})
 		return
 	}
 	cosmovisorEnabled := 0

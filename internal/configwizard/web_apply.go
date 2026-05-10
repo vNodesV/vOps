@@ -597,7 +597,6 @@ func applyVOps(home string, f map[string]any) error {
 	v.ArchivesDir = fieldStr(f, "archives_dir", "")
 	v.VProxBin = fieldStr(f, "vprox_bin", "vprox")
 
-	v.APIKey = preserveRedactedStringFieldWithImport(f, "api_key", existing.VOps.APIKey, importedSecrets["api_key"])
 	v.Auth.PasswordHash = preserveRedactedStringFieldWithImport(f, "password_hash", existing.VOps.Auth.PasswordHash, importedSecrets["password_hash"])
 	v.Intel.Keys.AbuseIPDB = preserveRedactedStringFieldWithImport(f, "abuseipdb", existing.VOps.Intel.Keys.AbuseIPDB, importedSecrets["abuseipdb"])
 	v.Intel.Keys.VirusTotal = preserveRedactedStringFieldWithImport(f, "virustotal", existing.VOps.Intel.Keys.VirusTotal, importedSecrets["virustotal"])
@@ -840,7 +839,6 @@ func loadImportedVOpsSecrets(sourcePath string) (map[string]string, error) {
 		return nil, fmt.Errorf("parse imported vops TOML: %w", err)
 	}
 	v := cfg.VOps
-	secrets["api_key"] = strings.TrimSpace(v.APIKey)
 	secrets["password_hash"] = strings.TrimSpace(v.Auth.PasswordHash)
 	secrets["abuseipdb"] = strings.TrimSpace(v.Intel.Keys.AbuseIPDB)
 	secrets["virustotal"] = strings.TrimSpace(v.Intel.Keys.VirusTotal)

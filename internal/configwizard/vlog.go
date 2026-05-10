@@ -31,10 +31,6 @@ func runVOps(home string) error {
 	}
 	v.BindAddress = readIP("bind_address", defBind, true)
 	v.BasePath = readString("base_path (URL prefix, e.g. /vops)", ex.VOps.BasePath, false)
-	v.APIKey = readString("api_key (shared secret for /block,/unblock; empty=disabled)", ex.VOps.APIKey, false)
-	if v.APIKey == "" {
-		fmt.Println("  ⚠  api_key is empty — block/unblock endpoints will be disabled")
-	}
 
 	section("Group B — Auth")
 	v.Auth.Username = readString("auth.username", stringDefault(ex.VOps.Auth.Username, "admin"), true)

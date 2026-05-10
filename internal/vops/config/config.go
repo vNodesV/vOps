@@ -51,10 +51,6 @@ type VOpsSection struct {
 	// Leave empty (default) when served at the root path.
 	BasePath string `toml:"base_path"`
 
-	// APIKey is a shared secret required for mutating API endpoints (block/unblock).
-	// If empty, mutating endpoints are disabled. Set via vops.toml [vops] api_key.
-	APIKey string `toml:"api_key"`
-
 	// DBPath is the path to the SQLite database file.
 	// Default: $VPROX_HOME/data/vops.db
 	DBPath string `toml:"db_path"`

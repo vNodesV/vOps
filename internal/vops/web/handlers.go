@@ -1050,6 +1050,14 @@ func (s *Server) handleLoginSubmit(w http.ResponseWriter, r *http.Request) {
 	if tcpIP == "127.0.0.1" || tcpIP == "::1" {
 		if xrip := strings.TrimSpace(r.Header.Get("X-Real-IP")); xrip != "" {
 			clientIP = xrip
+		} else if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			// Take the leftmost address only — the one the first-hop proxy recorded.
+			// Subsequent hops are client-controlled and must not be trusted.
+			if first, _, found := strings.Cut(xff, ","); found {
+				clientIP = strings.TrimSpace(first)
+			} else {
+				clientIP = strings.TrimSpace(xff)
+			}
 		}
 	}
 
@@ -1083,6 +1091,11 @@ func (s *Server) handleLoginSubmit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
+	csrfTok, err := newCSRFToken()
+	if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
 	_ = db.InsertAuditLog(s.db.DB, db.AuditEntry{
 		Actor:      username,
 		Action:     "auth.login.ok",
@@ -1100,6 +1113,7 @@ func (s *Server) handleLoginSubmit(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   86400, // 24h
 	})
+	setCSRFCookie(w, csrfTok)
 	http.Redirect(w, r, s.cfg.VOps.BasePath+"/", http.StatusFound)
 }
 
@@ -1117,5 +1131,6 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   -1,
 	})
+	clearCSRFCookie(w)
 	http.Redirect(w, r, s.cfg.VOps.BasePath+"/login", http.StatusFound)
 }

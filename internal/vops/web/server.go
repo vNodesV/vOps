@@ -9,9 +9,7 @@ package web
 import (
 	"bytes"
 	"context"
-	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha256"
 	"embed"
 	"encoding/hex"
 	"encoding/json"
@@ -73,7 +71,6 @@ type Server struct {
 	sessions     map[string]time.Time // token → expiry
 	sessionUsers map[string]string    // token → authenticated username
 	sessionMu    sync.RWMutex
-	sessionKey   []byte // 32-byte HMAC key, generated at startup
 
 	// Brute-force protection: per-IP failed login tracking.
 	loginMu       sync.Mutex
@@ -110,12 +107,6 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		return nil, fmt.Errorf("web: embed dist sub: %w", err)
 	}
 
-	// Generate session HMAC key.
-	sessionKey := make([]byte, 32)
-	if _, err := rand.Read(sessionKey); err != nil {
-		return nil, fmt.Errorf("web: generate session key: %w", err)
-	}
-
 	s := &Server{
 		db:            d,
 		enricher:      enricher,
@@ -128,7 +119,6 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		buildDate:     appBuildDate,
 		sessions:      make(map[string]time.Time),
 		sessionUsers:  make(map[string]string),
-		sessionKey:    sessionKey,
 		loginAttempts: make(map[string]*loginAttempt),
 		debug:         &DebugRing{},
 	}
@@ -492,7 +482,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 
 	s.httpSrv = &http.Server{
 		Addr:         fmt.Sprintf("%s:%d", cfg.VOps.BindAddress, cfg.VOps.Port),
-		Handler:      s.debugHTTPMiddleware(withRequestID(securityHeaders(mux))),
+		Handler:      s.debugHTTPMiddleware(withRequestID(securityHeaders(withCSRF(mux)))),
 		ReadTimeout:  readTimeout,
 		WriteTimeout: writeTimeout,
 	}
@@ -584,15 +574,13 @@ func (s *Server) requireSession(next http.Handler) http.Handler {
 	})
 }
 
-// newSession creates a new HMAC-signed session token with 24h TTL for username.
+// newSession creates a new opaque session token (32 bytes of entropy) with 24h TTL for username.
 func (s *Server) newSession(username string) (string, error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
 		return "", fmt.Errorf("web: newSession rand: %w", err)
 	}
-	mac := hmac.New(sha256.New, s.sessionKey)
-	mac.Write(raw)
-	token := hex.EncodeToString(raw) + "." + hex.EncodeToString(mac.Sum(nil))
+	token := hex.EncodeToString(raw)
 	s.sessionMu.Lock()
 	s.sessions[token] = time.Now().Add(24 * time.Hour)
 	s.sessionUsers[token] = username
@@ -768,25 +756,6 @@ func (s *Server) clearLoginAttempts(clientIP string) {
 	s.loginMu.Unlock()
 }
 
-// requireAPIKey is middleware that enforces API key authentication.
-// The key must be provided via the X-API-Key request header.
-// If the server's configured APIKey is empty, all requests are rejected (key not configured).
-//
-//nolint:unused // middleware registered dynamically in future auth expansion
-func (s *Server) requireAPIKey(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.cfg.VOps.APIKey == "" {
-			http.Error(w, "unauthorized: api_key not configured in vops.toml", http.StatusUnauthorized)
-			return
-		}
-		if r.Header.Get("X-API-Key") != s.cfg.VOps.APIKey {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
 // withRequestID ensures every request carries a correlation ID in both the
 // incoming request header (X-Request-ID) and the outgoing response header.
 // If the upstream reverse proxy forwards an existing ID it is reused; otherwise
@@ -810,7 +779,7 @@ func securityHeaders(next http.Handler) http.Handler {
 		h.Set("Content-Security-Policy",
 			"default-src 'self';"+
 				" script-src 'self';"+
-				" style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;"+
+				" style-src 'self' https://fonts.googleapis.com;"+
 				" img-src 'self' data:;"+
 				" connect-src 'self' https://cosmos.directory;"+
 				" font-src 'self' https://fonts.gstatic.com;")

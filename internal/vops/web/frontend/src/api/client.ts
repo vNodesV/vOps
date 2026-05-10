@@ -23,6 +23,16 @@ function detectBase(): string {
 
 export const BASE = detectBase();
 
+// Read the csrf_token cookie set by the server after login.
+// The double-submit pattern requires echoing this value in X-CSRF-Token for
+// all state-changing requests.
+function getCSRFToken(): string {
+  const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/);
+  return match?.[1] ?? '';
+}
+
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
 export class APIError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -35,9 +45,14 @@ export async function apiFetch<T>(
   path: string,
   options?: RequestInit,
 ): Promise<T> {
+  const method = (options?.method ?? 'GET').toUpperCase();
+  const csrfHeaders: Record<string, string> = SAFE_METHODS.has(method)
+    ? {}
+    : { 'X-CSRF-Token': getCSRFToken() };
+
   const res = await fetch(BASE + path, {
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    headers: { 'Content-Type': 'application/json', ...csrfHeaders, ...options?.headers },
     ...options,
   });
   if (res.status === 302 || res.redirected) {

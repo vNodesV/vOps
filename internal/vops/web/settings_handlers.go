@@ -388,16 +388,13 @@ func (s *Server) handleAPISettingsPreferences(w http.ResponseWriter, r *http.Req
 	s.cfg.VOps.UI.Theme = req.Theme
 
 	// Set a cookie for flash-free theme on page reload.
-	// Secure is only set when the connection is already over TLS; on plain HTTP
-	// (local dev / internal network) the flag would cause browsers to silently
-	// drop the cookie and break theme persistence.
 	http.SetCookie(w, &http.Cookie{
 		Name:     "vops_theme",
 		Value:    req.Theme,
 		Path:     "/",
 		SameSite: http.SameSiteStrictMode,
 		HttpOnly: true,
-		Secure:   r.TLS != nil,
+		Secure:   true,
 	})
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "theme": req.Theme})

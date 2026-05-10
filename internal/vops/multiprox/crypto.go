@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 )
@@ -64,7 +65,9 @@ func decryptAPIKey(key [32]byte, ciphertext string) (string, error) {
 	nonce, ct := raw[:nonceSize], raw[nonceSize:]
 	plain, err := gcm.Open(nil, nonce, ct, nil)
 	if err != nil {
-		// Decryption failed → treat as legacy plaintext.
+		// Decryption failed — ciphertext may be from a different key or corrupted.
+		// Log a warning and return the raw ciphertext as a legacy-plaintext fallback.
+		log.Printf("WRN multiprox/crypto: GCM decryption failed, falling back to plaintext: %v", err)
 		return ciphertext, nil
 	}
 	return string(plain), nil
