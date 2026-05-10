@@ -717,7 +717,7 @@ func (h *Handlers) HandleInstallGuestAgent(w http.ResponseWriter, r *http.Reques
 	sendEvent("connected", fmt.Sprintf("Connected to %s (%s)", domainName, dialAddr))
 
 	sendEvent("step", "Running apt update...")
-	if err := client.RunStream("apt update -y 2>&1", "", func(line string) {
+	if err := client.RunStream("sudo apt update -y 2>&1", "", func(line string) {
 		sendEvent("log", strings.TrimRight(line, "\r\n"))
 	}); err != nil {
 		sendEvent("error", fmt.Sprintf("apt update: %v", err))
@@ -725,13 +725,13 @@ func (h *Handlers) HandleInstallGuestAgent(w http.ResponseWriter, r *http.Reques
 	}
 
 	sendEvent("step", "Installing qemu-guest-agent...")
-	if err := client.RunStream("apt install -y qemu-guest-agent 2>&1", "", func(line string) {
+	if err := client.RunStream("sudo apt install -y qemu-guest-agent 2>&1", "", func(line string) {
 		sendEvent("log", strings.TrimRight(line, "\r\n"))
 	}); err != nil {
 		sendEvent("error", fmt.Sprintf("apt install: %v", err))
 		return
 	}
 
-	_, _ = client.Run("systemctl enable qemu-guest-agent && systemctl start qemu-guest-agent 2>&1")
+	_, _ = client.Run("sudo systemctl enable qemu-guest-agent && sudo systemctl start qemu-guest-agent 2>&1")
 	sendEvent("done", "qemu-guest-agent installed and started successfully.")
 }

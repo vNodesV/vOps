@@ -611,6 +611,7 @@ func (h *Handlers) HandleVMHistory(w http.ResponseWriter, r *http.Request) {
 
 type vmView struct {
 	Name       string `json:"name"`
+	HostRef    string `json:"host_ref"`
 	Host       string `json:"host"`
 	Datacenter string `json:"datacenter"`
 	Type       string `json:"type"`
@@ -621,7 +622,7 @@ func (h *Handlers) HandleVMs(w http.ResponseWriter, r *http.Request) {
 	vms := h.svc.VMs()
 	out := make([]vmView, 0, len(vms))
 	for _, vm := range vms {
-		out = append(out, vmView{Name: vm.Name, Host: vm.Host, Datacenter: vm.Datacenter, Type: vm.Type})
+		out = append(out, vmView{Name: vm.Name, HostRef: vm.HostRef, Host: vm.Host, Datacenter: vm.Datacenter, Type: vm.Type})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"vms": out})
 }

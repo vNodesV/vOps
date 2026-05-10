@@ -26,7 +26,7 @@ export const BASE = detectBase();
 // Read the csrf_token cookie set by the server after login.
 // The double-submit pattern requires echoing this value in X-CSRF-Token for
 // all state-changing requests.
-function getCSRFToken(): string {
+export function getCSRFToken(): string {
   const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/);
   return match?.[1] ?? '';
 }

@@ -7,6 +7,7 @@ import Spinner from '../components/Spinner';
 /* ── types ────────────────────────────────────────────────────── */
 interface VMView {
   name: string;
+  host_ref?: string;
   host?: string;
   host_name?: string;
   state?: string;
@@ -64,7 +65,7 @@ export default function TopologyPage() {
   // Group VMs by datacenter/host.
   const vmsByHost: Record<string, VMView[]> = {};
   for (const vm of vms) {
-    const key = vm.host_name ?? vm.host ?? vm.datacenter ?? 'unknown';
+    const key = vm.host_ref ?? vm.host_name ?? vm.host ?? vm.datacenter ?? 'unknown';
     (vmsByHost[key] ??= []).push(vm);
   }
 
@@ -114,7 +115,7 @@ export default function TopologyPage() {
 
           {dcs.map(dc => {
             const dcHosts = hostsByDC[dc];
-            const dcVMs = vms.filter(v => (v.datacenter ?? 'Unknown DC') === dc && !dcHosts.find(h => h.name === (v.host_name ?? v.host)));
+            const dcVMs = vms.filter(v => (v.datacenter ?? 'Unknown DC') === dc && !dcHosts.find(h => h.name === (v.host_ref ?? v.host_name ?? v.host)));
             return (
               <div key={dc} className="card card-sm" style={{ borderLeft: '3px solid var(--vn-primary)', marginBottom: '1rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>

@@ -1,3 +1,5 @@
+import { getCSRFToken } from './client';
+
 export interface SSEMessage {
   event?: string;
   data: string;
@@ -19,6 +21,7 @@ export function openSSEStream(
     headers: {
       'Accept': 'text/event-stream',
       ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      ...(method !== 'GET' ? { 'X-CSRF-Token': getCSRFToken() } : {}),
     },
     signal: controller.signal,
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
