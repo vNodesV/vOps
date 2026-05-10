@@ -391,15 +391,11 @@ export const getProxyConfig = () =>
   });
 
 export const saveProxyConfig = (toml: string) =>
-  fetch(
-    (document.querySelector<HTMLMetaElement>('meta[name="vops-base"]')?.content ?? '').replace(/\/$/, '') +
-      '/api/v1/proxy/config',
-    {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'text/plain' },
-      body: toml,
-    },
-  ).then((r) => {
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  apiFetch<{ ok: boolean }>('/api/v1/proxy/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: toml,
   });
+
+export const savePreferences = (prefs: Record<string, unknown>) =>
+  apiPost<{ ok: boolean }>('/settings/api/config/preferences', prefs);

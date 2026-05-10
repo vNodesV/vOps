@@ -25,7 +25,7 @@ import DebugPanel from './components/DebugPanel';
 import SettingsDrawer, { GearButton } from './components/SettingsDrawer';
 import { VOpsPanel, BackupsPanel, PreferencesPanel } from './pages/settings/SystemPanel';
 import Spinner from './components/Spinner';
-import { logout, getDebugMode, setDebugMode, getConfig } from './api';
+import { logout, getDebugMode, setDebugMode, getConfig, savePreferences } from './api';
 import { BASE } from './api/client';
 import { applyTheme, THEMES } from './lib/theme';
 
@@ -91,12 +91,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   const handleThemeChange = (id: string) => {
     setCurrentTheme(id);
     applyTheme(id);
-    fetch(BASE + '/settings/api/config/preferences', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ theme: id }),
-      credentials: 'include',
-    }).catch(() => {});
+    savePreferences({ theme: id }).catch(() => {});
   };
 
   const toggleDebug = async () => {
