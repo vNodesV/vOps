@@ -18,6 +18,16 @@ const COLOR_MAP: Record<string, { bg: string; text: string; label: string }> = {
     text: 'var(--vn-on-primary)',
     label: 'Flagged',
   },
+  online: {
+    bg: 'var(--vn-success)',
+    text: 'var(--vn-on-primary)',
+    label: 'Online',
+  },
+  offline: {
+    bg: 'var(--vn-danger)',
+    text: 'var(--vn-on-primary)',
+    label: 'Offline',
+  },
   synced: {
     bg: 'var(--vn-success)',
     text: 'var(--vn-on-primary)',
