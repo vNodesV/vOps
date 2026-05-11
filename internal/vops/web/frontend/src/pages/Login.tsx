@@ -155,7 +155,7 @@ export default function LoginPage() {
               userSelect: 'none',
             }}
           >
-            ▓▒░ vNODES.V ░▒▓
+            ▓▒░ vNodes[V] ░▒▓
           </div>
           <h1
             style={{
@@ -180,7 +180,7 @@ export default function LoginPage() {
               letterSpacing: '0.05em',
             }}
           >
-            PROXY &amp; ACCESS INTELLIGENCE
+            ACCESS INTELLIGENCE &amp; OPERATIONS
             <span style={{ color: 'var(--vn-primary)', opacity: cursor ? 1 : 0 }}>_</span>
           </p>
         </div>
@@ -260,7 +260,7 @@ export default function LoginPage() {
             disabled={loading || !username || !password}
             className="btn btn-primary w-full flex items-center justify-center gap-2 btn-vn-primary
                        disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{ fontFamily: 'var(--font-mono, monospace)', letterSpacing: '0.1em' }}
+            style={{ fontFamily: 'var(--font-mono, monospace)', letterSpacing: '0.1em', color: 'var(--vn-primary)' }}
           >
             {loading ? (
               <>
