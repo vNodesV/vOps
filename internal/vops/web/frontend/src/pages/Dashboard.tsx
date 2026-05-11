@@ -459,8 +459,7 @@ function SummaryBoxes() {
 
 
 
-function FleetTable() {
-  const nav = useNavigate();
+function FleetTable({ onChainClick }: { onChainClick: (chain: string, units: CosmosUnitWithStatus[]) => void }) {
   const { data, isLoading } = useQuery({
     queryKey: ['units'],
     queryFn: getUnits,
@@ -519,8 +518,8 @@ function FleetTable() {
               <tr
                 key={chain}
                 style={{ cursor: 'pointer' }}
-                onClick={() => nav('/settings')}
-                title={`View ${chain} services in Settings`}
+                onClick={() => onChainClick(chain, chainUnits)}
+                title={`View ${chain} service details`}
               >
                 <td className="px-3 py-2 font-medium whitespace-nowrap">
                   {chain}
@@ -640,8 +639,7 @@ function HistorySparkline({ vmName }: { vmName: string }) {
   );
 }
 
-function ServersPanel() {
-  const navigate = useNavigate();
+function ServersPanel({ onVMClick }: { onVMClick: (vm: VMStatus) => void }) {
   const [upgradeTarget, setUpgradeTarget] = useState<VMStatus | null>(null);
 
   const { data, isLoading, isError } = useQuery({
@@ -719,8 +717,8 @@ function ServersPanel() {
                   <tr
                     key={vm.name}
                     style={{ cursor: 'pointer' }}
-                    onClick={() => navigate(`/ops?focus=${encodeURIComponent(vm.name)}`)}
-                    title={`Open ${vm.name} in OpsCenter`}
+                    onClick={() => onVMClick(vm)}
+                    title={`View ${vm.name} details`}
                   >
                     <td className="px-3 py-2">
                       <div className="font-medium text-xs">{vm.name}</div>
@@ -883,6 +881,180 @@ function IngestBar() {
 }
 
 
+/* ── Chain Detail Drawer ─────────────────────────────────────── */
+
+function ChainDetailDrawer({
+  chain, units, onClose,
+}: {
+  chain: string;
+  units: CosmosUnitWithStatus[];
+  onClose: () => void;
+}) {
+  return (
+    <SettingsDrawer title={`Chain: ${chain}`} onClose={onClose}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        {units[0] && (
+          <p className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>
+            {units[0].chain_id}
+            {units[0].network_type ? ` · ${units[0].network_type}` : ''}
+          </p>
+        )}
+        <div className="card card-flush overflow-x-auto">
+          <table className="vn-table">
+            <thead>
+              <tr>
+                {['Node', 'Type', 'Status', 'Height', 'Peers', 'Gov', 'Updated'].map(h => (
+                  <th key={h} scope="col">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {units.map((u) => (
+                <tr key={u.id}>
+                  <td className="px-3 py-2 text-xs font-medium whitespace-nowrap">
+                    {u.name}
+                    {u.vm_name && (
+                      <span style={{ color: 'var(--vn-text-subtle)', marginLeft: '0.25rem' }}>@{u.vm_name}</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-xs" style={{ color: 'var(--vn-text-muted)' }}>
+                    {u.node_type}
+                  </td>
+                  <td className="px-3 py-2">
+                    {u.status ? (
+                      u.status.service_active
+                        ? <Badge status={u.status.syncing ? 'syncing' : 'synced'} />
+                        : <Badge status="down" />
+                    ) : (
+                      <span style={{ color: 'var(--vn-text-subtle)', fontSize: '0.7rem' }}>unknown</span>
+                    )}
+                    {u.status?.error && (
+                      <span className="ml-1 text-xs" style={{ color: 'var(--vn-danger)' }} title={u.status.error}>⚠</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-xs tabular-nums">
+                    {(u.status?.block_height ?? 0) > 0
+                      ? (u.status?.block_height ?? 0).toLocaleString()
+                      : '\u2014'}
+                  </td>
+                  <td className="px-3 py-2 text-xs tabular-nums" style={{ color: 'var(--vn-text-muted)' }}>
+                    {(u.status?.peers ?? 0) > 0 ? (u.status?.peers ?? 0) : '\u2014'}
+                  </td>
+                  <td className="px-3 py-2 text-xs">
+                    {(u.status?.gov_pending ?? 0) > 0 ? (
+                      <span style={{ color: 'var(--vn-warning)', fontWeight: 600 }}>
+                        {u.status?.gov_pending}
+                      </span>
+                    ) : (
+                      <span style={{ color: 'var(--vn-text-subtle)' }}>{'\u2014'}</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-xs whitespace-nowrap" style={{ color: 'var(--vn-text-subtle)' }}>
+                    {u.status?.polled_at ? fmtRelative(u.status.polled_at) : '\u2014'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {units.filter(u => (u.status?.upgrade_height ?? 0) > 0).map(u => (
+          <div key={u.id} className="alert" style={{ fontSize: '0.78rem' }}>
+            ⬆ {u.name}: {u.status?.upgrade_name ?? 'upgrade'} @ block {u.status?.upgrade_height?.toLocaleString()}
+          </div>
+        ))}
+      </div>
+    </SettingsDrawer>
+  );
+}
+
+/* ── VM Detail Drawer ────────────────────────────────────────── */
+
+function VMDetailDrawer({
+  vm, onClose,
+}: {
+  vm: VMStatus;
+  onClose: () => void;
+}) {
+  const navigate = useNavigate();
+  return (
+    <SettingsDrawer title={vm.name} onClose={onClose}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+          <Badge status={vm.online ? 'online' : 'offline'} />
+          {vm.datacenter && (
+            <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>{vm.datacenter}</span>
+          )}
+          {vm.lan_ip && (
+            <code className="text-xs" style={{ color: 'var(--vn-text-subtle)', fontFamily: 'monospace' }}>{vm.lan_ip}</code>
+          )}
+          {vm.os && (
+            <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>{vm.os}</span>
+          )}
+        </div>
+        {vm.online ? (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '0.5rem 1rem', alignItems: 'center' }}>
+              <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>CPU</span>
+              <MetricBar value={vm.cpu_pct} />
+              <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>Memory</span>
+              <MetricBar value={vm.mem_pct} />
+              <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>Disk</span>
+              <MetricBar value={vm.storage_pct} warn={75} danger={90} />
+              {vm.load_avg && (
+                <>
+                  <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>Load avg</span>
+                  <span className="text-xs tabular-nums" style={{ color: 'var(--vn-text)' }}>{vm.load_avg}</span>
+                </>
+              )}
+            </div>
+            <div>
+              <span className="text-xs" style={{ color: 'var(--vn-text-muted)', display: 'block', marginBottom: '0.25rem' }}>6h History</span>
+              <HistorySparkline vmName={vm.name} />
+            </div>
+            {vm.apt_count > 0 && (
+              <div style={{
+                padding: '0.5rem 0.75rem',
+                border: '1px solid var(--vn-warning)',
+                borderRadius: 'var(--vn-radius)',
+                background: 'color-mix(in srgb, var(--vn-warning) 8%, transparent)',
+              }}>
+                <span className="text-xs" style={{ color: 'var(--vn-warning)', fontWeight: 600 }}>
+                  {vm.apt_count} pending update{vm.apt_count !== 1 ? 's' : ''}
+                </span>
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="text-sm" style={{ color: 'var(--vn-text-muted)' }}>Server is offline.</p>
+        )}
+        {vm.error && (
+          <div style={{
+            padding: '0.5rem 0.75rem',
+            border: '1px solid var(--vn-danger)',
+            borderRadius: 'var(--vn-radius)',
+            background: 'color-mix(in srgb, var(--vn-danger) 8%, transparent)',
+          }}>
+            <span className="text-xs" style={{ color: 'var(--vn-danger)' }}>{vm.error}</span>
+          </div>
+        )}
+        {vm.polled_at && (
+          <p className="text-xs" style={{ color: 'var(--vn-text-subtle)' }}>
+            Last updated {fmtRelative(vm.polled_at)}
+          </p>
+        )}
+        <div style={{ marginTop: '0.5rem', paddingTop: '1rem', borderTop: '1px solid var(--vn-border)' }}>
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={() => { onClose(); navigate(`/ops?focus=${encodeURIComponent(vm.name)}`); }}
+          >
+            Open in OpsCenter →
+          </button>
+        </div>
+      </div>
+    </SettingsDrawer>
+  );
+}
+
 /* ── Dashboard Page ──────────────────────────────────────────── */
 
 export default function DashboardPage() {
@@ -890,6 +1062,8 @@ export default function DashboardPage() {
   const [chainSettingsOpen, setChainSettingsOpen] = useState(false);
   const [serversSettingsOpen, setServersSettingsOpen] = useState(false);
   const [serversOpen, setServersOpen] = useState(false);
+  const [selectedChain, setSelectedChain] = useState<{ name: string; units: CosmosUnitWithStatus[] } | null>(null);
+  const [selectedVM, setSelectedVM] = useState<VMStatus | null>(null);
   const { data: stats, isLoading } = useQuery<Stats>({
     queryKey: ['stats'],
     queryFn: getStats,
@@ -962,7 +1136,7 @@ export default function DashboardPage() {
           <h3 className="text-sm font-medium" style={{ color: 'var(--vn-text-muted)' }}>Servers</h3>
           <GearButton onClick={e => { e.stopPropagation(); setServersSettingsOpen(true); }} label="Fleet & server settings" />
         </div>
-        {serversOpen && <ServersPanel />}
+        {serversOpen && <ServersPanel onVMClick={setSelectedVM} />}
       </div>
 
       {/* Chain Status */}
@@ -973,7 +1147,7 @@ export default function DashboardPage() {
           </h3>
           <GearButton onClick={() => setChainSettingsOpen(true)} label="Chain profile settings" />
         </div>
-        <FleetTable />
+        <FleetTable onChainClick={(chain, units) => setSelectedChain({ name: chain, units })} />
       </div>
 
       {/* Archive Ingest — compact single-line bar at bottom */}
@@ -991,6 +1165,19 @@ export default function DashboardPage() {
             <ConfigPanel>{(cfg) => <DatacentersPanel config={cfg} />}</ConfigPanel>
           </div>
         </SettingsDrawer>
+      )}
+      {selectedChain && (
+        <ChainDetailDrawer
+          chain={selectedChain.name}
+          units={selectedChain.units}
+          onClose={() => setSelectedChain(null)}
+        />
+      )}
+      {selectedVM && (
+        <VMDetailDrawer
+          vm={selectedVM}
+          onClose={() => setSelectedVM(null)}
+        />
       )}
     </div>
   );
