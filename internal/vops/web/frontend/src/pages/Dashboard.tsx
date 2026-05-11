@@ -505,7 +505,7 @@ function FleetTable() {
             const maxHeight = Math.max(0, ...chainUnits.map(u => u.status?.block_height ?? 0));
             const totalGov = chainUnits.reduce((s, u) => s + (u.status?.gov_pending ?? 0), 0);
             const validators = chainUnits.filter(u => u.node_type === 'validator');
-            const bondedValidators = validators.filter(u => (u.status?.voting_power ?? 0) > 0);
+            const bondedValidators = validators.filter(u => u.status?.service_active && !u.status?.syncing);
             const network = chainUnits[0]?.network_type ?? '';
             const chainId = chainUnits[0]?.chain_id ?? '';
             const upgrades = chainUnits.filter(u => u.status?.upgrade_height != null && (u.status?.upgrade_height ?? 0) > 0);
