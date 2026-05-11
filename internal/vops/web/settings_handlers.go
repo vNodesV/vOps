@@ -174,6 +174,23 @@ func (s *Server) handleAPISettingsImport(w http.ResponseWriter, r *http.Request)
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON payload"})
 		return
 	}
+
+	// Constrain import path to ~/.vOps and ~/.vProx to prevent path traversal.
+	abs, err := filepath.Abs(filepath.Clean(req.Path))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid path"})
+		return
+	}
+	vopsRoot := filepath.Join(s.home, ".vOps")
+	vproxRoot := filepath.Join(s.home, ".vProx")
+	if !strings.HasPrefix(abs, vopsRoot+string(filepath.Separator)) &&
+		abs != vopsRoot &&
+		!strings.HasPrefix(abs, vproxRoot+string(filepath.Separator)) &&
+		abs != vproxRoot {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "path outside allowed root"})
+		return
+	}
+
 	fields, normalizedPath, err := configwizard.ImportStepFieldsFromPath(req.Step, req.Path)
 	if err != nil {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
