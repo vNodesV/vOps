@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, Fragment } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -670,70 +670,97 @@ function ServersPanel({ onVMClick, units = [] }: { onVMClick: (vm: VMStatus) => 
     );
   }
 
+  // Group VMs by datacenter
+  const byDC = vms.reduce<Record<string, VMStatus[]>>((acc, vm) => {
+    const dc = vm.datacenter || '—';
+    (acc[dc] ??= []).push(vm);
+    return acc;
+  }, {});
+  const dcNames = Object.keys(byDC).sort();
+
   return (
     <div className="card card-flush overflow-x-auto">
       <table className="vn-table">
         <thead>
           <tr>
-            {['Server', 'DC', 'CPU', 'Memory', 'Services'].map((h) => (
+            {['Name', 'IP', 'Services', 'Disk', 'CPU', 'Mem'].map((h) => (
               <th key={h} scope="col">{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {vms.map((vm) => {
-            const vmUnits = units.filter(u => u.vm_name === vm.name);
-            const govPending = vmUnits.some(u => (u.status?.gov_pending ?? 0) > 0);
-            const anyDown = vmUnits.some(u => u.status && !u.status.service_active);
-            return (
-              <tr
-                key={vm.name}
-                style={{ cursor: 'pointer' }}
-                onClick={() => onVMClick(vm)}
-                title={`View ${vm.name} details`}
-              >
-                <td className="px-3 py-2">
-                  <div className="font-medium text-xs" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                    <span
-                      style={{
-                        width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
-                        backgroundColor: vm.online ? 'var(--vn-success)' : 'var(--vn-danger)',
-                      }}
-                      aria-hidden="true"
-                    />
-                    {vm.name}
-                  </div>
-                  {vm.lan_ip && (
-                    <div className="text-xs" style={{ color: 'var(--vn-text-subtle)', fontFamily: 'monospace', paddingLeft: '0.85rem' }}>{vm.lan_ip}</div>
-                  )}
-                </td>
-                <td className="px-3 py-2 text-xs whitespace-nowrap" style={{ color: 'var(--vn-text-muted)' }}>
-                  {vm.datacenter || '—'}
-                </td>
-                <td className="px-3 py-2" style={{ minWidth: '90px' }}>
-                  {vm.online ? <MetricBar value={vm.cpu_pct} /> : <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>}
-                </td>
-                <td className="px-3 py-2" style={{ minWidth: '90px' }}>
-                  {vm.online ? <MetricBar value={vm.mem_pct} /> : <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>}
-                </td>
-                <td className="px-3 py-2 whitespace-nowrap">
-                  {vmUnits.length === 0 ? (
-                    <span style={{ color: 'var(--vn-text-subtle)', fontSize: '0.7rem' }}>—</span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1">
-                      <span className="text-xs tabular-nums" style={{
-                        color: anyDown ? 'var(--vn-danger)' : 'var(--vn-accent)',
-                        fontWeight: 600,
-                      }}>⬡ {vmUnits.length}</span>
-                      {govPending && (
-                        <span className="text-xs" style={{ color: 'var(--vn-warning)' }} title="Governance proposals pending">📋</span>
-                      )}
-                    </span>
-                  )}
+          {dcNames.map((dc) => (
+            <Fragment key={dc}>
+              <tr key={`dc-${dc}`} aria-label={`Datacenter: ${dc}`}>
+                <td
+                  colSpan={6}
+                  style={{
+                    padding: '0.3rem 0.75rem',
+                    fontSize: '0.65rem', fontWeight: 600,
+                    color: 'var(--vn-text-subtle)',
+                    background: 'var(--vn-green-dim)',
+                    letterSpacing: '0.06em', textTransform: 'uppercase',
+                    borderBottom: '1px solid var(--vn-border)',
+                  }}
+                >
+                  {dc}
                 </td>
               </tr>
-            );
-          })}
+              {byDC[dc].map((vm) => {
+                const vmUnits = units.filter(u => u.vm_name === vm.name);
+                const govPending = vmUnits.some(u => (u.status?.gov_pending ?? 0) > 0);
+                const anyDown = vmUnits.some(u => u.status && !u.status.service_active);
+                return (
+                  <tr
+                    key={vm.name}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => onVMClick(vm)}
+                    title={`View ${vm.name} details`}
+                  >
+                    <td className="px-3 py-2">
+                      <div className="font-medium text-xs" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                        <span
+                          style={{
+                            width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
+                            backgroundColor: vm.online ? 'var(--vn-success)' : 'var(--vn-danger)',
+                          }}
+                          aria-hidden="true"
+                        />
+                        {vm.name}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 text-xs whitespace-nowrap" style={{ color: 'var(--vn-text-subtle)', fontFamily: 'monospace' }}>
+                      {vm.lan_ip || '—'}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      {vmUnits.length === 0 ? (
+                        <span style={{ color: 'var(--vn-text-subtle)', fontSize: '0.7rem' }}>—</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1">
+                          <span className="text-xs tabular-nums" style={{
+                            color: anyDown ? 'var(--vn-danger)' : 'var(--vn-accent)',
+                            fontWeight: 600,
+                          }}>⬡ {vmUnits.length}</span>
+                          {govPending && (
+                            <span className="text-xs" style={{ color: 'var(--vn-warning)' }} title="Governance proposals pending">📋</span>
+                          )}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2" style={{ minWidth: '80px' }}>
+                      {vm.online ? <MetricBar value={vm.storage_pct} warn={75} danger={90} /> : <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>}
+                    </td>
+                    <td className="px-3 py-2" style={{ minWidth: '80px' }}>
+                      {vm.online ? <MetricBar value={vm.cpu_pct} /> : <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>}
+                    </td>
+                    <td className="px-3 py-2" style={{ minWidth: '80px' }}>
+                      {vm.online ? <MetricBar value={vm.mem_pct} /> : <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </Fragment>
+          ))}
         </tbody>
       </table>
     </div>
@@ -920,195 +947,244 @@ function VMDetailDrawer({
   const [upgradeTarget, setUpgradeTarget] = useState<VMStatus | null>(null);
   return (
     <>
-      <SettingsDrawer title={vm.name} onClose={onClose}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
-            <Badge status={vm.online ? 'online' : 'offline'} />
-            {vm.datacenter && (
-              <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>{vm.datacenter}</span>
-            )}
-            {vm.lan_ip && (
-              <code className="text-xs" style={{ color: 'var(--vn-text-subtle)', fontFamily: 'monospace' }}>{vm.lan_ip}</code>
-            )}
-            {vm.os && (
-              <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>{vm.os}</span>
-            )}
+      {/* Centered modal — click outside to close */}
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        style={{ backgroundColor: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(3px)' }}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Server details: ${vm.name}`}
+        onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      >
+        <div
+          className="w-full max-w-xl rounded-xl overflow-hidden flex flex-col"
+          style={{
+            backgroundColor: 'var(--vn-surface)',
+            border: '1px solid var(--vn-border)',
+            boxShadow: 'var(--vn-shadow-md)',
+            maxHeight: '90vh',
+          }}
+        >
+          {/* Header */}
+          <div
+            className="flex items-center justify-between px-5 py-3"
+            style={{ borderBottom: '1px solid var(--vn-border)', flexShrink: 0 }}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <span
+                style={{
+                  width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                  backgroundColor: vm.online ? 'var(--vn-success)' : 'var(--vn-danger)',
+                }}
+                aria-hidden="true"
+              />
+              <h2 className="text-sm font-semibold truncate" style={{ color: 'var(--vn-text)', fontFamily: 'var(--font-mono)' }}>
+                {vm.name}
+              </h2>
+              <Badge status={vm.online ? 'online' : 'offline'} />
+              {vm.datacenter && (
+                <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>{vm.datacenter}</span>
+              )}
+            </div>
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'var(--vn-text-muted)', fontSize: '1.1rem', lineHeight: 1,
+                padding: '0.25rem',
+              }}
+            >✕</button>
           </div>
-          {vm.online ? (
-            <>
-              <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '0.5rem 1rem', alignItems: 'center' }}>
-                <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>CPU</span>
-                <MetricBar value={vm.cpu_pct} />
-                <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>Memory</span>
-                <MetricBar value={vm.mem_pct} />
-                <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>Disk</span>
-                <MetricBar value={vm.storage_pct} warn={75} danger={90} />
-                {vm.load_avg && (
-                  <>
-                    <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>Load avg</span>
-                    <span className="text-xs tabular-nums" style={{ color: 'var(--vn-text)' }}>{vm.load_avg}</span>
-                  </>
+
+          {/* Scrollable body */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {/* IP + OS meta */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+              {vm.lan_ip && (
+                <code className="text-xs" style={{ color: 'var(--vn-text-subtle)', fontFamily: 'monospace' }}>{vm.lan_ip}</code>
+              )}
+              {vm.os && (
+                <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>{vm.os}</span>
+              )}
+            </div>
+            {vm.online ? (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '0.5rem 1rem', alignItems: 'center' }}>
+                  <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>CPU</span>
+                  <MetricBar value={vm.cpu_pct} />
+                  <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>Memory</span>
+                  <MetricBar value={vm.mem_pct} />
+                  <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>Disk</span>
+                  <MetricBar value={vm.storage_pct} warn={75} danger={90} />
+                  {vm.load_avg && (
+                    <>
+                      <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>Load avg</span>
+                      <span className="text-xs tabular-nums" style={{ color: 'var(--vn-text)' }}>{vm.load_avg}</span>
+                    </>
+                  )}
+                </div>
+                <div>
+                  <span className="text-xs" style={{ color: 'var(--vn-text-muted)', display: 'block', marginBottom: '0.25rem' }}>6h History</span>
+                  <HistorySparkline vmName={vm.name} />
+                </div>
+                {vm.apt_count > 0 && (
+                  <div style={{
+                    padding: '0.5rem 0.75rem',
+                    border: '1px solid var(--vn-warning)',
+                    borderRadius: 'var(--vn-radius)',
+                    background: 'color-mix(in srgb, var(--vn-warning) 8%, transparent)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem',
+                  }}>
+                    <span className="text-xs" style={{ color: 'var(--vn-warning)', fontWeight: 600 }}>
+                      {vm.apt_count} pending update{vm.apt_count !== 1 ? 's' : ''}
+                    </span>
+                    <button
+                      onClick={() => setUpgradeTarget(vm)}
+                      className="px-2 py-1 text-xs rounded cursor-pointer whitespace-nowrap"
+                      style={{
+                        color: 'var(--vn-on-primary)',
+                        backgroundColor: 'var(--vn-primary)',
+                        border: 'none',
+                      }}
+                      aria-label={`Upgrade ${vm.name}`}
+                    >
+                      Upgrade
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-sm" style={{ color: 'var(--vn-text-muted)' }}>Server is offline.</p>
+            )}
+            {vm.error && (
+              <div style={{
+                padding: '0.5rem 0.75rem',
+                border: '1px solid var(--vn-danger)',
+                borderRadius: 'var(--vn-radius)',
+                background: 'color-mix(in srgb, var(--vn-danger) 8%, transparent)',
+              }}>
+                <span className="text-xs" style={{ color: 'var(--vn-danger)' }}>{vm.error}</span>
+              </div>
+            )}
+            {vm.polled_at && (
+              <p className="text-xs" style={{ color: 'var(--vn-text-subtle)' }}>
+                Last updated {fmtRelative(vm.polled_at)}
+              </p>
+            )}
+
+            {/* ── Services ─────────────────────────────────────── */}
+            <div style={{ marginTop: '0.25rem', paddingTop: '1rem', borderTop: '1px solid var(--vn-border)' }}>
+              <div className="text-xs font-semibold uppercase tracking-[0.06em] mb-2" style={{ color: 'var(--vn-text-muted)' }}>
+                ⬡ Services
+                {units.length > 0 && (
+                  <span style={{ fontWeight: 400, textTransform: 'none', marginLeft: '0.5rem', color: 'var(--vn-text-subtle)' }}>
+                    {units.length} unit{units.length !== 1 ? 's' : ''}
+                  </span>
                 )}
               </div>
-              <div>
-                <span className="text-xs" style={{ color: 'var(--vn-text-muted)', display: 'block', marginBottom: '0.25rem' }}>6h History</span>
-                <HistorySparkline vmName={vm.name} />
-              </div>
-              {vm.apt_count > 0 && (
-                <div style={{
-                  padding: '0.5rem 0.75rem',
-                  border: '1px solid var(--vn-warning)',
-                  borderRadius: 'var(--vn-radius)',
-                  background: 'color-mix(in srgb, var(--vn-warning) 8%, transparent)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem',
-                }}>
-                  <span className="text-xs" style={{ color: 'var(--vn-warning)', fontWeight: 600 }}>
-                    {vm.apt_count} pending update{vm.apt_count !== 1 ? 's' : ''}
-                  </span>
-                  <button
-                    onClick={() => setUpgradeTarget(vm)}
-                    className="px-2 py-1 text-xs rounded cursor-pointer whitespace-nowrap"
-                    style={{
-                      color: 'var(--vn-on-primary)',
-                      backgroundColor: 'var(--vn-primary)',
-                      border: 'none',
-                    }}
-                    aria-label={`Upgrade ${vm.name}`}
-                  >
-                    Upgrade
-                  </button>
-                </div>
-              )}
-            </>
-          ) : (
-            <p className="text-sm" style={{ color: 'var(--vn-text-muted)' }}>Server is offline.</p>
-          )}
-          {vm.error && (
-            <div style={{
-              padding: '0.5rem 0.75rem',
-              border: '1px solid var(--vn-danger)',
-              borderRadius: 'var(--vn-radius)',
-              background: 'color-mix(in srgb, var(--vn-danger) 8%, transparent)',
-            }}>
-              <span className="text-xs" style={{ color: 'var(--vn-danger)' }}>{vm.error}</span>
-            </div>
-          )}
-          {vm.polled_at && (
-            <p className="text-xs" style={{ color: 'var(--vn-text-subtle)' }}>
-              Last updated {fmtRelative(vm.polled_at)}
-            </p>
-          )}
-
-          {/* ── Services — card format ─────────────────────────── */}
-          <div style={{ marginTop: '0.25rem', paddingTop: '1rem', borderTop: '1px solid var(--vn-border)' }}>
-            <div className="text-xs font-semibold uppercase tracking-[0.06em] mb-2" style={{ color: 'var(--vn-text-muted)' }}>
-              ⬡ Services
-              {units.length > 0 && (
-                <span style={{ fontWeight: 400, textTransform: 'none', marginLeft: '0.5rem', color: 'var(--vn-text-subtle)' }}>
-                  {units.length} unit{units.length !== 1 ? 's' : ''}
-                </span>
-              )}
-            </div>
-            {units.length === 0 ? (
-              <p className="text-xs" style={{ color: 'var(--vn-text-subtle)' }}>No services registered to this server.</p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                {units.map((u) => {
-                  const isActive = u.status?.service_active;
-                  const isSyncing = u.status?.syncing;
-                  const statusColor = !u.status ? 'var(--vn-text-subtle)'
-                    : isActive ? (isSyncing ? 'var(--vn-warning)' : 'var(--vn-success)')
-                    : 'var(--vn-danger)';
-                  const statusLabel = !u.status ? 'unknown'
-                    : isActive ? (isSyncing ? 'catching up' : 'synced')
-                    : 'down';
-                  return (
-                    <div
-                      key={u.id}
-                      style={{
-                        background: 'var(--vn-green-dim)',
-                        border: '1px solid var(--vn-green-border)',
-                        borderRadius: 'var(--vn-radius)',
-                        padding: '0.45rem 0.6rem',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.2rem' }}>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
-                          {u.name}
-                        </span>
-                        {u.network_type && (
-                          <span style={{
-                            fontSize: '0.6rem', padding: '1px 5px',
-                            borderRadius: '3px',
-                            background: 'var(--vn-surface-2)',
-                            border: '1px solid var(--vn-border)',
-                            color: 'var(--vn-text-muted)',
-                            textTransform: 'uppercase', letterSpacing: '0.04em',
-                          }}>
-                            {u.network_type}
+              {units.length === 0 ? (
+                <p className="text-xs" style={{ color: 'var(--vn-text-subtle)' }}>No services registered to this server.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  {units.map((u) => {
+                    const isActive = u.status?.service_active;
+                    const isSyncing = u.status?.syncing;
+                    const statusColor = !u.status ? 'var(--vn-text-subtle)'
+                      : isActive ? (isSyncing ? 'var(--vn-warning)' : 'var(--vn-success)')
+                      : 'var(--vn-danger)';
+                    const statusLabel = !u.status ? 'unknown'
+                      : isActive ? (isSyncing ? 'catching up' : 'synced')
+                      : 'down';
+                    return (
+                      <div
+                        key={u.id}
+                        style={{
+                          background: 'var(--vn-green-dim)',
+                          border: '1px solid var(--vn-green-border)',
+                          borderRadius: 'var(--vn-radius)',
+                          padding: '0.45rem 0.6rem',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.2rem' }}>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
+                            {u.name}
                           </span>
-                        )}
-                        <span style={{ marginLeft: 'auto', fontSize: '0.68rem', fontWeight: 600, color: statusColor }}>
-                          {statusLabel}
-                        </span>
-                        {u.status?.error && (
-                          <span className="text-xs" style={{ color: 'var(--vn-danger)' }} title={u.status.error}>⚠</span>
-                        )}
-                      </div>
-                      <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.68rem', color: 'var(--vn-text-subtle)' }}>
-                          chain{' '}
-                          <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--vn-text-muted)' }}>
-                            {u.chain_name || u.chain_id}
+                          {u.network_type && (
+                            <span style={{
+                              fontSize: '0.6rem', padding: '1px 5px',
+                              borderRadius: '3px',
+                              background: 'var(--vn-surface-2)',
+                              border: '1px solid var(--vn-border)',
+                              color: 'var(--vn-text-muted)',
+                              textTransform: 'uppercase', letterSpacing: '0.04em',
+                            }}>
+                              {u.network_type}
+                            </span>
+                          )}
+                          <span style={{ marginLeft: 'auto', fontSize: '0.68rem', fontWeight: 600, color: statusColor }}>
+                            {statusLabel}
                           </span>
-                        </span>
-                        {(u.status?.block_height ?? 0) > 0 && (
+                          {u.status?.error && (
+                            <span className="text-xs" style={{ color: 'var(--vn-danger)' }} title={u.status.error}>⚠</span>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
                           <span style={{ fontSize: '0.68rem', color: 'var(--vn-text-subtle)' }}>
-                            h{' '}
+                            chain{' '}
                             <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--vn-text-muted)' }}>
-                              {(u.status?.block_height ?? 0).toLocaleString()}
+                              {u.chain_name || u.chain_id}
                             </span>
                           </span>
-                        )}
-                        {(u.status?.peers ?? 0) > 0 && (
-                          <span style={{ fontSize: '0.68rem', color: 'var(--vn-text-subtle)' }}>
-                            peers{' '}
-                            <span style={{ color: 'var(--vn-text-muted)' }}>{u.status?.peers}</span>
-                          </span>
-                        )}
-                        {(u.status?.gov_pending ?? 0) > 0 && (
-                          <span style={{
-                            fontSize: '0.6rem', padding: '1px 5px', borderRadius: '3px',
-                            background: 'color-mix(in srgb, var(--vn-warning) 10%, transparent)',
-                            border: '1px solid color-mix(in srgb, var(--vn-warning) 25%, transparent)',
-                            color: 'var(--vn-warning)', fontWeight: 600,
-                          }}>
-                            {u.status?.gov_pending} gov
-                          </span>
-                        )}
+                          {(u.status?.block_height ?? 0) > 0 && (
+                            <span style={{ fontSize: '0.68rem', color: 'var(--vn-text-subtle)' }}>
+                              h{' '}
+                              <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--vn-text-muted)' }}>
+                                {(u.status?.block_height ?? 0).toLocaleString()}
+                              </span>
+                            </span>
+                          )}
+                          {(u.status?.peers ?? 0) > 0 && (
+                            <span style={{ fontSize: '0.68rem', color: 'var(--vn-text-subtle)' }}>
+                              peers{' '}
+                              <span style={{ color: 'var(--vn-text-muted)' }}>{u.status?.peers}</span>
+                            </span>
+                          )}
+                          {(u.status?.gov_pending ?? 0) > 0 && (
+                            <span style={{
+                              fontSize: '0.6rem', padding: '1px 5px', borderRadius: '3px',
+                              background: 'color-mix(in srgb, var(--vn-warning) 10%, transparent)',
+                              border: '1px solid color-mix(in srgb, var(--vn-warning) 25%, transparent)',
+                              color: 'var(--vn-warning)', fontWeight: 600,
+                            }}>
+                              {u.status?.gov_pending} gov
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            {units.filter(u => (u.status?.upgrade_height ?? 0) > 0).map(u => (
-              <div key={u.id} className="alert mt-2" style={{ fontSize: '0.78rem' }}>
-                ⬆ {u.name}: {u.status?.upgrade_name ?? 'upgrade'} @ block {u.status?.upgrade_height?.toLocaleString()}
-              </div>
-            ))}
-          </div>
+                    );
+                  })}
+                </div>
+              )}
+              {units.filter(u => (u.status?.upgrade_height ?? 0) > 0).map(u => (
+                <div key={u.id} className="alert mt-2" style={{ fontSize: '0.78rem' }}>
+                  ⬆ {u.name}: {u.status?.upgrade_name ?? 'upgrade'} @ block {u.status?.upgrade_height?.toLocaleString()}
+                </div>
+              ))}
+            </div>
 
-          <div style={{ marginTop: '0.5rem', paddingTop: '1rem', borderTop: '1px solid var(--vn-border)' }}>
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={() => { onClose(); navigate(`/ops?focus=${encodeURIComponent(vm.name)}`); }}
-            >
-              Open in OpsCenter →
-            </button>
+            {/* Footer action */}
+            <div style={{ paddingTop: '1rem', borderTop: '1px solid var(--vn-border)' }}>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => { onClose(); navigate(`/ops?focus=${encodeURIComponent(vm.name)}`); }}
+              >
+                Open in OpsCenter →
+              </button>
+            </div>
           </div>
         </div>
-      </SettingsDrawer>
+      </div>
       {upgradeTarget && (
         <UpgradeModal
           vmName={upgradeTarget.name}
@@ -1150,6 +1226,14 @@ export default function DashboardPage() {
         Dashboard
       </h2>
 
+      {/* Infrastructure Overview — 4 pills: Chains, Services, VMs, Alerts */}
+      <div>
+        <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--vn-text-muted)' }}>
+          Infrastructure Overview
+        </h3>
+        <SummaryBoxes />
+      </div>
+
       {/* Stat pills — 3 left + 3 right */}
       {isLoading ? (
         <Spinner label="Loading stats" />
@@ -1176,14 +1260,6 @@ export default function DashboardPage() {
         <div className="card">
           <ChartPanel title="IPs over Time (30d)" queryKey="chart-ips" chartType="ips_over_time" />
         </div>
-      </div>
-
-      {/* Infrastructure Overview — 4 pills: Chains, Services, VMs, Alerts */}
-      <div>
-        <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--vn-text-muted)' }}>
-          Infrastructure Overview
-        </h3>
-        <SummaryBoxes />
       </div>
 
       {/* Servers — collapsible, default closed */}

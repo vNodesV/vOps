@@ -17,7 +17,7 @@ const NAV_SECTIONS = [
     section: 'Infrastructure',
     items: [
       { to: '/ops',       label: 'OpsCenter',  end: false },
-      { to: '/chains',    label: 'Chains',     end: false },
+      { to: '/chains',    label: 'Services',   end: false },
       { to: '/topology',  label: 'Topology',   end: false },
       { to: '/multiprox', label: 'Multi-vProx',end: false },
     ],
@@ -69,23 +69,13 @@ export default function SidebarShell({
       >
         {/* Logo */}
         <div style={{ padding: '1.1rem 1.1rem 0.85rem', borderBottom: '1px solid var(--vn-border)', flexShrink: 0 }}>
-          <a
-            href={BASE + '/'}
-            style={{ textDecoration: 'none', display: 'block' }}
-            aria-label="vOps home"
-          >
-            <div style={{
-              fontSize: '1.05rem', fontWeight: 700, color: 'var(--vn-primary)',
-              letterSpacing: '-0.02em', fontFamily: 'var(--font-mono)',
-            }}>
-              v<span style={{ color: 'var(--vn-text)', opacity: 0.55 }}>[</span>O<span style={{ color: 'var(--vn-text)', opacity: 0.55 }}>]</span>ps
+          <a href={BASE + '/'} className="vops-logo-link" aria-label="vOps home">
+            <div className="vops-logo">
+              <span className="vops-logo-fallback">
+                v<span style={{ opacity: 0.55 }}>[</span>O<span style={{ opacity: 0.55 }}>]</span>ps
+              </span>
             </div>
-            <div style={{
-              fontSize: '0.6rem', color: 'var(--vn-text-subtle)',
-              marginTop: 2, letterSpacing: '0.03em',
-            }}>
-              Access Intelligence &amp; Operations
-            </div>
+            <div className="vops-logo-tagline">Access Intelligence &amp; Operations</div>
           </a>
         </div>
 

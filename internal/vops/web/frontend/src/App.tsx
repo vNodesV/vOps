@@ -142,7 +142,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   ];
 
   const moreLinks = [
-    { to: '/chains', label: 'Chains' },
+    { to: '/chains', label: 'Services' },
     { to: '/topology', label: 'Topology' },
     { to: '/multiprox', label: 'Multi-vProx' },
     { to: '/audit', label: 'Audit Log' },
