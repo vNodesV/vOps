@@ -1,0 +1,175 @@
+/* ═══════════════════════════════════════════════════════════════════
+   v[D]ark — Pure black matrix terminal theme for vOps
+   Based on mockup: ..internal_memo/vops-dashboard-new-mockup.html
+   All rules scoped to [data-theme="vdark"] — fully reversible.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Design tokens ───────────────────────────────────────────────── */
+:root[data-theme="vdark"] {
+  --vn-primary:        #00ff00;
+  --vn-primary-hover:  #6df36d;
+  --vn-accent:         #00e5ff;
+  --vn-bg:             #000000;
+  --vn-bg-card:        rgba(0,6,0,0.78);
+  --vn-surface:        rgba(0,6,0,0.95);
+  --vn-surface-2:      rgba(0,20,0,0.70);
+  --vn-border:         rgba(0,255,0,0.10);
+  --vn-green-border:   rgba(0,255,0,0.18);
+  --vn-green-dim:      rgba(0,255,0,0.05);
+  --vn-green-glow:     rgba(0,255,0,0.15);
+  --vn-btn-bg:         rgba(0,6,0,0.85);
+  --vn-text:           #c8c8c8;
+  --vn-text-muted:     #888888;
+  --vn-text-subtle:    #555555;
+  --vn-success:        #00ff00;
+  --vn-warning:        #ffa726;
+  --vn-warning-medium: #ea580c;
+  --vn-danger:         #ef5350;
+  --vn-threat-high:    #e53935;
+  --vn-info:           #38bdf8;
+  --vn-on-primary:     #001700;
+  --vn-shadow:         0 2px 12px rgba(0,0,0,0.85), inset 0 1px 0 rgba(0,255,0,0.04);
+  --vn-shadow-md:      0 4px 20px rgba(0,0,0,0.75);
+}
+
+/* ── Body — pure black, no background image ──────────────────────── */
+:root[data-theme="vdark"] body {
+  background: #000000;
+  background-image: none !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', ui-monospace, monospace;
+}
+
+:root[data-theme="vdark"] body::before { display: none; }
+:root[data-theme="vdark"] body > #root { position: relative; z-index: 1; }
+
+/* ── Scrollbars ──────────────────────────────────────────────────── */
+:root[data-theme="vdark"] ::-webkit-scrollbar-track  { background: #000000; }
+:root[data-theme="vdark"] ::-webkit-scrollbar-thumb  { background: rgba(0,255,0,0.15); border-radius: 3px; }
+:root[data-theme="vdark"] ::-webkit-scrollbar-thumb:hover { background: rgba(0,255,0,0.28); }
+
+/* ── Selection ───────────────────────────────────────────────────── */
+:root[data-theme="vdark"] ::selection {
+  background: rgba(0,255,0,0.18);
+  color: #c8c8c8;
+}
+
+/* ── Cards — crisp border, no blur (pure black bg renders cleanly) ── */
+:root[data-theme="vdark"] .card,
+:root[data-theme="vdark"] .v-block,
+:root[data-theme="vdark"] .stat-card,
+:root[data-theme="vdark"] .chart-block {
+  background: var(--vn-bg-card);
+  border-color: var(--vn-green-border);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* ── Top navigation ──────────────────────────────────────────────── */
+:root[data-theme="vdark"] .page-nav {
+  background: rgba(0,4,0,0.98);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-bottom-color: var(--vn-green-border);
+}
+
+:root[data-theme="vdark"] .nav-more-dropdown {
+  background: rgba(0,4,0,0.98);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-color: var(--vn-green-border);
+}
+
+:root[data-theme="vdark"] .nav-mobile-panel {
+  background: rgba(0,4,0,0.98);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-right-color: var(--vn-green-border);
+}
+
+/* ── Footer ──────────────────────────────────────────────────────── */
+:root[data-theme="vdark"] .vlog-footer {
+  background: rgba(0,4,0,0.98);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-top-color: var(--vn-green-border);
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────── */
+:root[data-theme="vdark"] .btn-primary {
+  background: var(--vn-primary);
+  color: #001700;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  border-color: transparent;
+}
+:root[data-theme="vdark"] .btn-primary:hover:not(:disabled) {
+  background: var(--vn-primary-hover);
+}
+
+:root[data-theme="vdark"] .btn-secondary {
+  background: transparent;
+  border-color: var(--vn-green-border);
+  color: var(--vn-text-muted);
+}
+:root[data-theme="vdark"] .btn-secondary:hover:not(:disabled) {
+  color: var(--vn-primary);
+  border-color: var(--vn-primary);
+  background: rgba(0,255,0,0.04);
+}
+
+/* ── Tables ──────────────────────────────────────────────────────── */
+:root[data-theme="vdark"] .vn-table thead th {
+  color: var(--vn-text-subtle);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  border-bottom-color: var(--vn-border);
+}
+
+:root[data-theme="vdark"] .vn-table tbody tr:hover td {
+  background: rgba(0,255,0,0.04);
+}
+
+:root[data-theme="vdark"] .vn-table tbody td {
+  border-bottom-color: var(--vn-border);
+}
+
+/* ── v-block header ──────────────────────────────────────────────── */
+:root[data-theme="vdark"] .v-block-header,
+:root[data-theme="vdark"] .v-block > details > summary {
+  border-bottom-color: var(--vn-border);
+}
+
+/* ── Drawers / overlays ──────────────────────────────────────────── */
+:root[data-theme="vdark"] .settings-drawer,
+:root[data-theme="vdark"] .drawer-panel {
+  background: #030d03;
+  border-left-color: var(--vn-green-border);
+  box-shadow: -6px 0 32px rgba(0,255,0,0.07);
+}
+
+/* ── Alert / badge row ───────────────────────────────────────────── */
+:root[data-theme="vdark"] .alert {
+  background: rgba(239,83,80,0.07);
+  border-color: rgba(239,83,80,0.28);
+}
+
+/* ── Logo (sidebar mode) ─────────────────────────────────────────── */
+:root[data-theme="vdark"] .vops-logo-fallback {
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+  font-weight: 800;
+}
+
+/* ── Code / mono text ────────────────────────────────────────────── */
+:root[data-theme="vdark"] code {
+  background: rgba(0,255,0,0.05);
+  border-color: rgba(0,255,0,0.12);
+  color: var(--vn-primary);
+}
+
+/* ── Focus ring ──────────────────────────────────────────────────── */
+:root[data-theme="vdark"] :focus-visible {
+  outline-color: rgba(0,255,0,0.6);
+}
