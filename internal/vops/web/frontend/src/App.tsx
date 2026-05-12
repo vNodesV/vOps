@@ -240,7 +240,7 @@ function Shell({ children }: { children: React.ReactNode }) {
                 v<span>[O]</span>ps
               </div>
               <div style={{ fontSize: '0.7rem', color: 'var(--vn-text-muted)', marginTop: 2 }}>
-                ACCESS INTELLIGENCE &amp; OPERATIONS
+                Access Intelligence &amp; Operations
               </div>
             </div>
             {allLinks.map(l => (
@@ -279,7 +279,7 @@ function Shell({ children }: { children: React.ReactNode }) {
 
       {/* ── Footer ─────────────────────────────────────────────── */}
       <footer className="vlog-footer">
-        v<span>[O]</span>ps · ACCESS INTELLIGENCE &amp; OPERATIONS
+        v<span>[O]</span>ps · Access Intelligence &amp; Operations
       </footer>
 
       {debugEnabled && <DebugPanel onDisable={() => setDebugEnabled(false)} />}

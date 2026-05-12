@@ -21,6 +21,9 @@ import { ChainProfilesPanel } from './settings/ProxyPanel';
 import { BackupsPanel } from './settings/SystemPanel';
 import { FleetScanPanel, DatacentersPanel } from './settings/InfraPanel';
 
+/* ── Feature flag — flip to false to restore original layout ─── */
+const SERVICES_IN_DRAWER = true;
+
 /* ── SVG Icons ───────────────────────────────────────────────── */
 
 function RequestsIcon() {
@@ -325,7 +328,8 @@ function SummaryBoxes() {
         )}
       </div>
 
-      {/* Services box */}
+      {/* Services box — hidden when services live in VM drawer */}
+      {!SERVICES_IN_DRAWER && (
       <div className="card" role="button" tabIndex={0} onClick={() => nav('/ops')}
         onKeyDown={e => e.key === 'Enter' && nav('/ops')}
         aria-label="Go to Operations Center"
@@ -351,6 +355,7 @@ function SummaryBoxes() {
           </div>
         ))}
       </div>
+      )}
 
       {/* VMs box */}
       <div className="card" role="button" tabIndex={0} onClick={() => nav('/vms')}
@@ -639,7 +644,7 @@ function HistorySparkline({ vmName }: { vmName: string }) {
   );
 }
 
-function ServersPanel({ onVMClick }: { onVMClick: (vm: VMStatus) => void }) {
+function ServersPanel({ onVMClick, units = [] }: { onVMClick: (vm: VMStatus) => void; units?: CosmosUnitWithStatus[] }) {
   const [upgradeTarget, setUpgradeTarget] = useState<VMStatus | null>(null);
 
   const { data, isLoading, isError } = useQuery({
@@ -682,7 +687,7 @@ function ServersPanel({ onVMClick }: { onVMClick: (vm: VMStatus) => void }) {
         <table className="vn-table">
           <thead>
             <tr>
-              {['Server', 'OS', 'CPU', 'Memory', 'Disk', 'Load', 'Updates', '6h History', 'Status', ''].map((h) => (
+              {['Server', 'OS', 'CPU', 'Memory', 'Disk', 'Load', 'Updates', ...(SERVICES_IN_DRAWER ? ['Services'] : []), '6h History', 'Status', ''].map((h) => (
                 <th key={h} scope="col">{h}</th>
               ))}
             </tr>
@@ -693,7 +698,7 @@ function ServersPanel({ onVMClick }: { onVMClick: (vm: VMStatus) => void }) {
                 {/* Datacenter group header */}
                 <tr>
                   <td
-                    colSpan={10}
+                    colSpan={SERVICES_IN_DRAWER ? 11 : 10}
                     style={{
                       padding: '0.35rem 0.75rem',
                       background: 'var(--vn-surface-2)',
@@ -755,6 +760,28 @@ function ServersPanel({ onVMClick }: { onVMClick: (vm: VMStatus) => void }) {
                         <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>
                       )}
                     </td>
+                    {SERVICES_IN_DRAWER && (() => {
+                      const vmUnits = units.filter(u => u.vm_name === vm.name);
+                      const govPending = vmUnits.some(u => (u.status?.gov_pending ?? 0) > 0);
+                      const anyDown = vmUnits.some(u => u.status && !u.status.service_active);
+                      return (
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          {vmUnits.length === 0 ? (
+                            <span style={{ color: 'var(--vn-text-subtle)', fontSize: '0.7rem' }}>—</span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1">
+                              <span className="text-xs tabular-nums" style={{
+                                color: anyDown ? 'var(--vn-danger)' : 'var(--vn-accent)',
+                                fontWeight: 600,
+                              }}>⬡ {vmUnits.length}</span>
+                              {govPending && (
+                                <span className="text-xs" style={{ color: 'var(--vn-warning)' }} title="Governance proposals pending">📋</span>
+                              )}
+                            </span>
+                          )}
+                        </td>
+                      );
+                    })()}
                     <td className="px-3 py-2" style={{ minWidth: '110px' }}>
                       {vm.online ? <HistorySparkline vmName={vm.name} /> : <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>}
                     </td>
@@ -970,9 +997,10 @@ function ChainDetailDrawer({
 /* ── VM Detail Drawer ────────────────────────────────────────── */
 
 function VMDetailDrawer({
-  vm, onClose,
+  vm, units = [], onClose,
 }: {
   vm: VMStatus;
+  units?: CosmosUnitWithStatus[];
   onClose: () => void;
 }) {
   const navigate = useNavigate();
@@ -1042,6 +1070,76 @@ function VMDetailDrawer({
             Last updated {fmtRelative(vm.polled_at)}
           </p>
         )}
+        {SERVICES_IN_DRAWER && (
+          <div style={{ marginTop: '0.25rem', paddingTop: '1rem', borderTop: '1px solid var(--vn-border)' }}>
+            <div className="text-xs font-semibold uppercase tracking-[0.06em] mb-2" style={{ color: 'var(--vn-text-muted)' }}>
+              ⬡ Services
+              {units.length > 0 && (
+                <span style={{ fontWeight: 400, textTransform: 'none', marginLeft: '0.5rem', color: 'var(--vn-text-subtle)' }}>
+                  {units.length} unit{units.length !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+            {units.length === 0 ? (
+              <p className="text-xs" style={{ color: 'var(--vn-text-subtle)' }}>No services registered to this server.</p>
+            ) : (
+              <div className="card card-flush overflow-x-auto">
+                <table className="vn-table">
+                  <thead>
+                    <tr>
+                      {['Node', 'Chain', 'Status', 'Height', 'Peers', 'Gov'].map(h => (
+                        <th key={h} scope="col">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {units.map((u) => (
+                      <tr key={u.id}>
+                        <td className="px-3 py-2 text-xs font-medium whitespace-nowrap">{u.name}</td>
+                        <td className="px-3 py-2 text-xs whitespace-nowrap" style={{ color: 'var(--vn-text-muted)' }}>
+                          {u.chain_name || u.chain_id}
+                          {u.network_type ? <span style={{ color: 'var(--vn-text-subtle)', marginLeft: '0.25rem' }}>{u.network_type}</span> : null}
+                        </td>
+                        <td className="px-3 py-2">
+                          {u.status ? (
+                            u.status.service_active
+                              ? <Badge status={u.status.syncing ? 'syncing' : 'synced'} />
+                              : <Badge status="down" />
+                          ) : (
+                            <span style={{ color: 'var(--vn-text-subtle)', fontSize: '0.7rem' }}>unknown</span>
+                          )}
+                          {u.status?.error && (
+                            <span className="ml-1 text-xs" style={{ color: 'var(--vn-danger)' }} title={u.status.error}>⚠</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-xs tabular-nums">
+                          {(u.status?.block_height ?? 0) > 0
+                            ? (u.status?.block_height ?? 0).toLocaleString()
+                            : '—'}
+                        </td>
+                        <td className="px-3 py-2 text-xs tabular-nums" style={{ color: 'var(--vn-text-muted)' }}>
+                          {(u.status?.peers ?? 0) > 0 ? (u.status?.peers ?? 0) : '—'}
+                        </td>
+                        <td className="px-3 py-2 text-xs">
+                          {(u.status?.gov_pending ?? 0) > 0 ? (
+                            <span style={{ color: 'var(--vn-warning)', fontWeight: 600 }}>{u.status?.gov_pending}</span>
+                          ) : (
+                            <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {units.filter(u => (u.status?.upgrade_height ?? 0) > 0).map(u => (
+              <div key={u.id} className="alert mt-2" style={{ fontSize: '0.78rem' }}>
+                ⬆ {u.name}: {u.status?.upgrade_name ?? 'upgrade'} @ block {u.status?.upgrade_height?.toLocaleString()}
+              </div>
+            ))}
+          </div>
+        )}
         <div style={{ marginTop: '0.5rem', paddingTop: '1rem', borderTop: '1px solid var(--vn-border)' }}>
           <button
             className="btn btn-primary btn-sm"
@@ -1069,6 +1167,14 @@ export default function DashboardPage() {
     queryFn: getStats,
     refetchInterval: 65_000,
   });
+  const { data: svcsData } = useQuery({
+    queryKey: ['units'],
+    queryFn: getUnits,
+    refetchInterval: 60_000,
+    retry: false,
+    enabled: SERVICES_IN_DRAWER,
+  });
+  const allUnits: CosmosUnitWithStatus[] = svcsData?.units ?? [];
 
   return (
     <div className="space-y-6">
@@ -1136,10 +1242,11 @@ export default function DashboardPage() {
           <h3 className="text-sm font-medium" style={{ color: 'var(--vn-text-muted)' }}>Servers</h3>
           <GearButton onClick={e => { e.stopPropagation(); setServersSettingsOpen(true); }} label="Fleet & server settings" />
         </div>
-        {serversOpen && <ServersPanel onVMClick={setSelectedVM} />}
+        {serversOpen && <ServersPanel onVMClick={setSelectedVM} units={allUnits} />}
       </div>
 
-      {/* Chain Status */}
+      {/* Chain Status — hidden when services live in VM drawer */}
+      {!SERVICES_IN_DRAWER && (
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.75rem' }}>
           <h3 className="text-sm font-medium" style={{ color: 'var(--vn-text-muted)' }}>
@@ -1149,6 +1256,7 @@ export default function DashboardPage() {
         </div>
         <FleetTable onChainClick={(chain, units) => setSelectedChain({ name: chain, units })} />
       </div>
+      )}
 
       {/* Archive Ingest — compact single-line bar at bottom */}
       <IngestBar />
@@ -1176,6 +1284,7 @@ export default function DashboardPage() {
       {selectedVM && (
         <VMDetailDrawer
           vm={selectedVM}
+          units={allUnits.filter(u => u.vm_name === selectedVM.name)}
           onClose={() => setSelectedVM(null)}
         />
       )}
