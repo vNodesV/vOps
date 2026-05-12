@@ -1,4 +1,4 @@
-import { useState, Fragment } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -645,8 +645,6 @@ function HistorySparkline({ vmName }: { vmName: string }) {
 }
 
 function ServersPanel({ onVMClick, units = [] }: { onVMClick: (vm: VMStatus) => void; units?: CosmosUnitWithStatus[] }) {
-  const [upgradeTarget, setUpgradeTarget] = useState<VMStatus | null>(null);
-
   const { data, isLoading, isError } = useQuery({
     queryKey: ['vm-status'],
     queryFn: getVMStatus,
@@ -672,158 +670,73 @@ function ServersPanel({ onVMClick, units = [] }: { onVMClick: (vm: VMStatus) => 
     );
   }
 
-  // Group by datacenter, preserve insertion order within each group
-  const byDC: Record<string, VMStatus[]> = {};
-  for (const vm of vms) {
-    const dc = vm.datacenter || 'Unknown';
-    if (!byDC[dc]) byDC[dc] = [];
-    byDC[dc].push(vm);
-  }
-  const dcs = Object.keys(byDC).sort();
-
   return (
-    <>
-      <div className="card card-flush overflow-x-auto">
-        <table className="vn-table">
-          <thead>
-            <tr>
-              {['Server', 'OS', 'CPU', 'Memory', 'Disk', 'Load', 'Updates', ...(SERVICES_IN_DRAWER ? ['Services'] : []), '6h History', 'Status', ''].map((h) => (
-                <th key={h} scope="col">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {dcs.map(dc => (
-              <Fragment key={dc}>
-                {/* Datacenter group header */}
-                <tr>
-                  <td
-                    colSpan={SERVICES_IN_DRAWER ? 11 : 10}
-                    style={{
-                      padding: '0.35rem 0.75rem',
-                      background: 'var(--vn-surface-2)',
-                      fontSize: '0.69rem',
-                      fontWeight: 700,
-                      color: 'var(--vn-text-muted)',
-                      letterSpacing: '0.07em',
-                      textTransform: 'uppercase',
-                      borderBottom: '1px solid var(--vn-border)',
-                      userSelect: 'none',
-                    }}
-                  >
-                    {dc}
-                    <span style={{ fontWeight: 400, opacity: 0.65, marginLeft: '0.4rem' }}>
-                      · {byDC[dc].length} server{byDC[dc].length > 1 ? 's' : ''}
-                    </span>
-                  </td>
-                </tr>
-                {/* Server rows */}
-                {byDC[dc].map((vm) => (
-                  <tr
-                    key={vm.name}
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => onVMClick(vm)}
-                    title={`View ${vm.name} details`}
-                  >
-                    <td className="px-3 py-2">
-                      <div className="font-medium text-xs">{vm.name}</div>
-                      {vm.lan_ip && (
-                        <div className="text-xs" style={{ color: 'var(--vn-text-subtle)', fontFamily: 'monospace' }}>{vm.lan_ip}</div>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-xs whitespace-nowrap" style={{ color: 'var(--vn-text-muted)' }}>
-                      {vm.online ? (vm.os || 'Linux') : '—'}
-                    </td>
-                    <td className="px-3 py-2" style={{ minWidth: '90px' }}>
-                      {vm.online ? <MetricBar value={vm.cpu_pct} /> : <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>}
-                    </td>
-                    <td className="px-3 py-2" style={{ minWidth: '90px' }}>
-                      {vm.online ? <MetricBar value={vm.mem_pct} /> : <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>}
-                    </td>
-                    <td className="px-3 py-2" style={{ minWidth: '90px' }}>
-                      {vm.online ? <MetricBar value={vm.storage_pct} warn={75} danger={90} /> : <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>}
-                    </td>
-                    <td className="px-3 py-2 text-xs tabular-nums whitespace-nowrap" style={{ color: 'var(--vn-text-muted)' }}>
-                      {vm.online ? vm.load_avg || '—' : '—'}
-                    </td>
-                    <td className="px-3 py-2">
-                      {vm.online ? (
-                        vm.apt_count > 0 ? (
-                          <span className="inline-flex items-center gap-1 text-xs" style={{ color: 'var(--vn-warning)' }}>
-                            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'var(--vn-warning)' }} aria-hidden="true" />
-                            {vm.apt_count} pending
-                          </span>
-                        ) : (
-                          <span className="text-xs" style={{ color: 'var(--vn-success)' }}>✓ current</span>
-                        )
-                      ) : (
-                        <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>
-                      )}
-                    </td>
-                    {SERVICES_IN_DRAWER && (() => {
-                      const vmUnits = units.filter(u => u.vm_name === vm.name);
-                      const govPending = vmUnits.some(u => (u.status?.gov_pending ?? 0) > 0);
-                      const anyDown = vmUnits.some(u => u.status && !u.status.service_active);
-                      return (
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          {vmUnits.length === 0 ? (
-                            <span style={{ color: 'var(--vn-text-subtle)', fontSize: '0.7rem' }}>—</span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1">
-                              <span className="text-xs tabular-nums" style={{
-                                color: anyDown ? 'var(--vn-danger)' : 'var(--vn-accent)',
-                                fontWeight: 600,
-                              }}>⬡ {vmUnits.length}</span>
-                              {govPending && (
-                                <span className="text-xs" style={{ color: 'var(--vn-warning)' }} title="Governance proposals pending">📋</span>
-                              )}
-                            </span>
-                          )}
-                        </td>
-                      );
-                    })()}
-                    <td className="px-3 py-2" style={{ minWidth: '110px' }}>
-                      {vm.online ? <HistorySparkline vmName={vm.name} /> : <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>}
-                    </td>
-                    <td className="px-3 py-2">
-                      <Badge status={vm.online ? 'online' : 'offline'} />
-                      {vm.error && (
-                        <span className="ml-1 text-xs" style={{ color: 'var(--vn-danger)' }} title={vm.error}>⚠</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
-                      {vm.online && vm.apt_count > 0 && (
-                        <button
-                          onClick={() => setUpgradeTarget(vm)}
-                          className="px-2 py-1 text-xs rounded cursor-pointer whitespace-nowrap
-                                     focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-                          style={{
-                            color: 'var(--vn-on-primary)',
-                            backgroundColor: 'var(--vn-primary)',
-                            border: 'none',
-                          }}
-                          aria-label={`Upgrade ${vm.name}`}
-                        >
-                          Upgrade
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </Fragment>
+    <div className="card card-flush overflow-x-auto">
+      <table className="vn-table">
+        <thead>
+          <tr>
+            {['Server', 'DC', 'CPU', 'Memory', 'Services'].map((h) => (
+              <th key={h} scope="col">{h}</th>
             ))}
-          </tbody>
-        </table>
-      </div>
-
-      {upgradeTarget && (
-        <UpgradeModal
-          vmName={upgradeTarget.name}
-          upgradeURL={vmUpgradeURL(upgradeTarget.name)}
-          onClose={() => setUpgradeTarget(null)}
-        />
-      )}
-    </>
+          </tr>
+        </thead>
+        <tbody>
+          {vms.map((vm) => {
+            const vmUnits = units.filter(u => u.vm_name === vm.name);
+            const govPending = vmUnits.some(u => (u.status?.gov_pending ?? 0) > 0);
+            const anyDown = vmUnits.some(u => u.status && !u.status.service_active);
+            return (
+              <tr
+                key={vm.name}
+                style={{ cursor: 'pointer' }}
+                onClick={() => onVMClick(vm)}
+                title={`View ${vm.name} details`}
+              >
+                <td className="px-3 py-2">
+                  <div className="font-medium text-xs" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <span
+                      style={{
+                        width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
+                        backgroundColor: vm.online ? 'var(--vn-success)' : 'var(--vn-danger)',
+                      }}
+                      aria-hidden="true"
+                    />
+                    {vm.name}
+                  </div>
+                  {vm.lan_ip && (
+                    <div className="text-xs" style={{ color: 'var(--vn-text-subtle)', fontFamily: 'monospace', paddingLeft: '0.85rem' }}>{vm.lan_ip}</div>
+                  )}
+                </td>
+                <td className="px-3 py-2 text-xs whitespace-nowrap" style={{ color: 'var(--vn-text-muted)' }}>
+                  {vm.datacenter || '—'}
+                </td>
+                <td className="px-3 py-2" style={{ minWidth: '90px' }}>
+                  {vm.online ? <MetricBar value={vm.cpu_pct} /> : <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>}
+                </td>
+                <td className="px-3 py-2" style={{ minWidth: '90px' }}>
+                  {vm.online ? <MetricBar value={vm.mem_pct} /> : <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>}
+                </td>
+                <td className="px-3 py-2 whitespace-nowrap">
+                  {vmUnits.length === 0 ? (
+                    <span style={{ color: 'var(--vn-text-subtle)', fontSize: '0.7rem' }}>—</span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1">
+                      <span className="text-xs tabular-nums" style={{
+                        color: anyDown ? 'var(--vn-danger)' : 'var(--vn-accent)',
+                        fontWeight: 600,
+                      }}>⬡ {vmUnits.length}</span>
+                      {govPending && (
+                        <span className="text-xs" style={{ color: 'var(--vn-warning)' }} title="Governance proposals pending">📋</span>
+                      )}
+                    </span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -1004,73 +917,89 @@ function VMDetailDrawer({
   onClose: () => void;
 }) {
   const navigate = useNavigate();
+  const [upgradeTarget, setUpgradeTarget] = useState<VMStatus | null>(null);
   return (
-    <SettingsDrawer title={vm.name} onClose={onClose}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
-          <Badge status={vm.online ? 'online' : 'offline'} />
-          {vm.datacenter && (
-            <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>{vm.datacenter}</span>
-          )}
-          {vm.lan_ip && (
-            <code className="text-xs" style={{ color: 'var(--vn-text-subtle)', fontFamily: 'monospace' }}>{vm.lan_ip}</code>
-          )}
-          {vm.os && (
-            <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>{vm.os}</span>
-          )}
-        </div>
-        {vm.online ? (
-          <>
-            <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '0.5rem 1rem', alignItems: 'center' }}>
-              <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>CPU</span>
-              <MetricBar value={vm.cpu_pct} />
-              <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>Memory</span>
-              <MetricBar value={vm.mem_pct} />
-              <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>Disk</span>
-              <MetricBar value={vm.storage_pct} warn={75} danger={90} />
-              {vm.load_avg && (
-                <>
-                  <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>Load avg</span>
-                  <span className="text-xs tabular-nums" style={{ color: 'var(--vn-text)' }}>{vm.load_avg}</span>
-                </>
-              )}
-            </div>
-            <div>
-              <span className="text-xs" style={{ color: 'var(--vn-text-muted)', display: 'block', marginBottom: '0.25rem' }}>6h History</span>
-              <HistorySparkline vmName={vm.name} />
-            </div>
-            {vm.apt_count > 0 && (
-              <div style={{
-                padding: '0.5rem 0.75rem',
-                border: '1px solid var(--vn-warning)',
-                borderRadius: 'var(--vn-radius)',
-                background: 'color-mix(in srgb, var(--vn-warning) 8%, transparent)',
-              }}>
-                <span className="text-xs" style={{ color: 'var(--vn-warning)', fontWeight: 600 }}>
-                  {vm.apt_count} pending update{vm.apt_count !== 1 ? 's' : ''}
-                </span>
-              </div>
+    <>
+      <SettingsDrawer title={vm.name} onClose={onClose}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+            <Badge status={vm.online ? 'online' : 'offline'} />
+            {vm.datacenter && (
+              <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>{vm.datacenter}</span>
             )}
-          </>
-        ) : (
-          <p className="text-sm" style={{ color: 'var(--vn-text-muted)' }}>Server is offline.</p>
-        )}
-        {vm.error && (
-          <div style={{
-            padding: '0.5rem 0.75rem',
-            border: '1px solid var(--vn-danger)',
-            borderRadius: 'var(--vn-radius)',
-            background: 'color-mix(in srgb, var(--vn-danger) 8%, transparent)',
-          }}>
-            <span className="text-xs" style={{ color: 'var(--vn-danger)' }}>{vm.error}</span>
+            {vm.lan_ip && (
+              <code className="text-xs" style={{ color: 'var(--vn-text-subtle)', fontFamily: 'monospace' }}>{vm.lan_ip}</code>
+            )}
+            {vm.os && (
+              <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>{vm.os}</span>
+            )}
           </div>
-        )}
-        {vm.polled_at && (
-          <p className="text-xs" style={{ color: 'var(--vn-text-subtle)' }}>
-            Last updated {fmtRelative(vm.polled_at)}
-          </p>
-        )}
-        {SERVICES_IN_DRAWER && (
+          {vm.online ? (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '0.5rem 1rem', alignItems: 'center' }}>
+                <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>CPU</span>
+                <MetricBar value={vm.cpu_pct} />
+                <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>Memory</span>
+                <MetricBar value={vm.mem_pct} />
+                <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>Disk</span>
+                <MetricBar value={vm.storage_pct} warn={75} danger={90} />
+                {vm.load_avg && (
+                  <>
+                    <span className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>Load avg</span>
+                    <span className="text-xs tabular-nums" style={{ color: 'var(--vn-text)' }}>{vm.load_avg}</span>
+                  </>
+                )}
+              </div>
+              <div>
+                <span className="text-xs" style={{ color: 'var(--vn-text-muted)', display: 'block', marginBottom: '0.25rem' }}>6h History</span>
+                <HistorySparkline vmName={vm.name} />
+              </div>
+              {vm.apt_count > 0 && (
+                <div style={{
+                  padding: '0.5rem 0.75rem',
+                  border: '1px solid var(--vn-warning)',
+                  borderRadius: 'var(--vn-radius)',
+                  background: 'color-mix(in srgb, var(--vn-warning) 8%, transparent)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem',
+                }}>
+                  <span className="text-xs" style={{ color: 'var(--vn-warning)', fontWeight: 600 }}>
+                    {vm.apt_count} pending update{vm.apt_count !== 1 ? 's' : ''}
+                  </span>
+                  <button
+                    onClick={() => setUpgradeTarget(vm)}
+                    className="px-2 py-1 text-xs rounded cursor-pointer whitespace-nowrap"
+                    style={{
+                      color: 'var(--vn-on-primary)',
+                      backgroundColor: 'var(--vn-primary)',
+                      border: 'none',
+                    }}
+                    aria-label={`Upgrade ${vm.name}`}
+                  >
+                    Upgrade
+                  </button>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="text-sm" style={{ color: 'var(--vn-text-muted)' }}>Server is offline.</p>
+          )}
+          {vm.error && (
+            <div style={{
+              padding: '0.5rem 0.75rem',
+              border: '1px solid var(--vn-danger)',
+              borderRadius: 'var(--vn-radius)',
+              background: 'color-mix(in srgb, var(--vn-danger) 8%, transparent)',
+            }}>
+              <span className="text-xs" style={{ color: 'var(--vn-danger)' }}>{vm.error}</span>
+            </div>
+          )}
+          {vm.polled_at && (
+            <p className="text-xs" style={{ color: 'var(--vn-text-subtle)' }}>
+              Last updated {fmtRelative(vm.polled_at)}
+            </p>
+          )}
+
+          {/* ── Services — card format ─────────────────────────── */}
           <div style={{ marginTop: '0.25rem', paddingTop: '1rem', borderTop: '1px solid var(--vn-border)' }}>
             <div className="text-xs font-semibold uppercase tracking-[0.06em] mb-2" style={{ color: 'var(--vn-text-muted)' }}>
               ⬡ Services
@@ -1083,54 +1012,84 @@ function VMDetailDrawer({
             {units.length === 0 ? (
               <p className="text-xs" style={{ color: 'var(--vn-text-subtle)' }}>No services registered to this server.</p>
             ) : (
-              <div className="card card-flush overflow-x-auto">
-                <table className="vn-table">
-                  <thead>
-                    <tr>
-                      {['Node', 'Chain', 'Status', 'Height', 'Peers', 'Gov'].map(h => (
-                        <th key={h} scope="col">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {units.map((u) => (
-                      <tr key={u.id}>
-                        <td className="px-3 py-2 text-xs font-medium whitespace-nowrap">{u.name}</td>
-                        <td className="px-3 py-2 text-xs whitespace-nowrap" style={{ color: 'var(--vn-text-muted)' }}>
-                          {u.chain_name || u.chain_id}
-                          {u.network_type ? <span style={{ color: 'var(--vn-text-subtle)', marginLeft: '0.25rem' }}>{u.network_type}</span> : null}
-                        </td>
-                        <td className="px-3 py-2">
-                          {u.status ? (
-                            u.status.service_active
-                              ? <Badge status={u.status.syncing ? 'syncing' : 'synced'} />
-                              : <Badge status="down" />
-                          ) : (
-                            <span style={{ color: 'var(--vn-text-subtle)', fontSize: '0.7rem' }}>unknown</span>
-                          )}
-                          {u.status?.error && (
-                            <span className="ml-1 text-xs" style={{ color: 'var(--vn-danger)' }} title={u.status.error}>⚠</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-xs tabular-nums">
-                          {(u.status?.block_height ?? 0) > 0
-                            ? (u.status?.block_height ?? 0).toLocaleString()
-                            : '—'}
-                        </td>
-                        <td className="px-3 py-2 text-xs tabular-nums" style={{ color: 'var(--vn-text-muted)' }}>
-                          {(u.status?.peers ?? 0) > 0 ? (u.status?.peers ?? 0) : '—'}
-                        </td>
-                        <td className="px-3 py-2 text-xs">
-                          {(u.status?.gov_pending ?? 0) > 0 ? (
-                            <span style={{ color: 'var(--vn-warning)', fontWeight: 600 }}>{u.status?.gov_pending}</span>
-                          ) : (
-                            <span style={{ color: 'var(--vn-text-subtle)' }}>—</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                {units.map((u) => {
+                  const isActive = u.status?.service_active;
+                  const isSyncing = u.status?.syncing;
+                  const statusColor = !u.status ? 'var(--vn-text-subtle)'
+                    : isActive ? (isSyncing ? 'var(--vn-warning)' : 'var(--vn-success)')
+                    : 'var(--vn-danger)';
+                  const statusLabel = !u.status ? 'unknown'
+                    : isActive ? (isSyncing ? 'catching up' : 'synced')
+                    : 'down';
+                  return (
+                    <div
+                      key={u.id}
+                      style={{
+                        background: 'var(--vn-green-dim)',
+                        border: '1px solid var(--vn-green-border)',
+                        borderRadius: 'var(--vn-radius)',
+                        padding: '0.45rem 0.6rem',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.2rem' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
+                          {u.name}
+                        </span>
+                        {u.network_type && (
+                          <span style={{
+                            fontSize: '0.6rem', padding: '1px 5px',
+                            borderRadius: '3px',
+                            background: 'var(--vn-surface-2)',
+                            border: '1px solid var(--vn-border)',
+                            color: 'var(--vn-text-muted)',
+                            textTransform: 'uppercase', letterSpacing: '0.04em',
+                          }}>
+                            {u.network_type}
+                          </span>
+                        )}
+                        <span style={{ marginLeft: 'auto', fontSize: '0.68rem', fontWeight: 600, color: statusColor }}>
+                          {statusLabel}
+                        </span>
+                        {u.status?.error && (
+                          <span className="text-xs" style={{ color: 'var(--vn-danger)' }} title={u.status.error}>⚠</span>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.68rem', color: 'var(--vn-text-subtle)' }}>
+                          chain{' '}
+                          <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--vn-text-muted)' }}>
+                            {u.chain_name || u.chain_id}
+                          </span>
+                        </span>
+                        {(u.status?.block_height ?? 0) > 0 && (
+                          <span style={{ fontSize: '0.68rem', color: 'var(--vn-text-subtle)' }}>
+                            h{' '}
+                            <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--vn-text-muted)' }}>
+                              {(u.status?.block_height ?? 0).toLocaleString()}
+                            </span>
+                          </span>
+                        )}
+                        {(u.status?.peers ?? 0) > 0 && (
+                          <span style={{ fontSize: '0.68rem', color: 'var(--vn-text-subtle)' }}>
+                            peers{' '}
+                            <span style={{ color: 'var(--vn-text-muted)' }}>{u.status?.peers}</span>
+                          </span>
+                        )}
+                        {(u.status?.gov_pending ?? 0) > 0 && (
+                          <span style={{
+                            fontSize: '0.6rem', padding: '1px 5px', borderRadius: '3px',
+                            background: 'color-mix(in srgb, var(--vn-warning) 10%, transparent)',
+                            border: '1px solid color-mix(in srgb, var(--vn-warning) 25%, transparent)',
+                            color: 'var(--vn-warning)', fontWeight: 600,
+                          }}>
+                            {u.status?.gov_pending} gov
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
             {units.filter(u => (u.status?.upgrade_height ?? 0) > 0).map(u => (
@@ -1139,17 +1098,25 @@ function VMDetailDrawer({
               </div>
             ))}
           </div>
-        )}
-        <div style={{ marginTop: '0.5rem', paddingTop: '1rem', borderTop: '1px solid var(--vn-border)' }}>
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={() => { onClose(); navigate(`/ops?focus=${encodeURIComponent(vm.name)}`); }}
-          >
-            Open in OpsCenter →
-          </button>
+
+          <div style={{ marginTop: '0.5rem', paddingTop: '1rem', borderTop: '1px solid var(--vn-border)' }}>
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => { onClose(); navigate(`/ops?focus=${encodeURIComponent(vm.name)}`); }}
+            >
+              Open in OpsCenter →
+            </button>
+          </div>
         </div>
-      </div>
-    </SettingsDrawer>
+      </SettingsDrawer>
+      {upgradeTarget && (
+        <UpgradeModal
+          vmName={upgradeTarget.name}
+          upgradeURL={vmUpgradeURL(upgradeTarget.name)}
+          onClose={() => setUpgradeTarget(null)}
+        />
+      )}
+    </>
   );
 }
 

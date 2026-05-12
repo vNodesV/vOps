@@ -29,6 +29,8 @@ import Spinner from './components/Spinner';
 import { logout, getDebugMode, setDebugMode, getConfig, savePreferences } from './api';
 import { BASE } from './api/client';
 import { applyTheme, THEMES } from './lib/theme';
+import { getLayoutMode, LAYOUT_EVENT, type LayoutMode } from './lib/layout';
+import SidebarShell from './components/SidebarShell';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
@@ -63,12 +65,23 @@ function Shell({ children }: { children: React.ReactNode }) {
   const [currentTheme, setCurrentTheme] = useState(
     () => document.documentElement.getAttribute('data-theme') ?? 'vthemedgr'
   );
+  const [currentLayout, setCurrentLayout] = useState<LayoutMode>(getLayoutMode);
   const moreRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (loc.pathname === '/login') return;
     getDebugMode().then((d) => setDebugEnabled(d.enabled)).catch(() => {});
   }, [loc.pathname]);
+
+  // Listen for layout preference changes dispatched by PreferencesPanel
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const mode = (e as CustomEvent<{ mode: LayoutMode }>).detail.mode;
+      setCurrentLayout(mode);
+    };
+    window.addEventListener(LAYOUT_EVENT, handler);
+    return () => window.removeEventListener(LAYOUT_EVENT, handler);
+  }, []);
 
   // Close More dropdown on outside click
   useEffect(() => {
@@ -101,6 +114,25 @@ function Shell({ children }: { children: React.ReactNode }) {
   };
 
   if (loc.pathname === '/login') return <>{children}</>;
+
+  // Sidebar layout — renders a fixed left nav instead of the top nav
+  if (currentLayout === 'sidebar') {
+    return (
+      <>
+        {globalSettingsOpen && (
+          <GlobalSettingsDrawer onClose={() => setGlobalSettingsOpen(false)} />
+        )}
+        <SidebarShell
+          debugEnabled={debugEnabled}
+          onToggleDebug={toggleDebug}
+          onGlobalSettings={() => setGlobalSettingsOpen(true)}
+          onLogout={handleLogout}
+        >
+          {children}
+        </SidebarShell>
+      </>
+    );
+  }
 
   const primaryLinks = [
     { to: '/', label: 'Dashboard', end: true },
