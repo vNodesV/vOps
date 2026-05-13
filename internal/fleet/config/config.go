@@ -468,6 +468,7 @@ func MergeConfigs(base, chains *Config) *Config {
 	for _, v := range chains.VMs {
 		if !seen[v.Name] {
 			merged = append(merged, v)
+			seen[v.Name] = true
 		}
 	}
 
@@ -667,6 +668,7 @@ func MergeInfraConfig(base, infra *Config) *Config {
 	for _, v := range infra.VMs {
 		if !seen[v.Name] {
 			vms = append(vms, v)
+			seen[v.Name] = true
 		}
 	}
 

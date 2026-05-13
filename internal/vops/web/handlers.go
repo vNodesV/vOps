@@ -967,12 +967,11 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 // isPrivateIP reports whether the given IP string is a loopback, link-local,
 // or private RFC1918/RFC4193 address. Used to prevent SSRF attacks.
-func isPrivateIP(ipStr string) bool {
-	ip := net.ParseIP(ipStr)
-	if ip == nil {
-		return false
-	}
-	private := []string{
+// The CIDR list is parsed once at package init to avoid per-call allocations.
+var privateNets []*net.IPNet
+
+func init() {
+	for _, cidr := range []string{
 		"127.0.0.0/8",    // loopback
 		"::1/128",        // IPv6 loopback
 		"10.0.0.0/8",     // RFC1918
@@ -982,12 +981,20 @@ func isPrivateIP(ipStr string) bool {
 		"fe80::/10",      // IPv6 link-local
 		"fc00::/7",       // IPv6 unique local (RFC4193)
 		"100.64.0.0/10",  // shared address space (RFC6598)
-	}
-	for _, cidr := range private {
+	} {
 		_, network, err := net.ParseCIDR(cidr)
-		if err != nil {
-			continue
+		if err == nil {
+			privateNets = append(privateNets, network)
 		}
+	}
+}
+
+func isPrivateIP(ipStr string) bool {
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return false
+	}
+	for _, network := range privateNets {
 		if network.Contains(ip) {
 			return true
 		}

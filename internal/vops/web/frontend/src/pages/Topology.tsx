@@ -247,7 +247,6 @@ function buildGraph(hosts: HostInventory[], vms: VMView[], units: CosmosUnitWith
   const hostsByDC: Record<string, HostInventory[]> = {};
   for (const h of hosts) (hostsByDC[h.datacenter ?? 'Unknown DC'] ??= []).push(h);
   for (const vm of vms) {
-    if (vm.host_ref) continue;
     const dc = vm.datacenter ?? 'Unknown DC';
     if (!hostsByDC[dc]) hostsByDC[dc] = [];
   }
