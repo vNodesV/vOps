@@ -780,7 +780,7 @@ func securityHeaders(next http.Handler) http.Handler {
 		h.Set("Content-Security-Policy",
 			"default-src 'self';"+
 				" script-src 'self';"+
-				" style-src 'self' https://fonts.googleapis.com;"+
+				" style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;"+
 				" img-src 'self' data:;"+
 				" connect-src 'self' https://cosmos.directory;"+
 				" font-src 'self' https://fonts.gstatic.com;")
