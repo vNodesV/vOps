@@ -17,7 +17,6 @@ import AccountDetail from './pages/AccountDetail';
 import LoginPage from './pages/Login';
 import SettingsPage from './pages/settings';
 import OperationsPage from './pages/Operations';
-import TopologyPage from './pages/Topology';
 import MultiProxPage from './pages/MultiProx';
 import AuditPage from './pages/Audit';
 import ProxyPage from './pages/proxy';
@@ -143,7 +142,6 @@ function Shell({ children }: { children: React.ReactNode }) {
 
   const moreLinks = [
     { to: '/chains', label: 'Services' },
-    { to: '/topology', label: 'Topology' },
     { to: '/multiprox', label: 'Multi-vProx' },
     { to: '/audit', label: 'Audit Log' },
     { to: '/settings', label: 'Settings' },
@@ -335,7 +333,6 @@ export default function App() {
               <Route path="/proxy" element={<ProxyPage />} />
               <Route path="/services" element={<Navigate to="/settings" replace />} />
               <Route path="/chains" element={<CosmosNodes />} />
-              <Route path="/topology" element={<TopologyPage />} />
               <Route path="/multiprox" element={<MultiProxPage />} />
               <Route path="/audit" element={<AuditPage />} />
               <Route path="/settings" element={<SettingsPage />} />

@@ -18,7 +18,6 @@ const NAV_SECTIONS = [
     items: [
       { to: '/ops',       label: 'OpsCenter',  end: false },
       { to: '/chains',    label: 'Services',   end: false },
-      { to: '/topology',  label: 'Topology',   end: false },
       { to: '/multiprox', label: 'Multi-vProx',end: false },
     ],
   },
