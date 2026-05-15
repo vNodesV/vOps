@@ -27,15 +27,15 @@ var (
 	buildDate = "unknown"
 )
 
-// resolveVProxHome returns VPROX_HOME or ~/.vProx.
+// resolveVProxHome returns VPROX_HOME or ~/.vOps.
 func resolveVProxHome() string {
 if v := strings.TrimSpace(os.Getenv("VPROX_HOME")); v != "" {
 return v
 }
 if h, err := os.UserHomeDir(); err == nil && h != "" {
-return filepath.Join(h, ".vProx")
+return filepath.Join(h, ".vOps")
 }
-return ".vProx"
+return ".vOps"
 }
 
 // runServiceCommand executes "service vProx <action>" and uses sudo when available.
@@ -288,7 +288,7 @@ if h := os.Getenv("VPROX_HOME"); h != "" {
 return h
 }
 home, _ := os.UserHomeDir()
-return filepath.Join(home, ".vProx")
+return filepath.Join(home, ".vOps")
 }
 
 printHelp := func() {

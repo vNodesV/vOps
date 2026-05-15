@@ -63,12 +63,22 @@ ENV_FILE := $(VOPS_HOME)/._env
 # Remote infra host for TOML patching — override: make toml-upgrade INFRA_HOST=user@host
 INFRA_HOST ?= www.qc
 
+# Remote deploy target — override any var: make deploy DEPLOY_HOST=srvs.vnodesv.net
+DEPLOY_HOST   ?= www.fr
+DEPLOY_USER   ?= vnodesv
+DEPLOY_DIR    ?= /home/$(DEPLOY_USER)/gitHub/vOps
+DEPLOY_BRANCH ?= vOps_v1.5.0
+_SSH          := ssh -i "$(VOPS_HOME)/secret/vops_ssh_key" -o StrictHostKeyChecking=no
+
 # Validate Go environment
-GOPATH := $(shell go env GOPATH)
-GOROOT := $(shell go env GOROOT)
-# Prefer GOBIN if explicitly set — avoids double-bin when GOPATH already ends in /bin on some servers.
+_RAW_GOPATH := $(shell go env GOPATH)
+GOPATH      := $(patsubst %/,%,$(_RAW_GOPATH))
+GOROOT      := $(shell go env GOROOT)
+# Prefer GOBIN if explicitly set.
+# If not set and GOPATH already ends in /bin (some server configs), use it directly
+# to avoid producing a double-bin path like ~/go/bin/bin.
 _RAW_GOBIN := $(shell go env GOBIN 2>/dev/null)
-GOPATH_BIN := $(if $(_RAW_GOBIN),$(_RAW_GOBIN),$(GOPATH)/bin)
+GOPATH_BIN := $(or $(_RAW_GOBIN),$(if $(filter %/bin,$(GOPATH)),$(GOPATH),$(GOPATH)/bin))
 
 # On servers where GOROOT points to a manually installed (potentially broken)
 # Go tree, the module-cache toolchain has a clean stdlib. Prefer it when present,
@@ -84,6 +94,7 @@ EFFECTIVE_GOROOT  := $(if $(_TOOLCHAIN_GOROOT),$(_TOOLCHAIN_GOROOT),$(GOROOT))
 .PHONY: all help install build build-vops build-vops-reset release-vops \
         clean ufw reset-services service-vops service-vprox system-user-vops \
         bump-patch bump-minor bump-major toml-upgrade upgrade-1.2.1-1.4.4 \
+        deploy deploy-vops deploy-vprox deploy-sudoers deploy-fix-bins \
         _config-reset
 
 all: help
@@ -103,9 +114,17 @@ help:
 	@echo "  make reset-services   Stop + remove stale service units (vProx, vLog) before fresh deploy"
 		@echo "  make release-vops     Cross-compile linux/amd64 → vops-linux-amd64, commit + push"
 	@echo "  make clean            Remove local build artifacts"
-	@echo "  make ufw              Passwordless UFW + apt sudoers for vOps"
+	@echo "  make ufw              Consolidated sudoers for vnodesv (UFW + apt + systemctl)"
 	@echo "  make toml-upgrade     SSH to INFRA_HOST ($(INFRA_HOST)) and patch infra TOML files"
 	@echo "  make upgrade-1.2.1-1.4.4  Migrate ~/.vProx config → ~/.vOps, rebuild + restart (run ON server)"
+	@echo ""
+	@echo "  Remote deploy (DEPLOY_HOST=$(DEPLOY_HOST)):"
+	@echo "    make deploy           Full deploy: sudoers + fix-bins + vOps + vProx"
+	@echo "    make deploy-vops      Pull + build-vops only"
+	@echo "    make deploy-vprox     Pull + build-vprox only"
+	@echo "    make deploy-sudoers   Write /etc/sudoers.d/vnodesv (non-interactive)"
+	@echo "    make deploy-fix-bins  Replace /usr/local/bin symlinks with direct copies"
+	@echo "    Override: make deploy DEPLOY_HOST=srvs.vnodesv.net DEPLOY_BRANCH=main"
 	@echo ""
 	@echo "  Version management (vOps):"
 	@echo "    make bump-patch       0.0.1 → 0.0.2  (bug fixes / small improvements)"
@@ -139,12 +158,12 @@ install: _validate-go _dirs _geo _config _config-vops _config-vprox _config-modu
 	@ln -sf "$(GOPATH_BIN)/$(VOPS_NAME)" "$(GOPATH_BIN)/vops"
 	@echo "✓ vops  → $(VOPS_NAME)  (lowercase alias)"
 	@echo ""
-	@echo "── /usr/local/bin symlinks (optional, requires sudo) ────────────────────"
-	@read -p "Create /usr/local/bin/{$(VOPS_NAME),vops} symlinks? (y/n) " -n 1 -r; echo ""; \
+	@echo "── /usr/local/bin copies (optional, requires sudo) ──────────────────────"
+	@read -p "Copy to /usr/local/bin/{$(VOPS_NAME),vops}? (y/n) " -n 1 -r; echo ""; \
 	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-		sudo ln -sf "$(GOPATH_BIN)/$(VOPS_NAME)" "/usr/local/bin/$(VOPS_NAME)"; \
-		sudo ln -sf "$(GOPATH_BIN)/$(VOPS_NAME)" "/usr/local/bin/vops"; \
-		echo "✓ /usr/local/bin/{$(VOPS_NAME),vops} created"; \
+		sudo cp "$(GOPATH_BIN)/$(VOPS_NAME)" "/usr/local/bin/$(VOPS_NAME)"; \
+		sudo cp "$(GOPATH_BIN)/$(VOPS_NAME)" "/usr/local/bin/vops"; \
+		echo "✓ /usr/local/bin/{$(VOPS_NAME),vops} installed (direct copy, no symlink)"; \
 	else \
 		echo "✓ Skipped — run from $(GOPATH_BIN)/ or add it to PATH."; \
 	fi
@@ -422,9 +441,8 @@ build-vops: _frontend
 	mkdir -p "$(BUILD_DIR)"
 	GOROOT="$(EFFECTIVE_GOROOT)" go build -ldflags "$(VOPS_LDFLAGS)" -o "$(VOPS_BUILD)" "$(VOPS_SRC)"
 	@echo "✓ Build complete — Binary: $(VOPS_BUILD)"
-	@VOPS_SC_LINE="$(USER) ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop $(VOPS_NAME), /usr/bin/systemctl start $(VOPS_NAME), /usr/bin/systemctl restart $(VOPS_NAME)"; \
-	if ! ([[ -f "/etc/sudoers.d/vops" ]] && sudo grep -qF "$$VOPS_SC_LINE" /etc/sudoers.d/vops); then \
-		echo "  ⚠ Passwordless systemctl not configured — run 'make service-vops' to configure sudoers."; \
+	@if ! ([[ -f "/etc/sudoers.d/vnodesv" ]] && sudo grep -qF "/usr/bin/systemctl stop $(VOPS_NAME)" /etc/sudoers.d/vnodesv); then \
+		echo "  ⚠ Passwordless systemctl not configured — run 'make ufw' to configure sudoers."; \
 	fi
 	@echo "Stopping $(VOPS_NAME) service for swap..."
 	@sudo systemctl stop "$(VOPS_NAME)" 2>/dev/null && echo "  ✓ $(VOPS_NAME) stopped" || echo "  ○ $(VOPS_NAME) was not running"
@@ -663,13 +681,15 @@ system-user-vops:
 	fi
 	@echo "  Tip: run 'make ufw' to grant vops the required sudoers entries."
 
-## Set up passwordless UFW + apt for vOps (writes /etc/sudoers.d/vops).
+## Write ALL passwordless sudoers rules for vnodesv into /etc/sudoers.d/vnodesv.
+## Covers: UFW block/unblock, conntrack, apt, systemctl for vOps + vProx.
+## Removes legacy /etc/sudoers.d/vops and /etc/sudoers.d/vprox if present.
 ufw:
-	@SUDOERS_FILE="/etc/sudoers.d/vops"; \
-	SUDOERS_LINE="$(VOPS_USER) ALL=(ALL) NOPASSWD: /usr/sbin/ufw deny from *, /usr/sbin/ufw delete deny from *, /usr/sbin/ufw insert 1 deny from * to any, /usr/sbin/conntrack -L -s *, /usr/sbin/conntrack -D -s *, /usr/bin/apt update, /usr/bin/apt upgrade -y"; \
+	@SUDOERS_FILE="/etc/sudoers.d/vnodesv"; \
+	SUDOERS_LINE="vnodesv ALL=(ALL) NOPASSWD: /usr/sbin/ufw deny from *, /usr/sbin/ufw delete deny from *, /usr/sbin/ufw insert 1 deny from * to any, /usr/sbin/conntrack -L -s *, /usr/sbin/conntrack -D -s *, /usr/bin/apt update, /usr/bin/apt upgrade -y, /usr/bin/systemctl stop vOps, /usr/bin/systemctl start vOps, /usr/bin/systemctl restart vOps, /usr/bin/systemctl stop vProx, /usr/bin/systemctl start vProx, /usr/bin/systemctl restart vProx"; \
 	if [[ -f "$$SUDOERS_FILE" ]]; then \
 		if sudo grep -qF "$$SUDOERS_LINE" "$$SUDOERS_FILE"; then \
-			echo "✓ Sudoers rule already configured ($$SUDOERS_FILE)"; \
+			echo "✓ Sudoers already configured ($$SUDOERS_FILE)"; \
 		else \
 			echo "⚠ $$SUDOERS_FILE exists but differs. Current content:"; \
 			sudo cat "$$SUDOERS_FILE"; \
@@ -684,19 +704,23 @@ ufw:
 			fi; \
 		fi; \
 	else \
-		echo "Setting up passwordless UFW block/unblock for vOps..."; \
-		echo "  Allows 'Block IP' and 'Unblock' buttons in vOps UI without password prompt."; \
+		echo "Setting up passwordless sudoers for vnodesv (UFW, conntrack, apt, systemctl)..."; \
 		read -p "Create sudoers rule? (y/n) " -n 1 -r; echo ""; \
 		if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
 			echo "$$SUDOERS_LINE" | sudo tee "$$SUDOERS_FILE" > /dev/null; \
 			sudo chmod 0440 "$$SUDOERS_FILE"; \
 			echo "✓ Created $$SUDOERS_FILE"; \
 		else \
-			echo "✓ Skipped. You can create it manually:"; \
-			echo "  echo '$$SUDOERS_LINE' | sudo tee $$SUDOERS_FILE"; \
-			echo "  sudo chmod 0440 $$SUDOERS_FILE"; \
+			echo "✓ Skipped. Create manually:"; \
+			echo "  echo '$$SUDOERS_LINE' | sudo tee $$SUDOERS_FILE && sudo chmod 0440 $$SUDOERS_FILE"; \
 		fi; \
-	fi
+	fi; \
+	for OLD in /etc/sudoers.d/vops /etc/sudoers.d/vprox; do \
+		if [[ -f "$$OLD" ]]; then \
+			echo "  Removing legacy $$OLD..."; \
+			sudo rm -f "$$OLD" && echo "  ✓ Removed $$OLD"; \
+		fi; \
+	done
 
 ## ─── vOps version management ────────────────────────────────────────────────
 ## Source of truth: cmd/vops/VERSION  (format: MAJOR.MINOR.PATCH)
@@ -771,3 +795,51 @@ toml-upgrade:
 
 upgrade-1.2.1-1.4.4:
 	@bash scripts/upgrade-1.2.1-to-1.4.4.sh
+
+## ─── Remote deploy ───────────────────────────────────────────────────────────
+## SSH key: $(VOPS_HOME)/secret/vops_ssh_key
+## Override any var: make deploy DEPLOY_HOST=srvs.vnodesv.net DEPLOY_BRANCH=main
+
+## Full deploy to DEPLOY_HOST: sudoers → fix-bins → vOps → vProx → status.
+deploy: deploy-sudoers deploy-fix-bins deploy-vops deploy-vprox
+	@echo "── Service status ───────────────────────────────────────────────────────"
+	@$(_SSH) "$(DEPLOY_USER)@$(DEPLOY_HOST)" \
+		'for S in vOps vProx; do printf "  %-8s %s\n" "$$S:" "$$(systemctl is-active $$S 2>/dev/null || echo inactive)"; done'
+	@echo "[ ok ]  deploy complete → $(DEPLOY_HOST)"
+
+## Pull + build-vops on DEPLOY_HOST.
+deploy-vops:
+	@echo "[info]  deploy-vops → $(DEPLOY_HOST)"
+	@$(_SSH) "$(DEPLOY_USER)@$(DEPLOY_HOST)" \
+		"cd $(DEPLOY_DIR) && git pull origin $(DEPLOY_BRANCH) && make build-vops"
+
+## Pull + build-vprox on DEPLOY_HOST.
+deploy-vprox:
+	@echo "[info]  deploy-vprox → $(DEPLOY_HOST)"
+	@$(_SSH) "$(DEPLOY_USER)@$(DEPLOY_HOST)" \
+		"cd $(DEPLOY_DIR) && git pull origin $(DEPLOY_BRANCH) && make build-vprox"
+
+## Write /etc/sudoers.d/vnodesv on DEPLOY_HOST (non-interactive). Removes legacy vops/vprox files.
+deploy-sudoers:
+	@echo "[info]  sudoers → $(DEPLOY_HOST)"
+	@$(_SSH) "$(DEPLOY_USER)@$(DEPLOY_HOST)" \
+		"echo 'vnodesv ALL=(ALL) NOPASSWD: /usr/sbin/ufw deny from *, /usr/sbin/ufw delete deny from *, /usr/sbin/ufw insert 1 deny from * to any, /usr/sbin/conntrack -L -s *, /usr/sbin/conntrack -D -s *, /usr/bin/apt update, /usr/bin/apt upgrade -y, /usr/bin/systemctl stop vOps, /usr/bin/systemctl start vOps, /usr/bin/systemctl restart vOps, /usr/bin/systemctl stop vProx, /usr/bin/systemctl start vProx, /usr/bin/systemctl restart vProx' \
+		| sudo tee /etc/sudoers.d/vnodesv > /dev/null \
+		&& sudo chmod 0440 /etc/sudoers.d/vnodesv \
+		&& sudo rm -f /etc/sudoers.d/vops /etc/sudoers.d/vprox \
+		&& echo '[ ok ]  /etc/sudoers.d/vnodesv'"
+
+## Replace /usr/local/bin/{vOps,vProx} symlinks with direct copies on DEPLOY_HOST.
+deploy-fix-bins:
+	@echo "[info]  fix-bins → $(DEPLOY_HOST)"
+	@$(_SSH) "$(DEPLOY_USER)@$(DEPLOY_HOST)" \
+		'for BIN in vOps vProx; do \
+			if [[ -L /usr/local/bin/$$BIN ]]; then \
+				REAL=$$(readlink -f /usr/local/bin/$$BIN); \
+				sudo cp "$$REAL" /usr/local/bin/$$BIN && echo "  [ ok ]  $$BIN — symlink replaced"; \
+			elif [[ -f /usr/local/bin/$$BIN ]]; then \
+				echo "  [ ok ]  $$BIN — already a regular file"; \
+			else \
+				echo "  [warn]  $$BIN — not found at /usr/local/bin/$$BIN"; \
+			fi; \
+		done'
