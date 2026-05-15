@@ -16,6 +16,9 @@ VOPS_VERSION  := $(shell cat cmd/vops/VERSION 2>/dev/null || echo "dev")
 VOPS_COMMIT   := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 VOPS_BUILT    := $(shell date -u +%Y-%m-%d)
 VOPS_LDFLAGS  := -X main.version=$(VOPS_VERSION) -X main.commit=$(VOPS_COMMIT) -X main.buildDate=$(VOPS_BUILT)
+# Override on the command line: make build-vprox VPROX_VERSION=1.0.1
+VPROX_VERSION := $(shell cat cmd/vprox/VERSION 2>/dev/null || echo "dev")
+VPROX_LDFLAGS := -X main.version=$(VPROX_VERSION) -X main.commit=$(VOPS_COMMIT) -X main.buildDate=$(VOPS_BUILT)
 # Service user: defaults to the installing user.
 # Override for a dedicated service account: make service-vops VOPS_USER=vops
 # (run `make system-user-vops` first to create the vops system user).
@@ -347,15 +350,43 @@ _config-modules:
 ## Build vOps binary (default build target)
 build: build-vops
 
-## Build vProx binary to .build/vProx
-## LEGACY — scheduled for removal in v1.4.0.
-## Use `vops vprox --start` (suite mode) or `vops vprox --daemon` instead.
-_build-vprox:
-	@echo "Building $(APP_NAME)..."
+## Build vProx binary to .build/vProx (with version ldflags, service sync + restart).
+## ⚠ NEVER touches any config TOML files — existing configs are always preserved.
+build-vprox:
+	@echo "Building $(APP_NAME) (service keeps running during compile)..."
 	mkdir -p "$(BUILD_DIR)"
-	GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(BUILD_OUT)" "$(BUILD_SRC)"
-	@echo "✓ Build complete"
-	@echo "  Output: $(BUILD_OUT)"
+	GOROOT="$(EFFECTIVE_GOROOT)" go build -ldflags "$(VPROX_LDFLAGS)" -o "$(BUILD_OUT)" "$(BUILD_SRC)"
+	@echo "✓ Build complete — Binary: $(BUILD_OUT)"
+	@echo "Stopping $(APP_NAME) service for swap..."
+	@sudo systemctl stop "$(APP_NAME)" 2>/dev/null && echo "  ✓ $(APP_NAME) stopped" || echo "  ○ $(APP_NAME) was not running"
+	@cp "$(BUILD_OUT)" "$(GOPATH_BIN)/$(APP_NAME)"
+	@if [ -e "/usr/local/bin/$(APP_NAME)" ]; then \
+		sudo cp "$(BUILD_OUT)" "/usr/local/bin/$(APP_NAME)"; \
+		echo "  ✓ Updated → /usr/local/bin/$(APP_NAME)"; \
+	fi
+	@echo "  Copied → $(GOPATH_BIN)/$(APP_NAME)"
+	@echo "── Syncing vProx service file ───────────────────────────────────────────"
+	@sys="/etc/systemd/system/vProx.service"; \
+	if [[ -f "$$sys" ]]; then \
+		rnd=$$(mktemp); \
+		sed "s|__HOME__|$(HOME)|g; s|__USER__|$(USER)|g; s|__VOPS_USER__|$(VOPS_USER)|g" vprox.service.template > "$$rnd"; \
+		if ! cmp -s "$$rnd" "$$sys"; then \
+			sudo cp "$$sys" "$${sys}.bak.$$(date +%s)"; \
+			sudo cp "$$rnd" "$$sys"; \
+			echo "  ✓ vProx.service updated (drifted from template; prior backed up)"; \
+			sudo systemctl daemon-reload && echo "  ✓ daemon-reload"; \
+		else \
+			echo "  ✓ vProx.service up to date"; \
+		fi; \
+		rm -f "$$rnd"; \
+	fi
+	@echo "Restarting $(APP_NAME) service..."
+	@sudo systemctl start "$(APP_NAME)" 2>/dev/null && echo "  ✓ $(APP_NAME) started" || echo "  ○ Could not start $(APP_NAME) — start manually: sudo service $(APP_NAME) start"
+
+## LEGACY: use build-vprox instead.
+_build-vprox:
+	@echo "⚠ _build-vprox is deprecated — use 'make build-vprox' instead."
+	@$(MAKE) build-vprox
 
 ## Clean local build artifacts (never touches installed binary)
 
@@ -694,6 +725,33 @@ bump-major:
 	new="$$((maj+1)).0.0"; \
 	printf "$$new\n" > cmd/vops/VERSION; \
 	echo "✓ vOps version: $$ver → $$new  (cmd/vops/VERSION updated)"
+
+## ─── vProx version management ──────────────────────────────────────────────
+## Source of truth: cmd/vprox/VERSION  (format: MAJOR.MINOR.PATCH)
+
+## Bump vProx patch version.
+bump-patch-vprox:
+	@ver=$$(cat cmd/vprox/VERSION); \
+	IFS='.' read -r maj min pat <<< "$$ver"; \
+	new="$$maj.$$min.$$((pat+1))"; \
+	printf "$$new\n" > cmd/vprox/VERSION; \
+	echo "✓ vProx version: $$ver → $$new  (cmd/vprox/VERSION updated)"
+
+## Bump vProx minor version.
+bump-minor-vprox:
+	@ver=$$(cat cmd/vprox/VERSION); \
+	IFS='.' read -r maj min pat <<< "$$ver"; \
+	new="$$maj.$$((min+1)).0"; \
+	printf "$$new\n" > cmd/vprox/VERSION; \
+	echo "✓ vProx version: $$ver → $$new  (cmd/vprox/VERSION updated)"
+
+## Bump vProx major version.
+bump-major-vprox:
+	@ver=$$(cat cmd/vprox/VERSION); \
+	IFS='.' read -r maj min pat <<< "$$ver"; \
+	new="$$((maj+1)).0.0"; \
+	printf "$$new\n" > cmd/vprox/VERSION; \
+	echo "✓ vProx version: $$ver → $$new  (cmd/vprox/VERSION updated)"
 
 ## ─── Infra config maintenance ────────────────────────────────────────────────
 

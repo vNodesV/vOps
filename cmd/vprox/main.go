@@ -20,6 +20,13 @@ backup "github.com/vNodesV/vOps/internal/backup"
 "github.com/vNodesV/vOps/internal/vprox"
 )
 
+// Injected at build time via -ldflags.
+var (
+	version   = "dev"
+	commit    = "unknown"
+	buildDate = "unknown"
+)
+
 // resolveVProxHome returns VPROX_HOME or ~/.vProx.
 func resolveVProxHome() string {
 if v := strings.TrimSpace(os.Getenv("VPROX_HOME")); v != "" {
@@ -406,8 +413,7 @@ flag.Usage = printHelp
 flag.Parse()
 
 if *versionFlag {
-fmt.Println("vProx - Reverse proxy with rate limiting and geolocation")
-fmt.Println("Version: 1.0.0")
+fmt.Printf("vProx %s (commit: %s, built: %s)\n", version, commit, buildDate)
 os.Exit(0)
 }
 
