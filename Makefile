@@ -69,6 +69,7 @@ DEPLOY_USER   ?= vnodesv
 DEPLOY_DIR    ?= /home/$(DEPLOY_USER)/gitHub/vOps
 DEPLOY_BRANCH ?= vOps_v1.5.0
 _SSH          := ssh -i "$(VOPS_HOME)/secret/vops_ssh_key" -o StrictHostKeyChecking=no
+_SSH_TTY      := ssh -tt -i "$(VOPS_HOME)/secret/vops_ssh_key" -o StrictHostKeyChecking=no
 
 # Validate Go environment
 _RAW_GOPATH := $(shell go env GOPATH)
@@ -821,8 +822,8 @@ deploy-vprox:
 
 ## Write /etc/sudoers.d/vnodesv on DEPLOY_HOST (non-interactive). Removes legacy vops/vprox files.
 deploy-sudoers:
-	@echo "[info]  sudoers → $(DEPLOY_HOST)"
-	@$(_SSH) "$(DEPLOY_USER)@$(DEPLOY_HOST)" \
+	@echo "[info]  sudoers → $(DEPLOY_HOST) (interactive — sudo password may be required)"
+	@$(_SSH_TTY) "$(DEPLOY_USER)@$(DEPLOY_HOST)" \
 		"echo 'vnodesv ALL=(ALL) NOPASSWD: /usr/sbin/ufw deny from *, /usr/sbin/ufw delete deny from *, /usr/sbin/ufw insert 1 deny from * to any, /usr/sbin/conntrack -L -s *, /usr/sbin/conntrack -D -s *, /usr/bin/apt update, /usr/bin/apt upgrade -y, /usr/bin/systemctl stop vOps, /usr/bin/systemctl start vOps, /usr/bin/systemctl restart vOps, /usr/bin/systemctl stop vProx, /usr/bin/systemctl start vProx, /usr/bin/systemctl restart vProx' \
 		| sudo tee /etc/sudoers.d/vnodesv > /dev/null \
 		&& sudo chmod 0440 /etc/sudoers.d/vnodesv \
