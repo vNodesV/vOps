@@ -92,7 +92,7 @@ EFFECTIVE_GOROOT  := $(if $(_TOOLCHAIN_GOROOT),$(_TOOLCHAIN_GOROOT),$(GOROOT))
 
 # Public targets only — internal helpers (_dirs, _geo, config-*, _env, _frontend, …) are intentionally
 # excluded from .PHONY so they don't pollute tab-completion.
-.PHONY: all help install build build-vops build-vops-reset release-vops \
+.PHONY: all help install install-sudoers install-fix-bins build build-vops build-vops-reset release-vops \
         clean ufw reset-services service-vops service-vprox system-user-vops \
         bump-patch bump-minor bump-major toml-upgrade upgrade-1.2.1-1.4.4 \
         deploy deploy-vops deploy-vprox deploy-sudoers deploy-fix-bins \
@@ -120,12 +120,17 @@ help:
 	@echo "  make upgrade-1.2.1-1.4.4  Migrate ~/.vProx config → ~/.vOps, rebuild + restart (run ON server)"
 	@echo ""
 	@echo "  Remote deploy (DEPLOY_HOST=$(DEPLOY_HOST)):"
-	@echo "    make deploy           Full deploy: sudoers + fix-bins + vOps + vProx"
-	@echo "    make deploy-vops      Pull + build-vops only"
-	@echo "    make deploy-vprox     Pull + build-vprox only"
-	@echo "    make deploy-sudoers   Write /etc/sudoers.d/vnodesv (non-interactive)"
-	@echo "    make deploy-fix-bins  Replace /usr/local/bin symlinks with direct copies"
+	@echo "    make deploy           git pull + make install on DEPLOY_HOST via SSH"
+	@echo "    make deploy-vops      Pull + build-vops only on DEPLOY_HOST"
+	@echo "    make deploy-vprox     Pull + build-vprox only on DEPLOY_HOST"
+	@echo "    make deploy-sudoers   Write sudoers on DEPLOY_HOST via SSH (interactive)"
+	@echo "    make deploy-fix-bins  Fix /usr/local/bin symlinks on DEPLOY_HOST via SSH"
 	@echo "    Override: make deploy DEPLOY_HOST=srvs.vnodesv.net DEPLOY_BRANCH=main"
+	@echo ""
+	@echo "  Local install (run ON the server after git pull):"
+	@echo "    make install          sudoers + fix-bins + build vOps + vProx"
+	@echo "    make install-sudoers  Write /etc/sudoers.d/vnodesv locally (requires sudo)"
+	@echo "    make install-fix-bins Replace /usr/local/bin symlinks with direct copies locally"
 	@echo ""
 	@echo "  Version management (vOps):"
 	@echo "    make bump-patch       0.0.1 → 0.0.2  (bug fixes / small improvements)"
@@ -797,50 +802,67 @@ toml-upgrade:
 upgrade-1.2.1-1.4.4:
 	@bash scripts/upgrade-1.2.1-to-1.4.4.sh
 
-## ─── Remote deploy ───────────────────────────────────────────────────────────
-## SSH key: $(VOPS_HOME)/secret/vops_ssh_key
-## Override any var: make deploy DEPLOY_HOST=srvs.vnodesv.net DEPLOY_BRANCH=main
+## ─── Local install (run ON the server after git pull) ────────────────────────
 
-## Full deploy to DEPLOY_HOST: sudoers → fix-bins → vOps → vProx → status.
-deploy: deploy-sudoers deploy-fix-bins deploy-vops deploy-vprox
+## Full local install: sudoers → fix-bins → build both binaries.
+## Run this directly on the server: make install
+install: install-sudoers install-fix-bins build-vops build-vprox
 	@echo "── Service status ───────────────────────────────────────────────────────"
+	@for S in vOps vProx; do printf "  %-8s %s\n" "$$S:" "$$(systemctl is-active $$S 2>/dev/null || echo inactive)"; done
+	@echo "[ ok ]  install complete"
+
+## Write /etc/sudoers.d/vnodesv locally. Requires sudo. Removes legacy vops/vprox files.
+install-sudoers:
+	@echo "[info]  writing /etc/sudoers.d/vnodesv"
+	@echo 'vnodesv ALL=(ALL) NOPASSWD: /usr/sbin/ufw deny from *, /usr/sbin/ufw delete deny from *, /usr/sbin/ufw insert 1 deny from * to any, /usr/sbin/conntrack -L -s *, /usr/sbin/conntrack -D -s *, /usr/bin/apt update, /usr/bin/apt upgrade -y, /usr/bin/systemctl stop vOps, /usr/bin/systemctl start vOps, /usr/bin/systemctl restart vOps, /usr/bin/systemctl stop vProx, /usr/bin/systemctl start vProx, /usr/bin/systemctl restart vProx' \
+		| sudo tee /etc/sudoers.d/vnodesv > /dev/null
+	@sudo chmod 0440 /etc/sudoers.d/vnodesv
+	@sudo rm -f /etc/sudoers.d/vops /etc/sudoers.d/vprox
+	@echo "[ ok ]  /etc/sudoers.d/vnodesv"
+
+## Replace /usr/local/bin/{vOps,vProx} symlinks with direct copies (POSIX sh safe).
+install-fix-bins:
+	@echo "[info]  fix-bins"
+	@for BIN in vOps vProx; do \
+		if [ -L /usr/local/bin/$$BIN ]; then \
+			REAL=$$(readlink -f /usr/local/bin/$$BIN); \
+			sudo cp "$$REAL" /usr/local/bin/$$BIN && echo "  [ ok ]  $$BIN — symlink replaced"; \
+		elif [ -f /usr/local/bin/$$BIN ]; then \
+			echo "  [ ok ]  $$BIN — already a regular file"; \
+		else \
+			echo "  [warn]  $$BIN — not found at /usr/local/bin/$$BIN"; \
+		fi; \
+	done
+
+## ─── Remote deploy (run from dev machine) ────────────────────────────────────
+## SSH key: $(VOPS_HOME)/secret/vops_ssh_key
+## Override: make deploy DEPLOY_HOST=srvs.vnodesv.net DEPLOY_BRANCH=main
+
+## Full remote deploy: pull branch + make install on DEPLOY_HOST.
+deploy:
+	@echo "[info]  deploy → $(DEPLOY_HOST) branch=$(DEPLOY_BRANCH)"
 	@$(_SSH) "$(DEPLOY_USER)@$(DEPLOY_HOST)" \
-		'for S in vOps vProx; do printf "  %-8s %s\n" "$$S:" "$$(systemctl is-active $$S 2>/dev/null || echo inactive)"; done'
+		"cd $(DEPLOY_DIR) && git pull origin $(DEPLOY_BRANCH) && make install"
 	@echo "[ ok ]  deploy complete → $(DEPLOY_HOST)"
 
-## Pull + build-vops on DEPLOY_HOST.
+## Pull + build-vops only on DEPLOY_HOST.
 deploy-vops:
 	@echo "[info]  deploy-vops → $(DEPLOY_HOST)"
 	@$(_SSH) "$(DEPLOY_USER)@$(DEPLOY_HOST)" \
 		"cd $(DEPLOY_DIR) && git pull origin $(DEPLOY_BRANCH) && make build-vops"
 
-## Pull + build-vprox on DEPLOY_HOST.
+## Pull + build-vprox only on DEPLOY_HOST.
 deploy-vprox:
 	@echo "[info]  deploy-vprox → $(DEPLOY_HOST)"
 	@$(_SSH) "$(DEPLOY_USER)@$(DEPLOY_HOST)" \
 		"cd $(DEPLOY_DIR) && git pull origin $(DEPLOY_BRANCH) && make build-vprox"
 
-## Write /etc/sudoers.d/vnodesv on DEPLOY_HOST (non-interactive). Removes legacy vops/vprox files.
+## Write sudoers on DEPLOY_HOST via SSH (requires sudo password on first run).
 deploy-sudoers:
-	@echo "[info]  sudoers → $(DEPLOY_HOST) (interactive — sudo password may be required)"
-	@$(_SSH_TTY) "$(DEPLOY_USER)@$(DEPLOY_HOST)" \
-		"echo 'vnodesv ALL=(ALL) NOPASSWD: /usr/sbin/ufw deny from *, /usr/sbin/ufw delete deny from *, /usr/sbin/ufw insert 1 deny from * to any, /usr/sbin/conntrack -L -s *, /usr/sbin/conntrack -D -s *, /usr/bin/apt update, /usr/bin/apt upgrade -y, /usr/bin/systemctl stop vOps, /usr/bin/systemctl start vOps, /usr/bin/systemctl restart vOps, /usr/bin/systemctl stop vProx, /usr/bin/systemctl start vProx, /usr/bin/systemctl restart vProx' \
-		| sudo tee /etc/sudoers.d/vnodesv > /dev/null \
-		&& sudo chmod 0440 /etc/sudoers.d/vnodesv \
-		&& sudo rm -f /etc/sudoers.d/vops /etc/sudoers.d/vprox \
-		&& echo '[ ok ]  /etc/sudoers.d/vnodesv'"
+	@echo "[info]  sudoers → $(DEPLOY_HOST)"
+	@$(_SSH_TTY) "$(DEPLOY_USER)@$(DEPLOY_HOST)" "cd $(DEPLOY_DIR) && make install-sudoers"
 
-## Replace /usr/local/bin/{vOps,vProx} symlinks with direct copies on DEPLOY_HOST.
+## Fix /usr/local/bin symlinks on DEPLOY_HOST via SSH.
 deploy-fix-bins:
 	@echo "[info]  fix-bins → $(DEPLOY_HOST)"
-	@$(_SSH) "$(DEPLOY_USER)@$(DEPLOY_HOST)" \
-		'for BIN in vOps vProx; do \
-			if [[ -L /usr/local/bin/$$BIN ]]; then \
-				REAL=$$(readlink -f /usr/local/bin/$$BIN); \
-				sudo cp "$$REAL" /usr/local/bin/$$BIN && echo "  [ ok ]  $$BIN — symlink replaced"; \
-			elif [[ -f /usr/local/bin/$$BIN ]]; then \
-				echo "  [ ok ]  $$BIN — already a regular file"; \
-			else \
-				echo "  [warn]  $$BIN — not found at /usr/local/bin/$$BIN"; \
-			fi; \
-		done'
+	@$(_SSH) "$(DEPLOY_USER)@$(DEPLOY_HOST)" "cd $(DEPLOY_DIR) && make install-fix-bins"
