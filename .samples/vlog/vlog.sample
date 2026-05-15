@@ -74,7 +74,7 @@ poll_interval_sec = 60
 # ── push global defaults ───────────────────────────────────────────────────
 # Default SSH credentials for chain-managed hosts.
 # Applied when [management] user or key_path are empty in chain.toml.
-# Generate the push key: ssh-keygen -t ed25519 -C "vprox-push" -f $HOME/.vprox/secret/id.push
+# Generate the push key: ssh-keygen -t ed25519 -C "vops-push" -f $HOME/.vOps/secret/vops_ssh_key
 [vlog.push.defaults]
 user     = ""    # default SSH user for all chain-managed hosts
 key_path = ""    # default SSH private key path ($HOME expanded at runtime)

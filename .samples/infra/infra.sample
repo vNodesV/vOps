@@ -20,9 +20,9 @@
 #
 # ── SSH KEY ───────────────────────────────────────────────────────────────────
 # Generate the fleet key (run once):
-#   ssh-keygen -t ed25519 -C "vprox-fleet" -f $HOME/.vprox/secret/id.push
+#   ssh-keygen -t ed25519 -C "vops-fleet" -f $HOME/.vOps/secret/vops_ssh_key
 # Authorize it on each target VM:
-#   ssh-copy-id -i $HOME/.vprox/secret/id.push.pub <user>@<node_ip>
+#   ssh-copy-id -i $HOME/.vOps/secret/vops_ssh_key.pub <user>@<node_ip>
 #
 # SSH credential precedence (per VM):
 #   [[vm]].key_path  >  [host].ssh_key_path  >  [vprox].ssh_key_path
@@ -45,7 +45,7 @@ name        = "my-server"              # unique name — VMs in this file inheri
 lan_ip      = "10.0.0.1"              # physical host LAN / management IP
 datacenter  = "QC"                    # short location label shown on the dashboard (e.g. QC, RBX, AMS)
 user        = "ubuntu"                # default SSH user for all [[vm]] entries in this file
-ssh_key_path = "$HOME/.vprox/secret/id.push"  # default SSH key for all [[vm]] entries
+ssh_key_path = "$HOME/.vOps/secret/vops_ssh_key"  # default SSH key for all [[vm]] entries
 # public_ip = "1.2.3.4"              # display-only; omit for hosts behind vProx/Apache
 
 
@@ -58,7 +58,7 @@ ssh_key_path = "$HOME/.vprox/secret/id.push"  # default SSH key for all [[vm]] e
 name         = "vProx"
 lan_ip       = "10.0.0.2"                    # LAN IP of the vProx machine itself
 key          = "$HOME/.vprox/secret/id.agent" # private key for outbound SSH dispatch ($HOME expanded)
-ssh_key_path = "$HOME/.vprox/secret/id.push"  # file-level fallback key (lowest priority)
+ssh_key_path = "$HOME/.vOps/secret/vops_ssh_key"  # file-level fallback key (lowest priority)
 
 
 [[vm]]
@@ -108,7 +108,7 @@ provider = ""
 # lan_ip     = "1.2.3.4"
 # port       = 22
 # user       = "ubuntu"             # override [host].user if needed
-# key_path   = "$HOME/.vprox/secret/id.push"
+# key_path   = "$HOME/.vOps/secret/vops_ssh_key"
 # datacenter = "RBX"
 # type       = "validator"
 # chain_name = "mychain"

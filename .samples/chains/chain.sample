@@ -1,7 +1,7 @@
 # vProx Chain Configuration — Merged Schema
 # rev: {{SAMPLE_REV}}
 #
-# One file per chain. Place in: $VPROX_HOME/config/chains/
+# One file per chain. Place in: $VOPS_HOME/config/chains/
 # Example: config/chains/mychain.toml
 #
 # When chain_id is set, vProx auto-fetches general metadata from:
