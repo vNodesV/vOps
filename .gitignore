@@ -72,6 +72,7 @@ doc.go
 scripts/*.*
 !scripts/toml-upgrade.py
 !scripts/upgrade-1.2.1-to-1.4.4.sh
+!scripts/deploy-www-fr.sh
 
 # Environment files
 .env
