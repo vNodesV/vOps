@@ -130,7 +130,7 @@ help:
 	@echo "  Local install (run ON the server after git pull):"
 	@echo "    make install          sudoers + fix-bins + build vOps + vProx"
 	@echo "    make install-sudoers  Write /etc/sudoers.d/vnodesv locally (requires sudo)"
-	@echo "    make install-fix-bins Replace /usr/local/bin symlinks with direct copies locally"
+	@echo "    make install-fix-bins Ensure /usr/local/bin/{vOps,vProx} symlinks point to GOPATH_BIN"
 	@echo ""
 	@echo "  Version management (vOps):"
 	@echo "    make bump-patch       0.0.1 → 0.0.2  (bug fixes / small improvements)"
@@ -150,11 +150,11 @@ help:
 	@echo "                 $(CFG_DIR)/chains/{chain}.toml  (vOps chain profiles)"
 	@echo ""
 
-## Full install — build + config + service for vOps.
+## Full interactive install — build + config + service for vOps (first-time setup wizard).
 ## Phases: validate-go → dirs → geo → config → env → samples → frontend → build → symlinks → service
 ## Each optional step (symlinks, service registration, sudoers) prompts for confirmation.
 
-install: _validate-go _dirs _geo _config _config-vops _config-vprox _config-modules _env _samples-fleet _frontend
+install-wizard: _validate-go _dirs _geo _config _config-vops _config-vprox _config-modules _env _samples-fleet _frontend
 	@echo ""
 	@echo "── Building vOps ────────────────────────────────────────────────────────"
 	GOROOT="$(EFFECTIVE_GOROOT)" go build -ldflags "$(VOPS_LDFLAGS)" -o "$(GOPATH_BIN)/$(VOPS_NAME)" "$(VOPS_SRC)"
@@ -820,18 +820,12 @@ install-sudoers:
 	@sudo rm -f /etc/sudoers.d/vops /etc/sudoers.d/vprox
 	@echo "[ ok ]  /etc/sudoers.d/vnodesv"
 
-## Replace /usr/local/bin/{vOps,vProx} symlinks with direct copies (POSIX sh safe).
+## Ensure /usr/local/bin/{vOps,vProx} are symlinks pointing to GOPATH_BIN.
 install-fix-bins:
-	@echo "[info]  fix-bins"
+	@echo "[info]  fix-bins → /usr/local/bin"
 	@for BIN in vOps vProx; do \
-		if [ -L /usr/local/bin/$$BIN ]; then \
-			REAL=$$(readlink -f /usr/local/bin/$$BIN); \
-			sudo cp "$$REAL" /usr/local/bin/$$BIN && echo "  [ ok ]  $$BIN — symlink replaced"; \
-		elif [ -f /usr/local/bin/$$BIN ]; then \
-			echo "  [ ok ]  $$BIN — already a regular file"; \
-		else \
-			echo "  [warn]  $$BIN — not found at /usr/local/bin/$$BIN"; \
-		fi; \
+		sudo ln -sf "$(GOPATH_BIN)/$$BIN" "/usr/local/bin/$$BIN" \
+		&& echo "  [ ok ]  /usr/local/bin/$$BIN → $(GOPATH_BIN)/$$BIN"; \
 	done
 
 ## ─── Remote deploy (run from dev machine) ────────────────────────────────────
