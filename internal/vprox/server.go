@@ -1042,10 +1042,18 @@ func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
 // --------------------- CORE HANDLER ---------------------
 
 var httpClient = &http.Client{
-	Timeout: 5 * time.Second,
+	Timeout: 30 * time.Second,
 	Transport: &http.Transport{
-		MaxIdleConns:    100,
-		IdleConnTimeout: 90 * time.Second,
+		MaxIdleConns:          200,
+		MaxIdleConnsPerHost:   20, // default is 2 — critical for connection reuse per Cosmos node
+		IdleConnTimeout:       90 * time.Second,
+		DisableCompression:    true, // pass through upstream encoding unchanged; don't silently decompress
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 20 * time.Second,
+		DialContext: (&net.Dialer{
+			Timeout:   5 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
 	},
 }
 
