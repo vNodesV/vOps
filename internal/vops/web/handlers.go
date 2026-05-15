@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/vNodesV/vOps/internal/logging"
+	"github.com/vNodesV/vOps/internal/vops/conntrack"
 	"github.com/vNodesV/vOps/internal/vops/ctxkeys"
 	"github.com/vNodesV/vOps/internal/vops/db"
 	"github.com/vNodesV/vOps/internal/vops/intel"
@@ -153,7 +154,12 @@ func (s *Server) handleAPIAccountDetail(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
 		return
 	}
-	writeJSON(w, http.StatusOK, account)
+
+	activeConns, _ := conntrack.Count(ip)
+	writeJSON(w, http.StatusOK, struct {
+		*db.IPAccount
+		ActiveConnections int `json:"ActiveConnections"`
+	}{account, activeConns})
 }
 
 func (s *Server) handleAPIEnrich(w http.ResponseWriter, r *http.Request) {
@@ -849,12 +855,25 @@ func (s *Server) handleAPIBlock(w http.ResponseWriter, r *http.Request) {
 		ufwOK = false
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	resp := map[string]any{
 		"ip":      ip,
 		"blocked": true,
 		"ufw":     ufwOK,
 		"reason":  reason,
-	})
+	}
+
+	// ?sever=true also severs all existing connections via conntrack.
+	if r.URL.Query().Get("sever") == "true" {
+		severed, err := conntrack.Sever(ip)
+		if err != nil {
+			logging.Print("WRN", "web", "conntrack sever failed", logging.F("ip", ip), logging.F("err", err))
+		}
+		resp["severed"] = severed
+		resp["conntrack"] = err == nil
+		logging.Print("INF", "web", "connections severed", logging.F("ip", ip), logging.F("count", severed))
+	}
+
+	writeJSON(w, http.StatusOK, resp)
 
 	actor, _ := r.Context().Value(ctxkeys.Actor).(string)
 	params, _ := json.Marshal(map[string]string{"reason": reason})
@@ -903,9 +922,41 @@ func (s *Server) handleAPIUnblock(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ---------------------------------------------------------------------------
+// handleAPISever severs all active kernel connections from the given IP by
+// deleting their conntrack entries, causing the kernel to send TCP RSTs.
+// POST /api/v1/sever/{ip}
+func (s *Server) handleAPISever(w http.ResponseWriter, r *http.Request) {
+	ip := r.PathValue("ip")
+	if net.ParseIP(ip) == nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid IP"})
+		return
+	}
 
-// handleAPIUFWSync reads current UFW DENY rules and imports any unknown IPs
+	severed, err := conntrack.Sever(ip)
+	if err != nil {
+		logging.Print("ERR", "web", "conntrack sever failed", logging.F("ip", ip), logging.F("err", err))
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "sever failed: " + err.Error()})
+		return
+	}
+
+	logging.Print("INF", "web", "connections severed", logging.F("ip", ip), logging.F("count", severed))
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ip":        ip,
+		"severed":   severed,
+		"conntrack": conntrack.IsAvailable(),
+	})
+
+	actor, _ := r.Context().Value(ctxkeys.Actor).(string)
+	params, _ := json.Marshal(map[string]int{"severed": severed})
+	_ = db.InsertAuditLog(s.db.DB, db.AuditEntry{
+		Actor:      actor,
+		Action:     "ip.sever",
+		TargetType: "ip",
+		TargetName: ip,
+		Params:     string(params),
+		Result:     "ok",
+	})
+}
 // into the blocked_ips table. Already-blocked IPs are skipped (idempotent).
 // POST /api/v1/ufw/sync
 // Accepts optional JSON body: {"sudo_password": "..."} for servers without NOPASSWD.

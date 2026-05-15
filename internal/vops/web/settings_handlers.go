@@ -22,7 +22,6 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"github.com/pelletier/go-toml/v2"
-	"github.com/vNodesV/vOps/internal/configwizard"
 	fleetcfg "github.com/vNodesV/vOps/internal/fleet/config"
 	vopscfg "github.com/vNodesV/vOps/internal/vops/config"
 )
@@ -160,65 +159,16 @@ func (s *Server) handleAPIGenSSHKey(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
-func (s *Server) handleAPISettingsCurrent(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, configwizard.CurrentSnapshot(s.home, r.URL.Query().Get("mode")))
+func (s *Server) handleAPISettingsCurrent(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "config wizard removed"})
 }
 
-func (s *Server) handleAPISettingsImport(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 512*1024)
-	var req struct {
-		Step string `json:"step"`
-		Path string `json:"path"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON payload"})
-		return
-	}
-
-	// Constrain import path to ~/.vOps and ~/.vProx to prevent path traversal.
-	abs, err := filepath.Abs(filepath.Clean(req.Path))
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid path"})
-		return
-	}
-	vopsRoot := filepath.Join(s.home, ".vOps")
-	vproxRoot := filepath.Join(s.home, ".vProx")
-	if !strings.HasPrefix(abs, vopsRoot+string(filepath.Separator)) &&
-		abs != vopsRoot &&
-		!strings.HasPrefix(abs, vproxRoot+string(filepath.Separator)) &&
-		abs != vproxRoot {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "path outside allowed root"})
-		return
-	}
-
-	fields, normalizedPath, err := configwizard.ImportStepFieldsFromPath(req.Step, req.Path)
-	if err != nil {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status":      "ok",
-		"step":        req.Step,
-		"source_path": normalizedPath,
-		"fields":      fields,
-	})
+func (s *Server) handleAPISettingsImport(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "config wizard removed"})
 }
 
-func (s *Server) handleAPISettingsRemove(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 256*1024)
-	var req struct {
-		Step   string `json:"step"`
-		Target string `json:"target"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON payload"})
-		return
-	}
-	if err := configwizard.RemoveStepEntry(s.home, req.Step, req.Target); err != nil {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+func (s *Server) handleAPISettingsRemove(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "config wizard removed"})
 }
 
 func (s *Server) handleAPISettingsApply(w http.ResponseWriter, r *http.Request) {
@@ -320,42 +270,14 @@ func (s *Server) reloadFleetRuntime(ctx context.Context) {
 	s.fleetSvc.Poll(pollCtx)
 }
 
-func (s *Server) handleAPISettingsSave(step string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		r.Body = http.MaxBytesReader(w, r.Body, 512*1024)
-		var fields map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&fields); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON payload"})
-			return
-		}
-		if err := configwizard.ApplyFields(s.home, step, fields); err != nil {
-			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
-			return
-		}
-		// Reload fleet runtime immediately when infra or fleet settings change
-		// so that fleet scan, VM status, and VM manager see the new config
-		// without needing a service restart.
-		if step == "infra" || step == "fleet" {
-			s.reloadFleetRuntime(r.Context())
-		}
-		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+func (s *Server) handleAPISettingsSave(_ string) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "config wizard removed"})
 	}
 }
 
-// handleAPIIntelKeys updates only the AbuseIPDB, VirusTotal, and Shodan API keys
-// in vops.toml, leaving all other settings untouched.
-func (s *Server) handleAPIIntelKeys(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 4*1024)
-	var fields map[string]any
-	if err := json.NewDecoder(r.Body).Decode(&fields); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON payload"})
-		return
-	}
-	if err := configwizard.ApplyIntelKeys(s.home, fields); err != nil {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+func (s *Server) handleAPIIntelKeys(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "config wizard removed"})
 }
 
 // handleAPISettingsPreferences persists UI preferences (theme) to vops.toml,
@@ -417,16 +339,9 @@ func (s *Server) handleAPISettingsPreferences(w http.ResponseWriter, r *http.Req
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "theme": req.Theme})
 }
 
-// handleWizardPage serves the embedded configwizard SPA at GET /settings/wizard.
-// It bypasses the React SPA so the wizard's self-contained HTML/JS runs directly.
+// handleWizardPage is a stub — the config wizard has been removed.
 func (s *Server) handleWizardPage(w http.ResponseWriter, _ *http.Request) {
-	html, err := configwizard.WizardHTML()
-	if err != nil {
-		http.Error(w, "wizard not available", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write(html)
+	http.Error(w, "config wizard removed", http.StatusNotImplemented)
 }
 
 // handleAPISettingsDone is called by the wizard "Done" button.

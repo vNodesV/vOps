@@ -56,6 +56,14 @@ export const blockIP = (ip: string) =>
 export const unblockIP = (ip: string) =>
   apiPost<{ ok: boolean }>(`/api/v1/unblock/${ip}`);
 
+export const severIP = (ip: string) =>
+  apiPost<{ ip: string; severed: number; conntrack: boolean }>(`/api/v1/sever/${ip}`, {});
+
+export const blockAndSeverIP = (ip: string) =>
+  apiPost<{ ip: string; blocked: boolean; severed: number; ufw: boolean; conntrack: boolean }>(
+    `/api/v1/block/${ip}?sever=true`,
+    {},
+  );
 export const syncUFW = (sudoPassword?: string) =>
   apiPost<{ total?: number; imported?: number; note?: string }>('/api/v1/ufw/sync', sudoPassword ? { sudo_password: sudoPassword } : undefined);
 

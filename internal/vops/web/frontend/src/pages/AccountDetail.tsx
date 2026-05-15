@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getAccount, blockIP, unblockIP } from '../api';
+import { getAccount, blockIP, unblockIP, severIP, blockAndSeverIP } from '../api';
 import { BASE } from '../api/client';
 import Badge from '../components/Badge';
 import ThreatScore from '../components/ThreatScore';
@@ -43,6 +43,7 @@ export default function AccountDetailPage() {
   const [activeStream, setActiveStream] = useState<StreamAction>(null);
   const [streamDone, setStreamDone] = useState(false);
   const [confirmBlock, setConfirmBlock] = useState(false);
+  const [severResult, setSeverResult] = useState<string | null>(null);
 
   // Stable callback — prevents SSEStream useEffect from looping on re-render.
   const handleStreamDone = useCallback(() => {
@@ -56,6 +57,8 @@ export default function AccountDetailPage() {
     queryKey: ['account', ip],
     queryFn: () => getAccount(ip!),
     enabled: !!ip,
+    // Refresh every 10 s so ActiveConnections stays current.
+    refetchInterval: 10_000,
   });
 
   const blockMut = useMutation({
@@ -66,6 +69,23 @@ export default function AccountDetailPage() {
   const unblockMut = useMutation({
     mutationFn: () => unblockIP(ip!),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['account', ip] }),
+  });
+
+  const severMut = useMutation({
+    mutationFn: () => severIP(ip!),
+    onSuccess: (data) => {
+      setSeverResult(`${data.severed} connection${data.severed === 1 ? '' : 's'} severed`);
+      queryClient.invalidateQueries({ queryKey: ['account', ip] });
+    },
+  });
+
+  const blockSeverMut = useMutation({
+    mutationFn: () => blockAndSeverIP(ip!),
+    onSuccess: (data) => {
+      setSeverResult(`Blocked · ${data.severed} connection${data.severed === 1 ? '' : 's'} severed`);
+      setConfirmBlock(false);
+      queryClient.invalidateQueries({ queryKey: ['account', ip] });
+    },
   });
 
   const handleBlockToggle = useCallback(() => {
@@ -251,31 +271,74 @@ export default function AccountDetailPage() {
               Actions
             </h3>
 
-            {/* Block / Unblock */}
-            <button
-              onClick={handleBlockToggle}
-              disabled={blockMut.isPending || unblockMut.isPending}
-              className={`w-full btn disabled:opacity-50 ${isBlocked ? 'btn-primary' : confirmBlock ? 'btn-danger' : 'btn-secondary'}`}
-            >
-              {blockMut.isPending || unblockMut.isPending
-                ? 'Processing\u2026'
-                : isBlocked
-                  ? 'Unblock IP'
-                  : confirmBlock
-                    ? 'Confirm Block'
-                    : 'Block IP'}
-            </button>
-            {confirmBlock && !isBlocked && (
+            {/* Block + Sever / Unblock */}
+            {isBlocked ? (
               <button
-                onClick={() => setConfirmBlock(false)}
-                className="btn btn-ghost btn-sm w-full"
+                onClick={handleBlockToggle}
+                disabled={unblockMut.isPending}
+                className="w-full btn btn-primary disabled:opacity-50"
               >
-                Cancel
+                {unblockMut.isPending ? 'Processing\u2026' : 'Unblock IP'}
               </button>
+            ) : (
+              <>
+                <button
+                  onClick={() => {
+                    if (!confirmBlock) { setConfirmBlock(true); return; }
+                    blockSeverMut.mutate();
+                  }}
+                  disabled={blockSeverMut.isPending}
+                  className={`w-full btn disabled:opacity-50 ${confirmBlock ? 'btn-danger' : 'btn-secondary'}`}
+                >
+                  {blockSeverMut.isPending
+                    ? 'Processing\u2026'
+                    : confirmBlock
+                      ? 'Confirm Block + Sever'
+                      : 'Block + Sever'}
+                </button>
+                {confirmBlock && (
+                  <button
+                    onClick={() => setConfirmBlock(false)}
+                    className="btn btn-ghost btn-sm w-full"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </>
             )}
-            {(blockMut.isError || unblockMut.isError) && (
+            {(blockMut.isError || unblockMut.isError || blockSeverMut.isError) && (
               <p className="alert alert-danger text-xs" role="alert">
-                {((blockMut.error || unblockMut.error) as Error)?.message}
+                {((blockMut.error || unblockMut.error || blockSeverMut.error) as Error)?.message}
+              </p>
+            )}
+
+            {/* Sever Connections */}
+            {(() => {
+              const conns = account?.ActiveConnections ?? 0;
+              const noConns = conns <= 0;
+              return (
+                <button
+                  onClick={() => { setSeverResult(null); severMut.mutate(); }}
+                  disabled={noConns || severMut.isPending}
+                  title={noConns ? 'No active connections to sever' : `Sever ${conns} active connection${conns === 1 ? '' : 's'}`}
+                  className={`w-full btn btn-secondary disabled:opacity-40 disabled:cursor-not-allowed`}
+                >
+                  {severMut.isPending
+                    ? 'Severing\u2026'
+                    : noConns
+                      ? 'Sever Connections (0)'
+                      : `Sever Connections (${conns})`}
+                </button>
+              );
+            })()}
+            {severResult && (
+              <p className="text-xs" style={{ color: 'var(--vn-success)' }}>
+                ✓ {severResult}
+              </p>
+            )}
+            {severMut.isError && (
+              <p className="alert alert-danger text-xs" role="alert">
+                {(severMut.error as Error)?.message}
               </p>
             )}
 

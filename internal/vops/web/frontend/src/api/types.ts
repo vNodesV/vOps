@@ -39,6 +39,7 @@ export interface IPAccount {
   PingMs: number;
   Protocol: string;
   OSINTUpdatedAt: string;
+  ActiveConnections: number; // live count from conntrack; -1 if unavailable
 }
 
 // Chart data

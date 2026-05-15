@@ -666,7 +666,7 @@ system-user-vops:
 ## Set up passwordless UFW + apt for vOps (writes /etc/sudoers.d/vops).
 ufw:
 	@SUDOERS_FILE="/etc/sudoers.d/vops"; \
-	SUDOERS_LINE="$(VOPS_USER) ALL=(ALL) NOPASSWD: /usr/sbin/ufw deny from *, /usr/sbin/ufw delete deny from *, /usr/sbin/ufw insert 1 deny from * to any, /usr/bin/apt update, /usr/bin/apt upgrade -y"; \
+	SUDOERS_LINE="$(VOPS_USER) ALL=(ALL) NOPASSWD: /usr/sbin/ufw deny from *, /usr/sbin/ufw delete deny from *, /usr/sbin/ufw insert 1 deny from * to any, /usr/sbin/conntrack -L -s *, /usr/sbin/conntrack -D -s *, /usr/bin/apt update, /usr/bin/apt upgrade -y"; \
 	if [[ -f "$$SUDOERS_FILE" ]]; then \
 		if grep -qF "$$SUDOERS_LINE" "$$SUDOERS_FILE"; then \
 			echo "✓ Sudoers rule already configured ($$SUDOERS_FILE)"; \
