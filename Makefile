@@ -423,7 +423,7 @@ build-vops: _frontend
 	GOROOT="$(EFFECTIVE_GOROOT)" go build -ldflags "$(VOPS_LDFLAGS)" -o "$(VOPS_BUILD)" "$(VOPS_SRC)"
 	@echo "✓ Build complete — Binary: $(VOPS_BUILD)"
 	@VOPS_SC_LINE="$(USER) ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop $(VOPS_NAME), /usr/bin/systemctl start $(VOPS_NAME), /usr/bin/systemctl restart $(VOPS_NAME)"; \
-	if ! ([[ -f "/etc/sudoers.d/vprox" ]] && grep -qF "$$VOPS_SC_LINE" /etc/sudoers.d/vprox); then \
+	if ! ([[ -f "/etc/sudoers.d/vops" ]] && sudo grep -qF "$$VOPS_SC_LINE" /etc/sudoers.d/vops); then \
 		echo "  ⚠ Passwordless systemctl not configured — run 'make service-vops' to configure sudoers."; \
 	fi
 	@echo "Stopping $(VOPS_NAME) service for swap..."
@@ -668,7 +668,7 @@ ufw:
 	@SUDOERS_FILE="/etc/sudoers.d/vops"; \
 	SUDOERS_LINE="$(VOPS_USER) ALL=(ALL) NOPASSWD: /usr/sbin/ufw deny from *, /usr/sbin/ufw delete deny from *, /usr/sbin/ufw insert 1 deny from * to any, /usr/sbin/conntrack -L -s *, /usr/sbin/conntrack -D -s *, /usr/bin/apt update, /usr/bin/apt upgrade -y"; \
 	if [[ -f "$$SUDOERS_FILE" ]]; then \
-		if grep -qF "$$SUDOERS_LINE" "$$SUDOERS_FILE"; then \
+		if sudo grep -qF "$$SUDOERS_LINE" "$$SUDOERS_FILE"; then \
 			echo "✓ Sudoers rule already configured ($$SUDOERS_FILE)"; \
 		else \
 			echo "⚠ $$SUDOERS_FILE exists but differs. Current content:"; \
