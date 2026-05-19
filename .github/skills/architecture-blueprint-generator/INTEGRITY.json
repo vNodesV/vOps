@@ -1,0 +1,10 @@
+{
+  "plugin_name": "architecture-blueprint-generator",
+  "generated_at": "2026-05-19T10:05:12.049862+00:00",
+  "algorithm": "sha256",
+  "file_count": 1,
+  "files": {
+    "SKILL.md": "a6a6f7a3b7a8210a9a391f2da3f3945bf86505341fd677eb2eb62e599520f512"
+  },
+  "manifest_hash": "3837c8c2f4adf47111dcd67460064d019699c5dcc48d95602f4461d37dd6211b"
+}

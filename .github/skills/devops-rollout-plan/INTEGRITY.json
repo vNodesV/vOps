@@ -1,0 +1,10 @@
+{
+  "plugin_name": "devops-rollout-plan",
+  "generated_at": "2026-05-19T10:05:12.066209+00:00",
+  "algorithm": "sha256",
+  "file_count": 1,
+  "files": {
+    "SKILL.md": "4895d403e08e9ea4cf59ef06ef843745aa5dd574a1faad83d4140c1f2554b7d4"
+  },
+  "manifest_hash": "de206865c904d5ecc2a7f43f55d75fdbb04de7e6b994eadaafeebcbb400bb967"
+}

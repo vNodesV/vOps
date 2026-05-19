@@ -1,0 +1,10 @@
+{
+  "plugin_name": "copilot-instructions-blueprint-generator",
+  "generated_at": "2026-05-19T10:05:12.060240+00:00",
+  "algorithm": "sha256",
+  "file_count": 1,
+  "files": {
+    "SKILL.md": "e53409119442128e2afbc2b48ad1b286fb23b884934de26dd088b3a375fcfb2b"
+  },
+  "manifest_hash": "161517bb0d12f44b91210622d97259d8df1666ac02993da2bf9d35a76d0432c0"
+}

@@ -1,0 +1,10 @@
+{
+  "plugin_name": "sql-optimization",
+  "generated_at": "2026-05-19T10:05:12.102601+00:00",
+  "algorithm": "sha256",
+  "file_count": 1,
+  "files": {
+    "SKILL.md": "d87639dea8e0208e2161b78b22f6427b0fdf59e95e693b40d48b1226a0c35ccf"
+  },
+  "manifest_hash": "f254bc8280311e17880280123367d4819cb9614518ed01ae9db0d10604b59e8c"
+}

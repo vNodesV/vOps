@@ -1,0 +1,10 @@
+{
+  "plugin_name": "git-flow-branch-creator",
+  "generated_at": "2026-05-19T10:05:12.095092+00:00",
+  "algorithm": "sha256",
+  "file_count": 1,
+  "files": {
+    "SKILL.md": "7674b5753d7d72e6e9698d8d8f857c017e0650364f3b96fcaac743fe21f7f9d9"
+  },
+  "manifest_hash": "b7bc883596c79bae745ba563db990420ab2903c8cf252b9baf49055fb3acbe85"
+}

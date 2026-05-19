@@ -1,0 +1,25 @@
+{
+  "plugin_name": "excalidraw-diagram-generator",
+  "generated_at": "2026-05-19T10:05:12.072722+00:00",
+  "algorithm": "sha256",
+  "file_count": 16,
+  "files": {
+    "SKILL.md": "60df556e63d85ad51350fa448c097a1473d2e6e0adf4aad6e1a6c22eb536cfe9",
+    "references/element-types.md": "57238dcce1ae42028705d6480819f1e2f40366a0aeccb567986088d51b16da04",
+    "references/excalidraw-schema.md": "fd153de21f64eb2d0018461f8d674801b7ec54eb2bf8686bb1df4358e40b014a",
+    "scripts/.gitignore": "49f9ee4c099793eb02a72838891842a5ce6e26ecde0a79bd658dab5af79fa8ca",
+    "scripts/README.md": "b541d038477d184630aa5e7a2e8335b2fbd54dba7b3282b48765a744feb60a3f",
+    "scripts/add-arrow.py": "2895b8bc96d3fc298c3c33c5ff0470e0f89fd3727c7668d007fc9a635d779778",
+    "scripts/add-icon-to-diagram.py": "2f8a013d3ea6f73b4154a3abb86fa1781d32786d0ec905517de0628f1493b203",
+    "scripts/split-excalidraw-library.py": "af99780564a93590730b0d816da384e46765ee7970200ec440343a8fc1dfbd21",
+    "templates/business-flow-swimlane-template.excalidraw": "30f4708c5e93a6602e8687b73c6f440fd6e8996189d87dc7530224786a3bfacb",
+    "templates/class-diagram-template.excalidraw": "4d3f8984ddb57c27d5ffb7d68331a1ea59a4928c986a1b0e366586e9ed6198e4",
+    "templates/data-flow-diagram-template.excalidraw": "da41355072ce76a594bd405696de7f6ba65da6b90cef4a6480addb3947e50533",
+    "templates/er-diagram-template.excalidraw": "50313fac3520d3fe60387dc9386c5589e5fc46795d242efc3663cac336aab096",
+    "templates/flowchart-template.excalidraw": "2d40fe507d44c45ba46a4d5be24ed5ceff380fb1651c86296ab2d1ff6c8c2eea",
+    "templates/mindmap-template.excalidraw": "d619a1d95d1e6800f3464c39dc30b78585b690bbc5e844d33051a18d94484d45",
+    "templates/relationship-template.excalidraw": "fb6414487e26d5c6af5f2e64c5d8084f08968a730ad0be828f189d1db41ca6ca",
+    "templates/sequence-diagram-template.excalidraw": "1edf67683f35f4b7f2ac4c3e23d674ddb966fe1b9e53801dbf98f8a6b66394d9"
+  },
+  "manifest_hash": "a083412db83bc5b558483561f1c185bb367c00b853cbe67de58eed2e8880130b"
+}

@@ -1,0 +1,10 @@
+{
+  "plugin_name": "create-implementation-plan",
+  "generated_at": "2026-05-19T10:05:12.061544+00:00",
+  "algorithm": "sha256",
+  "file_count": 1,
+  "files": {
+    "SKILL.md": "58f9876006d632bc364794b0270e2c13a8e4de937e4641e6928927a08200aa67"
+  },
+  "manifest_hash": "d361a617b7d87c0bb10f9b3119151bfcf716bae02b21716453f2c7cd1cdcf272"
+}

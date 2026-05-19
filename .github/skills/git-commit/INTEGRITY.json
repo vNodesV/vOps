@@ -1,0 +1,10 @@
+{
+  "plugin_name": "git-commit",
+  "generated_at": "2026-05-19T10:05:12.094231+00:00",
+  "algorithm": "sha256",
+  "file_count": 1,
+  "files": {
+    "SKILL.md": "554d1a3c6d95f15bc1170160659ecdc9a9958b64f377f3988941b672c249b13f"
+  },
+  "manifest_hash": "d07c80c11453ff398bf952171173eb8fe45cf1bcfeb264eb58e4698a2c8e16fa"
+}

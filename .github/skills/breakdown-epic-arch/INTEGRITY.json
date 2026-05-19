@@ -1,0 +1,10 @@
+{
+  "plugin_name": "breakdown-epic-arch",
+  "generated_at": "2026-05-19T10:05:12.051424+00:00",
+  "algorithm": "sha256",
+  "file_count": 1,
+  "files": {
+    "SKILL.md": "27d126ec1ab88dd60dadb41d7434036aa7480df8757e9a076cf5d0a8bbb711c9"
+  },
+  "manifest_hash": "e346deec50773ffd242f28d58f96b2681c282030fddd3d7386e7fdf204f469d2"
+}

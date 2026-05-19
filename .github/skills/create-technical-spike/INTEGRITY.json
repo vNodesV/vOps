@@ -1,0 +1,10 @@
+{
+  "plugin_name": "create-technical-spike",
+  "generated_at": "2026-05-19T10:05:12.062846+00:00",
+  "algorithm": "sha256",
+  "file_count": 1,
+  "files": {
+    "SKILL.md": "2caccb0ba3b9851b82c648870330b6d22a47ee7cda4d3770ef8b5f8d6e439281"
+  },
+  "manifest_hash": "487bdc910fe1e1e48bc7f655252a41edcfcbdbb781fc5c8b86c7e249c54d8b91"
+}

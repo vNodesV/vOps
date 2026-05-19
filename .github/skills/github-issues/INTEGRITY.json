@@ -1,0 +1,18 @@
+{
+  "plugin_name": "github-issues",
+  "generated_at": "2026-05-19T10:05:12.098303+00:00",
+  "algorithm": "sha256",
+  "file_count": 9,
+  "files": {
+    "SKILL.md": "0b015612542646ddca605ca6ba2de65863b2f367c48ad5badbe90b2c988f83a1",
+    "references/dependencies.md": "9503d23ba104de1aae51176e4f29d3cf6b85c83e3421252a4808140d60eba571",
+    "references/images.md": "585c89a02e1b79e702b4b88f2771cb8dadca9fdf98798ca72a83deb76623b219",
+    "references/issue-fields.md": "80cd1b8e4e65fa76cdc415b8370d3fd65860c692fbcaa6e341dc91bdfa049d47",
+    "references/issue-types.md": "be0a33a4a4a15ce92c6b589f19943813b69c25cd1f20e9e30df567bab50e5e63",
+    "references/projects.md": "358071bc9915a50e86956b21ba1c0077b489d8981eddc63ea09aa4cfe1043710",
+    "references/search.md": "e73499b778efaaac7a90fd6a7c0359f30a89a7a62c25b27d994274e7f7ae172e",
+    "references/sub-issues.md": "333339143e4a4ef0dfeb575cf0f18da2ca78d6388e2b9ba4b77daad7c1ce29a8",
+    "references/templates.md": "8202c0277a34033acd44ed960a236f31a5b7a74d98769dffac497f2267279fed"
+  },
+  "manifest_hash": "a26c492da92e701e8be7fce4ef87187b133d6d42838d0e498c18bbffe87fe64b"
+}

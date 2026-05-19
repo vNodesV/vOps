@@ -1,0 +1,16 @@
+{
+  "plugin_name": "codeql",
+  "generated_at": "2026-05-19T10:05:12.058865+00:00",
+  "algorithm": "sha256",
+  "file_count": 7,
+  "files": {
+    "SKILL.md": "81503394c7c0595756d18a47e0b626dfd1dc6cf4673d40e9be23349a66fa5d27",
+    "references/alert-management.md": "998d51889e97525603519cc329b10b7e8887570b5bcedf66d8f4b4f466df192e",
+    "references/cli-commands.md": "6e3067deb4762399da90bbb60bbd3a32329003bff67e419e3bdb8d3691e2b97c",
+    "references/compiled-languages.md": "4e2a5c5ef8e4d3191c22fc3d0f9fabf30d01a3ebf736e77101169aa1277dfb2d",
+    "references/sarif-output.md": "c389d24b6ad3eff33ece4d79ec42ce7696cdc2a42d7dc3177d9506c64e3c8cb3",
+    "references/troubleshooting.md": "018e8b0e57668ee9dcb159f0793324ee91128d0318f671624d84df5bac4d20d8",
+    "references/workflow-configuration.md": "76ed214c3b7eb827fea7d0c283b04f627ac0e4c23ee090e04ef5681001d3f96f"
+  },
+  "manifest_hash": "41d1db4434ac9165f7f6fb0c77479f6c25c99ab65d5dde8c455038c1ccab568a"
+}

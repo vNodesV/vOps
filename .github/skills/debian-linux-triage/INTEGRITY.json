@@ -1,0 +1,10 @@
+{
+  "plugin_name": "debian-linux-triage",
+  "generated_at": "2026-05-19T10:05:12.063477+00:00",
+  "algorithm": "sha256",
+  "file_count": 1,
+  "files": {
+    "SKILL.md": "75ed743f3862662099c0c0af8aeeea61b93812656dd93cbd2305fbe74e6177f9"
+  },
+  "manifest_hash": "829ff698f72e448433573e3030d7b1470d9a5a0dec06727be1ad8543dd7fe44f"
+}

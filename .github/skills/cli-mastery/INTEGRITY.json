@@ -1,0 +1,10 @@
+{
+  "plugin_name": "cli-mastery",
+  "generated_at": "2026-05-19T10:05:12.052947+00:00",
+  "algorithm": "sha256",
+  "file_count": 1,
+  "files": {
+    "SKILL.md": "d3e4194d69f973aa5bf8993c8e68b09fea9f0f2c0427e740a18fd4175d956879"
+  },
+  "manifest_hash": "e641e64981a8ffdf3b5243decf2efa16325e612271b18d075aace475facd0c5f"
+}

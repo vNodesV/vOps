@@ -1,0 +1,153 @@
+name: Supply Chain Integrity
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - '.github/skills/**'
+  push:
+    branches: [main, develop]
+    paths:
+      - '.github/skills/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supply-chain-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-skills:
+    name: Verify skill integrity
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Generate and verify skill manifests
+        run: |
+          python3 - <<'PYEOF'
+          import hashlib, json, sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          EXCLUDE_DIRS  = {".git", "__pycache__", "node_modules", ".venv", ".pytest_cache"}
+          EXCLUDE_FILES = {".DS_Store", "Thumbs.db", "INTEGRITY.json"}
+
+          def hash_file(path: Path) -> str:
+              h = hashlib.sha256()
+              with open(path, "rb") as f:
+                  for chunk in iter(lambda: f.read(8192), b""):
+                      h.update(chunk)
+              return h.hexdigest()
+
+          def scan_dir(root: Path) -> dict[str, str]:
+              files = {}
+              for path in sorted(root.rglob("*")):
+                  if not path.is_file():
+                      continue
+                  if path.name in EXCLUDE_FILES:
+                      continue
+                  if any(part in EXCLUDE_DIRS for part in path.relative_to(root).parts):
+                      continue
+                  files[path.relative_to(root).as_posix()] = hash_file(path)
+              return files
+
+          def chain_hash(files: dict[str, str]) -> str:
+              h = hashlib.sha256()
+              for key in sorted(files.keys()):
+                  h.update(files[key].encode("ascii"))
+              return h.hexdigest()
+
+          skills_root = Path(".github/skills")
+          if not skills_root.is_dir():
+              print("No .github/skills/ directory found — skipping.")
+              sys.exit(0)
+
+          skill_dirs = sorted(d for d in skills_root.iterdir() if d.is_dir())
+          if not skill_dirs:
+              print("No skill subdirectories found — skipping.")
+              sys.exit(0)
+
+          errors = []
+          results = []
+
+          for skill_dir in skill_dirs:
+              # Check for INTEGRITY.json baseline
+              manifest_path = skill_dir / "INTEGRITY.json"
+              current_files = scan_dir(skill_dir)
+
+              if not manifest_path.exists():
+                  # No baseline yet — emit as unverified but not an error.
+                  # First push after this workflow is added will establish baseline.
+                  results.append(f"  UNBASELINED  {skill_dir.name} ({len(current_files)} files — no INTEGRITY.json)")
+                  continue
+
+              manifest = json.loads(manifest_path.read_text())
+              recorded = manifest.get("files", {})
+
+              skill_errors = []
+              for rel, expected in recorded.items():
+                  full = skill_dir / rel
+                  if not full.exists():
+                      skill_errors.append(f"MISSING: {rel}")
+                  elif hash_file(full) != expected:
+                      skill_errors.append(f"MODIFIED: {rel}")
+
+              for rel in current_files:
+                  if rel not in recorded:
+                      skill_errors.append(f"UNTRACKED: {rel}")
+
+              if skill_errors:
+                  errors.append((skill_dir.name, skill_errors))
+                  results.append(f"  FAIL         {skill_dir.name}")
+                  for e in skill_errors:
+                      results.append(f"               {e}")
+              else:
+                  results.append(f"  OK           {skill_dir.name} ({len(current_files)} files, chain={chain_hash(current_files)[:16]}...)")
+
+          print(f"\nSkill integrity report — {datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}")
+          print(f"Skills scanned: {len(skill_dirs)}")
+          print()
+          for r in results:
+              print(r)
+
+          if errors:
+              print(f"\n{'='*60}")
+              print(f"FAILED: {len(errors)} skill(s) have integrity violations")
+              for name, errs in errors:
+                  print(f"  {name}: {len(errs)} issue(s)")
+                  for e in errs:
+                      print(f"    ::error file=.github/skills/{name}::{e}")
+              sys.exit(1)
+          else:
+              print(f"\nAll skills verified ✓")
+          PYEOF
+
+      - name: Check for required skill files
+        run: |
+          python3 - <<'PYEOF'
+          import sys
+          from pathlib import Path
+
+          skills_root = Path(".github/skills")
+          if not skills_root.is_dir():
+              sys.exit(0)
+
+          missing = []
+          for skill_dir in sorted(d for d in skills_root.iterdir() if d.is_dir()):
+              has_manifest = (skill_dir / "SKILL.md").exists() or (skill_dir / "README.md").exists()
+              if not has_manifest:
+                  missing.append(skill_dir.name)
+
+          if missing:
+              print(f"FAILED: {len(missing)} skill(s) missing SKILL.md or README.md:")
+              for name in missing:
+                  print(f"  ::error file=.github/skills/{name}/SKILL.md::Missing SKILL.md or README.md")
+              sys.exit(1)
+          else:
+              print(f"All skills have a manifest file ✓")
+          PYEOF

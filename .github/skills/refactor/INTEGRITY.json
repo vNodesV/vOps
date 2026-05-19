@@ -1,0 +1,10 @@
+{
+  "plugin_name": "refactor",
+  "generated_at": "2026-05-19T10:05:12.101143+00:00",
+  "algorithm": "sha256",
+  "file_count": 1,
+  "files": {
+    "SKILL.md": "58a38edd230cdcdd866939906321c8ba6f47c98a70d0cda373360196ee2ca1a7"
+  },
+  "manifest_hash": "f39898d4044e05271e7404abed002285067210ee4a686165c644e9dbd821227c"
+}

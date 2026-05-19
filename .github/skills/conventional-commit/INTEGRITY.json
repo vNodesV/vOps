@@ -1,0 +1,10 @@
+{
+  "plugin_name": "conventional-commit",
+  "generated_at": "2026-05-19T10:05:12.059558+00:00",
+  "algorithm": "sha256",
+  "file_count": 1,
+  "files": {
+    "SKILL.md": "250235f71b8c501a7744ded911281292324bcd1a2d014e34b25041e2d2c8bf73"
+  },
+  "manifest_hash": "1e3c174fb07b1a9c09d1aee23c1863f7126027d7cf75ca5e23e2c6a2a453689f"
+}

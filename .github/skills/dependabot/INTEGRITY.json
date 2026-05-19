@@ -1,0 +1,13 @@
+{
+  "plugin_name": "dependabot",
+  "generated_at": "2026-05-19T10:05:12.065234+00:00",
+  "algorithm": "sha256",
+  "file_count": 4,
+  "files": {
+    "SKILL.md": "160f1dd5fdd6b6692591d90d448477100845a7b2b23838011413266a5a71b128",
+    "references/dependabot-yml-reference.md": "c3b101d7e200a215211c9e23157ddfb1c051e437815b4d5a3d9bc13e504d6ed6",
+    "references/example-configs.md": "35375699cfbaa372b68a232a2704f88a190e1267f937e1f1921e8d83c97485ca",
+    "references/pr-commands.md": "471a786456c798364d13c0da554c12c712c581986b7f4a1de95d8b3638fd21cb"
+  },
+  "manifest_hash": "42b4b70d20bacde7c7e32ef6e6f19444a760d0807fa100a3ce69061dc09120c1"
+}

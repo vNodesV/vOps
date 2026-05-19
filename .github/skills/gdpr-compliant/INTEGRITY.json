@@ -1,0 +1,12 @@
+{
+  "plugin_name": "gdpr-compliant",
+  "generated_at": "2026-05-19T10:05:12.091428+00:00",
+  "algorithm": "sha256",
+  "file_count": 3,
+  "files": {
+    "SKILL.md": "e1f33a817a1d0f7165f4f6652cfeb52632ba124067c3f46c37f867cde730242e",
+    "references/Security.md": "4fffe37e4c024043287807a07b47f0655dea89c30fc5c5b8308553cf7a7667ef",
+    "references/data-rights.md": "8a17c938497e5988c70775b2431377204cb37c225613c92cc4176ca1d1d450f8"
+  },
+  "manifest_hash": "afe7238dad7405937e41bbd94a487cfd840670e1706716a70dd94f15c134411c"
+}

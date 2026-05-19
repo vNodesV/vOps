@@ -1,0 +1,10 @@
+{
+  "plugin_name": "create-specification",
+  "generated_at": "2026-05-19T10:05:12.062189+00:00",
+  "algorithm": "sha256",
+  "file_count": 1,
+  "files": {
+    "SKILL.md": "ae2c3ca87d871056b4b7d8e11758ee8c29fcb307ba890b1407ab5a88b8d2a5d8"
+  },
+  "manifest_hash": "2747693ea2337112f46912fbd56f06ebadde49357c4c77ea9ed7653ad322e5b1"
+}

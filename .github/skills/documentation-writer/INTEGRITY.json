@@ -1,0 +1,10 @@
+{
+  "plugin_name": "documentation-writer",
+  "generated_at": "2026-05-19T10:05:12.066893+00:00",
+  "algorithm": "sha256",
+  "file_count": 1,
+  "files": {
+    "SKILL.md": "7e8244988c9f4eb63bf8c0edf160578544621eb96e5e51e2d848f1401c5de8f1"
+  },
+  "manifest_hash": "2f1084e61d0b368030a02a7e748cdf4b7fca1eca7f9e8afe434c490c5c3c11fc"
+}

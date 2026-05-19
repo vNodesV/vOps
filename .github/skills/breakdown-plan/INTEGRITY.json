@@ -1,0 +1,10 @@
+{
+  "plugin_name": "breakdown-plan",
+  "generated_at": "2026-05-19T10:05:12.052223+00:00",
+  "algorithm": "sha256",
+  "file_count": 1,
+  "files": {
+    "SKILL.md": "ce46dc0485b0ee3e7fc4172a507df685207b17806c9fa431bbf723308b8a2125"
+  },
+  "manifest_hash": "e6396ac4922c93f154d20a670e11466ea699373008be2a8956c20da4d57f29d0"
+}

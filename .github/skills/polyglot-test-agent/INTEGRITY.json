@@ -1,0 +1,11 @@
+{
+  "plugin_name": "polyglot-test-agent",
+  "generated_at": "2026-05-19T10:05:12.100374+00:00",
+  "algorithm": "sha256",
+  "file_count": 2,
+  "files": {
+    "SKILL.md": "9687a9ecf57d4110d293af98e77f71503dc3835c7a194fcfd5ad0bfcdae5843e",
+    "unit-test-generation.prompt.md": "51fb84668d78fcc1ef305b83fa24aa4382bd2ceda8f251bd1f377f355d90a24a"
+  },
+  "manifest_hash": "cdbdca555e060142d1c90524d46f94ed5833f4b497d07cf04191d49b9c2ba50e"
+}

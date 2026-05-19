@@ -1,0 +1,10 @@
+{
+  "plugin_name": "sql-code-review",
+  "generated_at": "2026-05-19T10:05:12.101896+00:00",
+  "algorithm": "sha256",
+  "file_count": 1,
+  "files": {
+    "SKILL.md": "2e67c2fa2875f299d5f839942a72822d30981d4e19052dfe32455a0482a9267d"
+  },
+  "manifest_hash": "73e5f909478dd2a1ddd543fcf85f9443ac897a0f5105ff10e06f8f50d3b795f2"
+}

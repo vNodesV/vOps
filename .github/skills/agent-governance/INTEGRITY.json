@@ -1,0 +1,10 @@
+{
+  "plugin_name": "agent-governance",
+  "generated_at": "2026-05-19T10:05:12.045750+00:00",
+  "algorithm": "sha256",
+  "file_count": 1,
+  "files": {
+    "SKILL.md": "efc0abaa0dff7d5567a27e1a5b9126ef70410e0a213225dab1b109f3f129db68"
+  },
+  "manifest_hash": "e1f760b66a6a253eb54aed821b368f4e7a85348b6f36edf4f1b148100e287146"
+}

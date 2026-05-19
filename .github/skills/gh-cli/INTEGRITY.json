@@ -1,0 +1,10 @@
+{
+  "plugin_name": "gh-cli",
+  "generated_at": "2026-05-19T10:05:12.093491+00:00",
+  "algorithm": "sha256",
+  "file_count": 1,
+  "files": {
+    "SKILL.md": "18e53a9f4c154406a072ed4cfbc524d40f9a4734ef25102086c1ef5e24113a76"
+  },
+  "manifest_hash": "68dbe034c696307051146a94b16eeb6711c48d2f8caded7bf63e4efa876760c4"
+}

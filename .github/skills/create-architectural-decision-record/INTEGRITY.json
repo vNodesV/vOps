@@ -1,0 +1,10 @@
+{
+  "plugin_name": "create-architectural-decision-record",
+  "generated_at": "2026-05-19T10:05:12.060891+00:00",
+  "algorithm": "sha256",
+  "file_count": 1,
+  "files": {
+    "SKILL.md": "c11af0c34fa034e36e622ad97f1194824c3cbbe675a8b17cdc0bedc91b188a72"
+  },
+  "manifest_hash": "9d9018d05f34bc45b40587a76545e9426012affc98e6284b41ad084dc86606d6"
+}

@@ -1,0 +1,10 @@
+{
+  "plugin_name": "agent-owasp-compliance",
+  "generated_at": "2026-05-19T10:05:12.047160+00:00",
+  "algorithm": "sha256",
+  "file_count": 1,
+  "files": {
+    "SKILL.md": "5c1f92c48888beb811d2435e58aa02b2619422a921d6f70e3cc15e5c5be8e7da"
+  },
+  "manifest_hash": "20708852416a40453e7c1b6f955f41f30bd41b6d925d5f92bcaab10104ff85de"
+}

@@ -1,0 +1,11 @@
+{
+  "plugin_name": "doublecheck",
+  "generated_at": "2026-05-19T10:05:12.067971+00:00",
+  "algorithm": "sha256",
+  "file_count": 2,
+  "files": {
+    "SKILL.md": "ea16d7eb9d144a1f8d6287695a71be900a37efda468e899af4016361b233bdc7",
+    "assets/verification-report-template.md": "f45a72b7ab0f914bfc69e5edbc2110ffc2785a8f4ffb7fa3d102c0797b159b5a"
+  },
+  "manifest_hash": "6f1ea72dfcbce50e67262d0d7985dc195dce88f90f23bdaabfc8224ac461ffba"
+}

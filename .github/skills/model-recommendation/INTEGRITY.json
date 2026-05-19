@@ -1,0 +1,10 @@
+{
+  "plugin_name": "model-recommendation",
+  "generated_at": "2026-05-19T10:05:12.099155+00:00",
+  "algorithm": "sha256",
+  "file_count": 1,
+  "files": {
+    "SKILL.md": "a7190dea13853b00f072a1837c702a5f96a163ed8821bd026779f6339a980dce"
+  },
+  "manifest_hash": "4cb569120ca1bdeaa5cb641c29269701f7f554791db6f6480dca1202a1bfa70d"
+}

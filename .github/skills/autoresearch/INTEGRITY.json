@@ -1,0 +1,10 @@
+{
+  "plugin_name": "autoresearch",
+  "generated_at": "2026-05-19T10:05:12.050669+00:00",
+  "algorithm": "sha256",
+  "file_count": 1,
+  "files": {
+    "SKILL.md": "754179e987519dac86e01f79c1e015345d9b07c09f4bc34c324d89165d10fbd5"
+  },
+  "manifest_hash": "2ccd12202c98f04d8b7113c1f5649b29af35a4689715f0e2bc4418f251b3a224"
+}

@@ -1,0 +1,10 @@
+{
+  "plugin_name": "agent-supply-chain",
+  "generated_at": "2026-05-19T10:05:12.048296+00:00",
+  "algorithm": "sha256",
+  "file_count": 1,
+  "files": {
+    "SKILL.md": "5b678338dca40c92051ff46da592e6be13ffc2f843a2238cbf1c91368fe75fa7"
+  },
+  "manifest_hash": "82568191df840125c340e78d5b7db37ede94c4bc69bb8fee02b6909115f24425"
+}

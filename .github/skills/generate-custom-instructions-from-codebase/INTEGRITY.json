@@ -1,0 +1,10 @@
+{
+  "plugin_name": "generate-custom-instructions-from-codebase",
+  "generated_at": "2026-05-19T10:05:12.092499+00:00",
+  "algorithm": "sha256",
+  "file_count": 1,
+  "files": {
+    "SKILL.md": "b0be02c9acdbffae5a1e39509c3e24567696cba666d666cece24ded66afa885b"
+  },
+  "manifest_hash": "fa20e8dc2830a700031cd8385a7ce99ec7bf33fe184cd6f979bc94e07ee36ebd"
+}

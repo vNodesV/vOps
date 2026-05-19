@@ -1,0 +1,10 @@
+{
+  "plugin_name": "agentic-eval",
+  "generated_at": "2026-05-19T10:05:12.049097+00:00",
+  "algorithm": "sha256",
+  "file_count": 1,
+  "files": {
+    "SKILL.md": "fb198a5c9b12e746d01a43c9ff3368598fdc1134bb458766f580186f31001573"
+  },
+  "manifest_hash": "eb3415fa782ed659d1ae2d77d933f8700626e0a5f49f3056946461c24360608a"
+}

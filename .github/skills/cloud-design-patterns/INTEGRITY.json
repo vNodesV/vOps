@@ -1,0 +1,19 @@
+{
+  "plugin_name": "cloud-design-patterns",
+  "generated_at": "2026-05-19T10:05:12.056330+00:00",
+  "algorithm": "sha256",
+  "file_count": 10,
+  "files": {
+    "SKILL.md": "69b0e14a0011137f7253f90b85745eba1710d8849710e3b5b677e3bf9dfe6320",
+    "references/architecture-design.md": "7f15eb5be03f196cddce230f178866f77e1cfc3548abd9650a1ac166fb3863e2",
+    "references/azure-service-mappings.md": "cdc52667d6b23d882afedeaf9229bfe352e03c6c8ac0a43526dc038d62b5f103",
+    "references/best-practices.md": "98cdfd5996dcedad39625efcdfe09578b8559d5c4b1fd6253c4d9797d0512af2",
+    "references/deployment-operational.md": "e9677c2163444d0619eead7f86b0fcdbd739bfd1745457ac26828a6d3c44efeb",
+    "references/event-driven.md": "f340c93b3730666cc6be2167d1b1533a78d020b811622274a8867844f019a74b",
+    "references/messaging-integration.md": "16b3a768c6fad4a33351c4791709b748edf6977c176104cdc9954c90167a0bd1",
+    "references/performance.md": "1d717c3d80860214dc66e2fa21f6f93845af10a19d50fe4a98a830a39c7a9d5d",
+    "references/reliability-resilience.md": "364ea09a4037c7329e2904ef279467d106e14e44cea7ae00afe998156fce6d37",
+    "references/security.md": "813a3f2ffea552cd1f599087d876784066c54d481297423808ebb856c3b32481"
+  },
+  "manifest_hash": "2177efaebb537915ffbefe7b23724e21a8f7eaa022ff539f8090a3ead7ef9810"
+}
