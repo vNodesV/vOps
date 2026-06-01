@@ -160,7 +160,41 @@ func (s *Server) handleAPIGenSSHKey(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) handleAPISettingsCurrent(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "config wizard removed"})
+	// Resolve config path (server may have been started with an explicit path).
+	cfgPath := s.cfgPath
+	if cfgPath == "" {
+		cfgPath = filepath.Join(s.home, "config", "vops", "vops.toml")
+	}
+
+	// Try reading the on-disk TOML. If it doesn't exist, build a snapshot
+	// from the default config so the UI can still render sensible defaults.
+	b, err := os.ReadFile(cfgPath)
+	var snapshot map[string]any
+	if err != nil {
+		if os.IsNotExist(err) {
+			def := vopscfg.DefaultConfig(s.home)
+			b2, mErr := toml.Marshal(def)
+			if mErr != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not marshal default config"})
+				return
+			}
+			if uErr := toml.Unmarshal(b2, &snapshot); uErr != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not build config snapshot"})
+				return
+			}
+		} else {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not read vops.toml"})
+			return
+		}
+	} else {
+		if uErr := toml.Unmarshal(b, &snapshot); uErr != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not parse vops.toml"})
+			return
+		}
+	}
+
+	// Return the raw config snapshot (top-level keys mirror the TOML sections).
+	writeJSON(w, http.StatusOK, snapshot)
 }
 
 func (s *Server) handleAPISettingsImport(w http.ResponseWriter, _ *http.Request) {
