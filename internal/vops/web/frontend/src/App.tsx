@@ -7,7 +7,7 @@ import {
   Navigate,
   useLocation,
 } from 'react-router-dom';
-import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TaskProvider } from './contexts/TaskContext';
 
 import CosmosNodes from './pages/CosmosNodes';
@@ -22,10 +22,9 @@ import AuditPage from './pages/Audit';
 import ProxyPage from './pages/proxy';
 import DebugPanel from './components/DebugPanel';
 import SettingsDrawer, { GearButton } from './components/SettingsDrawer';
-import { VOpsPanel, BackupsPanel, PreferencesPanel } from './pages/settings/SystemPanel';
+import { PreferencesPanel } from './pages/settings/SystemPanel';
 import GlobalProgressBar from './components/GlobalProgressBar';
-import Spinner from './components/Spinner';
-import { logout, getDebugMode, setDebugMode, getConfig, savePreferences } from './api';
+import { logout, getDebugMode, setDebugMode, savePreferences } from './api';
 import { BASE } from './api/client';
 import { applyTheme, THEMES } from './lib/theme';
 import { getLayoutMode, LAYOUT_EVENT, type LayoutMode } from './lib/layout';
@@ -38,18 +37,14 @@ const queryClient = new QueryClient({
 /* ── Global settings drawer ──────────────────────────────────── */
 
 function GlobalSettingsDrawer({ onClose }: { onClose: () => void }) {
-  const { data: config, isLoading } = useQuery({ queryKey: ['config'], queryFn: getConfig });
+  // Config-file-driven panels (Dashboard & Auth, Backups) were retired — those
+  // settings are managed via config files / CLI. Only the live Appearance panel
+  // remains here.
   return (
     <SettingsDrawer title="System Settings" onClose={onClose}>
-      {isLoading ? (
-        <Spinner label="Loading settings…" />
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          {config && <VOpsPanel config={config} />}
-          {config && <BackupsPanel config={config} />}
-          <PreferencesPanel />
-        </div>
-      )}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <PreferencesPanel />
+      </div>
     </SettingsDrawer>
   );
 }

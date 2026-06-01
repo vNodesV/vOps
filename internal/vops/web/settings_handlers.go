@@ -1,20 +1,15 @@
 package web
 
 import (
-	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
-	"errors"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
-	"time"
 
 	"golang.org/x/crypto/bcrypt"
 
@@ -22,7 +17,6 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"github.com/pelletier/go-toml/v2"
-	fleetcfg "github.com/vNodesV/vOps/internal/fleet/config"
 	vopscfg "github.com/vNodesV/vOps/internal/vops/config"
 )
 
@@ -159,127 +153,6 @@ func (s *Server) handleAPIGenSSHKey(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
-func (s *Server) handleAPISettingsCurrent(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "config wizard removed"})
-}
-
-func (s *Server) handleAPISettingsImport(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "config wizard removed"})
-}
-
-func (s *Server) handleAPISettingsRemove(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "config wizard removed"})
-}
-
-func (s *Server) handleAPISettingsApply(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 256*1024)
-	var req struct {
-		Steps []string `json:"steps"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON payload"})
-		return
-	}
-
-	stepSet := make(map[string]struct{}, len(req.Steps))
-	for _, raw := range req.Steps {
-		step := strings.ToLower(strings.TrimSpace(raw))
-		if step == "" {
-			continue
-		}
-		stepSet[step] = struct{}{}
-	}
-
-	requires := make(map[string]struct{})
-	softReloaded := make([]string, 0, 1)
-
-	_, needsFleet := stepSet["fleet"]
-	_, needsChain := stepSet["chain"]
-	_, needsInfra := stepSet["infra"]
-	if needsFleet || needsChain || needsInfra {
-		if s.fleetSvc != nil {
-			ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
-			defer cancel()
-			s.reloadFleetRuntime(ctx)
-			softReloaded = append(softReloaded, "fleet")
-		} else {
-			requires["vops"] = struct{}{}
-		}
-	}
-
-	if _, ok := stepSet["vops"]; ok {
-		requires["vops"] = struct{}{}
-	}
-	if _, ok := stepSet["backup"]; ok {
-		requires["vops"] = struct{}{}
-	}
-	if _, ok := stepSet["ports"]; ok {
-		requires["vprox"] = struct{}{}
-	}
-	if _, ok := stepSet["settings"]; ok {
-		requires["vprox"] = struct{}{}
-	}
-
-	restartTargets := make([]string, 0, len(requires))
-	for target := range requires {
-		restartTargets = append(restartTargets, target)
-	}
-	sort.Strings(restartTargets)
-	sort.Strings(softReloaded)
-
-	message := "No runtime changes were applied."
-	switch {
-	case len(softReloaded) > 0 && len(restartTargets) == 0:
-		message = "Settings applied with soft reload."
-	case len(softReloaded) > 0 && len(restartTargets) > 0:
-		message = "Fleet reloaded. Some modules still require a service restart."
-	case len(restartTargets) > 0:
-		message = "Changes saved. Service restart required to apply all updates."
-	}
-
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status":           "ok",
-		"applied_steps":    req.Steps,
-		"soft_reloaded":    softReloaded,
-		"requires_restart": restartTargets,
-		"message":          message,
-	})
-}
-
-// reloadFleetRuntime reloads fleet config from disk and updates the in-memory
-// fleet service. Called after infra/fleet/chain settings are saved so that
-// fleet scan, VM status, and VM manager immediately reflect new TOML content
-// without requiring a service restart.
-func (s *Server) reloadFleetRuntime(ctx context.Context) {
-	if s.fleetSvc == nil {
-		return
-	}
-	defs := fleetcfg.FleetDefaults{
-		User:           s.cfg.VOps.Push.Defaults.User,
-		KeyPath:        s.cfg.VOps.Push.Defaults.KeyPath,
-		KnownHostsPath: s.cfg.VOps.Push.Defaults.KnownHostsPath,
-	}
-	runtimeCfg, err := fleetcfg.LoadRuntimeConfig(s.home, defs, s.cfg.VOps.Push.ChainsDir, s.cfg.VOps.Push.InfraDir)
-	if err != nil {
-		logging.Print("ERR", "settings", "fleet runtime reload failed", logging.F("err", err))
-		return
-	}
-	s.fleetSvc.SetConfig(runtimeCfg)
-	pollCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	s.fleetSvc.Poll(pollCtx)
-}
-
-func (s *Server) handleAPISettingsSave(_ string) http.HandlerFunc {
-	return func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "config wizard removed"})
-	}
-}
-
-func (s *Server) handleAPIIntelKeys(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "config wizard removed"})
-}
-
 // handleAPISettingsPreferences persists UI preferences (theme) to vops.toml,
 // updates the in-memory config, and sets a vops_theme cookie for flash-free load.
 func (s *Server) handleAPISettingsPreferences(w http.ResponseWriter, r *http.Request) {
@@ -337,17 +210,6 @@ func (s *Server) handleAPISettingsPreferences(w http.ResponseWriter, r *http.Req
 	})
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "theme": req.Theme})
-}
-
-// handleWizardPage is a stub — the config wizard has been removed.
-func (s *Server) handleWizardPage(w http.ResponseWriter, _ *http.Request) {
-	http.Error(w, "config wizard removed", http.StatusNotImplemented)
-}
-
-// handleAPISettingsDone is called by the wizard "Done" button.
-// It simply acknowledges completion — no server-side action needed.
-func (s *Server) handleAPISettingsDone(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "done"})
 }
 
 // handleAPIGenAPIKey generates a cryptographically random 32-byte hex API key.

@@ -1,18 +1,19 @@
 /**
  * settings/index.tsx
  * Settings page: nav shell with group/section switcher.
- * Config state lives here and is passed as props to each panel.
+ *
+ * Config-file-driven edit panels were retired (v1.5.x): settings backed by
+ * TOML files are now managed via config files / CLI, not the GUI. The sections
+ * that remain genuinely live are Fleet Scan, Services & Chains, Keys &
+ * Credentials, and Appearance. Retired sections render an honest notice via
+ * RetiredPanel rather than a Save button that silently 501s.
  */
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { getConfig } from '../../api';
-import type { ConfigSnapshot } from '../../api/types';
-import Spinner from '../../components/Spinner';
 
-import { FleetScanPanel, FleetSSHPanel, DatacentersPanel } from './InfraPanel';
-import { PortsPanel, ProxyControlsPanel, ChainProfilesPanel } from './ProxyPanel';
-import { VOpsPanel, BackupsPanel, PreferencesPanel } from './SystemPanel';
-import { SecurityPanel, AutoBanPanel, IntelKeysPanel } from './SecurityPanel';
+import { FleetScanPanel } from './InfraPanel';
+import { SecurityPanel } from './SecurityPanel';
+import { PreferencesPanel } from './SystemPanel';
+import { RetiredPanel } from './shared';
 import ServicesPage from '../CosmosNodes';
 
 /* ── Nav types ───────────────────────────────────────────────── */
@@ -29,7 +30,7 @@ interface NavGroup {
   sections: NavSection[];
 }
 
-/* ── Nav groups (updated: System group merges Preferences) ────── */
+/* ── Nav groups ──────────────────────────────────────────────── */
 
 const NAV_GROUPS: NavGroup[] = [
   {
@@ -88,47 +89,88 @@ export default function SettingsPage() {
   const [activeGroup, setActiveGroup] = useState('infrastructure');
   const [activeSection, setActiveSection] = useState('fleet-scan');
 
-  const { data: config, isLoading } = useQuery<ConfigSnapshot>({
-    queryKey: ['config'],
-    queryFn: getConfig,
-    retry: false,
-  });
-
   const selectSection = (groupId: string, sectionId: string) => {
     setActiveGroup(groupId);
     setActiveSection(sectionId);
   };
 
   const renderSection = () => {
-    if (isLoading) return <Spinner label="Loading configuration" />;
-
     switch (activeSection) {
+      /* ── Live sections ── */
       case 'fleet-scan':
         return <FleetScanPanel />;
-      case 'ssh-defaults':
-        return config ? <FleetSSHPanel config={config} /> : null;
-      case 'datacenters':
-        return config ? <DatacentersPanel config={config} /> : null;
-      case 'ports':
-        return config ? <PortsPanel config={config} /> : null;
-      case 'proxy-controls':
-        return config ? <ProxyControlsPanel config={config} /> : null;
-      case 'chain-profiles':
-        return config ? <ChainProfilesPanel config={config} /> : null;
       case 'cosmos-nodes':
         return <ServicesPage />;
-      case 'vops':
-        return config ? <VOpsPanel config={config} /> : null;
-      case 'backups':
-        return config ? <BackupsPanel config={config} /> : null;
-      case 'appearance':
-        return <PreferencesPanel />;
       case 'keys':
         return <SecurityPanel />;
+      case 'appearance':
+        return <PreferencesPanel />;
+
+      /* ── Retired config-file-driven sections ── */
+      case 'ssh-defaults':
+        return (
+          <RetiredPanel
+            title="Fleet SSH Defaults"
+            detail="Edit fleet SSH defaults in config/fleet/settings.toml, then restart vOps."
+          />
+        );
+      case 'datacenters':
+        return (
+          <RetiredPanel
+            title="Datacenters & VM Inventory"
+            detail="Datacenters and VMs are defined per file in config/infra/<datacenter>.toml. Use Fleet Scan to discover and add VMs to inventory."
+          />
+        );
+      case 'ports':
+        return (
+          <RetiredPanel
+            title="vProx Ports"
+            detail="vProx ports are configured in the vprox.toml config file."
+          />
+        );
+      case 'proxy-controls':
+        return (
+          <RetiredPanel
+            title="Proxy Controls"
+            detail="Rate limiting, auto-quarantine, and debug settings live in the vprox.toml config file."
+          />
+        );
+      case 'chain-profiles':
+        return (
+          <RetiredPanel
+            title="Chain Profiles"
+            detail="Chain profiles are defined per file in config/chains/<chain>.toml."
+          />
+        );
+      case 'vops':
+        return (
+          <RetiredPanel
+            title="vOps Dashboard & Auth"
+            detail="Network binding, admin credentials, and IP-intelligence tuning are set in config/vops/vops.toml. SSH/API keys and the password hash are generated under Security → Keys & Credentials."
+          />
+        );
+      case 'backups':
+        return (
+          <RetiredPanel
+            title="Backup & Import Configuration"
+            detail="Backup schedule and import mode are configured in the backup.toml config file."
+          />
+        );
       case 'intel-keys':
-        return config ? <IntelKeysPanel config={config} /> : null;
+        return (
+          <RetiredPanel
+            title="Intel API Keys"
+            detail="AbuseIPDB / VirusTotal / Shodan keys are set in config/vops/vops.toml under [vops.intel.keys]."
+          />
+        );
       case 'auto-ban':
-        return config ? <AutoBanPanel config={config} /> : null;
+        return (
+          <RetiredPanel
+            title="UFW Auto-Ban"
+            detail="Auto-ban thresholds, duration, and whitelist are set in config/vops/vops.toml under [vops.intel]."
+          />
+        );
+
       default:
         return (
           <p className="text-sm" style={{ color: 'var(--vn-text-muted)' }}>
@@ -225,12 +267,6 @@ export default function SettingsPage() {
 
           {/* Main section content */}
           {renderSection()}
-
-          {!isLoading && !config && (
-            <p style={{ fontSize: '0.875rem', color: 'var(--vn-text-muted)', padding: '1rem 0' }}>
-              Configuration unavailable — check that vOps can reach its config file.
-            </p>
-          )}
         </main>
       </div>
     </div>

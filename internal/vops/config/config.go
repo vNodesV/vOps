@@ -196,6 +196,27 @@ type AuthConfig struct {
 
 	// SSHPort is the local sshd port used for PAM credential validation.
 	// Defaults to 22 when unset.
+	//
+	// REQUIRED sshd setup — the port that vOps dials MUST accept the SSH
+	// "password" method, or every web login silently fails with "invalid
+	// login" even when the credentials are correct. If the host's global
+	// sshd policy is publickey-only (the recommended hardening), carve out a
+	// loopback-only gateway, e.g. in /etc/ssh/sshd_config.d/60-vops-pam.conf:
+	//
+	//   # vOps PAM web-login gateway — loopback only
+	//   Port 2222
+	//   ListenAddress 127.0.0.1:2222
+	//   Match LocalPort 2222
+	//       PasswordAuthentication yes
+	//       AuthenticationMethods password
+	//       KbdInteractiveAuthentication no
+	//       PermitEmptyPasswords no
+	//       PermitRootLogin no
+	//       AllowGroups vops
+	//
+	// then set ssh_port = 2222 here. Validate with `sshd -t` before reload.
+	// A missing/incorrect AuthenticationMethods line on this block is the
+	// classic cause of "login is broken after a fresh install".
 	SSHPort int `toml:"ssh_port"`
 
 	// Username is the legacy single-user login name (deprecated — use PAM).

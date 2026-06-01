@@ -9,7 +9,6 @@ import type {
   Deployment,
   RegisteredChain,
   ArchiveStats,
-  ConfigSnapshot,
   ChartPoint,
   EndpointStat,
 } from './types';
@@ -132,16 +131,9 @@ export const unregisterChain = (chain: string) =>
 export const forcePoll = () =>
   apiPost<{ ok: boolean }>('/api/v1/fleet/poll');
 
-// Settings
-export const getConfig = () =>
-  apiFetch<ConfigSnapshot>('/settings/api/config/current');
-
-export const saveConfig = (section: string, data: unknown) =>
-  apiPost<{ ok: boolean }>(`/settings/api/config/${section}`, data);
-
-export const applyConfig = (data: unknown) =>
-  apiPost<{ ok: boolean }>('/settings/api/config/apply', data);
-
+// Settings — key/credential generators + appearance preferences.
+// The config-file-driven edit surface (getConfig/saveConfig/applyConfig) was
+// retired: TOML-backed settings are now managed via config files / CLI.
 export const genAPIKey = () =>
   apiFetch<{ key: string }>('/settings/api/gen-api-key');
 

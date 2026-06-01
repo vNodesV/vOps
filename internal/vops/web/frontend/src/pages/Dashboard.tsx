@@ -16,10 +16,8 @@ import StatCard from '../components/StatCard';
 import Badge from '../components/Badge';
 import Spinner from '../components/Spinner';
 import UpgradeModal from '../components/UpgradeModal';
-import SettingsDrawer, { GearButton, ConfigPanel } from '../components/SettingsDrawer';
-import { ChainProfilesPanel } from './settings/ProxyPanel';
-import { BackupsPanel } from './settings/SystemPanel';
-import { FleetScanPanel, DatacentersPanel } from './settings/InfraPanel';
+import SettingsDrawer, { GearButton } from '../components/SettingsDrawer';
+import { FleetScanPanel } from './settings/InfraPanel';
 
 /* ── Feature flag — flip to false to restore original layout ─── */
 const SERVICES_IN_DRAWER = true;
@@ -771,7 +769,6 @@ function ServersPanel({ onVMClick, units = [] }: { onVMClick: (vm: VMStatus) => 
 
 function IngestBar() {
   const queryClient = useQueryClient();
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'ok' | 'err'; msg: string } | null>(null);
 
   const statsQ = useQuery({
@@ -835,14 +832,7 @@ function IngestBar() {
         >
           {importsMut.isPending ? 'Importing…' : '⬇ IMPORTS'}
         </button>
-        <GearButton onClick={() => setSettingsOpen(true)} label="Import & backup settings" />
       </div>
-
-      {settingsOpen && (
-        <SettingsDrawer title="Import & Backup Settings" onClose={() => setSettingsOpen(false)}>
-          <ConfigPanel>{(cfg) => <BackupsPanel config={cfg} />}</ConfigPanel>
-        </SettingsDrawer>
-      )}
     </div>
   );
 }
@@ -1200,7 +1190,6 @@ function VMDetailDrawer({
 
 export default function DashboardPage() {
   const nav = useNavigate();
-  const [chainSettingsOpen, setChainSettingsOpen] = useState(false);
   const [serversSettingsOpen, setServersSettingsOpen] = useState(false);
   const [serversOpen, setServersOpen] = useState(false);
   const [selectedChain, setSelectedChain] = useState<{ name: string; units: CosmosUnitWithStatus[] } | null>(null);
@@ -1295,7 +1284,6 @@ export default function DashboardPage() {
           <h3 className="text-sm font-medium" style={{ color: 'var(--vn-text-muted)' }}>
             Chain Status
           </h3>
-          <GearButton onClick={() => setChainSettingsOpen(true)} label="Chain profile settings" />
         </div>
         <FleetTable onChainClick={(chain, units) => setSelectedChain({ name: chain, units })} />
       </div>
@@ -1304,17 +1292,9 @@ export default function DashboardPage() {
       {/* Archive Ingest — compact single-line bar at bottom */}
       <IngestBar />
 
-      {chainSettingsOpen && (
-        <SettingsDrawer title="Chain Profile Settings" onClose={() => setChainSettingsOpen(false)}>
-          <ConfigPanel>{(cfg) => <ChainProfilesPanel config={cfg} />}</ConfigPanel>
-        </SettingsDrawer>
-      )}
       {serversSettingsOpen && (
         <SettingsDrawer title="Fleet & Server Settings" onClose={() => setServersSettingsOpen(false)}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            <FleetScanPanel />
-            <ConfigPanel>{(cfg) => <DatacentersPanel config={cfg} />}</ConfigPanel>
-          </div>
+          <FleetScanPanel />
         </SettingsDrawer>
       )}
       {selectedChain && (

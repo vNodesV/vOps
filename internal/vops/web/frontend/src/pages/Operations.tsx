@@ -21,8 +21,8 @@ import Spinner from '../components/Spinner';
 import { openSSEStream } from '../api/sse';
 import { BASE } from '../api/client';
 import { useTasks } from '../contexts/TaskContext';
-import SettingsDrawer, { GearButton, ConfigPanel } from '../components/SettingsDrawer';
-import { FleetScanPanel, FleetSSHPanel, DatacentersPanel } from './settings/InfraPanel';
+import SettingsDrawer, { GearButton } from '../components/SettingsDrawer';
+import { FleetScanPanel } from './settings/InfraPanel';
 
 /* ── Shell session keep-alive pool ──────────────────────────────
    WebSocket sessions survive ServerDetailModal unmount for
@@ -1916,17 +1916,7 @@ export default function OperationsPage() {
 
       {opsSettingsOpen && (
         <SettingsDrawer title="Fleet & Infrastructure Settings" onClose={() => setOpsSettingsOpen(false)}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            <FleetScanPanel />
-            <ConfigPanel>
-              {(cfg) => (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                  <FleetSSHPanel config={cfg} />
-                  <DatacentersPanel config={cfg} />
-                </div>
-              )}
-            </ConfigPanel>
-          </div>
+          <FleetScanPanel />
         </SettingsDrawer>
       )}
 

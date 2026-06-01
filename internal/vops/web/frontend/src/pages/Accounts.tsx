@@ -8,8 +8,8 @@ import ThreatScore from '../components/ThreatScore';
 import SortableHeader from '../components/SortableHeader';
 import Spinner from '../components/Spinner';
 import InvestigateModal from '../components/InvestigateModal';
-import SettingsDrawer, { GearButton, ConfigPanel } from '../components/SettingsDrawer';
-import { SecurityPanel, AutoBanPanel } from './settings/SecurityPanel';
+import SettingsDrawer, { GearButton } from '../components/SettingsDrawer';
+import { SecurityPanel } from './settings/SecurityPanel';
 
 const PAGE_SIZES = [25, 50, 100, 200, 0] as const;
 
@@ -312,7 +312,7 @@ export default function AccountsPage() {
           <h2 className="text-lg font-semibold" style={{ color: 'var(--vn-text)' }}>
             IP Accounts
           </h2>
-          <GearButton onClick={() => setSettingsOpen(true)} label="Security & auto-ban settings" />
+          <GearButton onClick={() => setSettingsOpen(true)} label="Security settings" />
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -326,11 +326,8 @@ export default function AccountsPage() {
       </div>
 
       {settingsOpen && (
-        <SettingsDrawer title="Security & Auto-ban Settings" onClose={() => setSettingsOpen(false)}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            <SecurityPanel />
-            <ConfigPanel>{(cfg) => <AutoBanPanel config={cfg} />}</ConfigPanel>
-          </div>
+        <SettingsDrawer title="Security Settings" onClose={() => setSettingsOpen(false)}>
+          <SecurityPanel />
         </SettingsDrawer>
       )}
 

@@ -426,8 +426,16 @@ func HasChainConfigs(dir string) bool {
 }
 
 // IsChainTOML returns true only for files that are chain config TOMLs.
-// Excludes known non-chain system files and all *.sample / *.sample.toml files.
+// Excludes known non-chain system files, all *.sample / *.sample.toml files,
+// and editor/backup artifacts (*.toml.bak, *.bak).
 func IsChainTOML(name string) bool {
+	// Explicitly reject backup artifacts first. A file such as "cosmos.toml.bak"
+	// does not end in ".toml" so the suffix check below would already reject it,
+	// but guarding here keeps the intent explicit and survives future refactors
+	// of the suffix logic (defense-in-depth against re-including stray backups).
+	if strings.HasSuffix(name, ".bak") {
+		return false
+	}
 	if !strings.HasSuffix(name, ".toml") {
 		return false
 	}

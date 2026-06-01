@@ -215,11 +215,9 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 
 	// SPA handler — serves the React app for all page routes.
 	// GET /login is served without session check so users can access the login page.
-	// GET /settings/wizard serves the embedded configwizard HTML (bypasses React Router).
 	// GET / (catch-all) enforces session; Go redirects to /login if unauthenticated.
 	spa := buildSPAHandler(distFS, s.cfg.VOps.BasePath, func() string { return s.cfg.VOps.UI.Theme })
 	mux.HandleFunc("GET /login", spa)
-	mux.Handle("GET /settings/wizard", s.requireSession(http.HandlerFunc(s.handleWizardPage)))
 	mux.Handle("GET /", s.requireSession(http.HandlerFunc(spa)))
 
 	// When base_path is set (e.g. "/vops" for sub-path proxy without prefix stripping),
@@ -230,19 +228,10 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		mux.HandleFunc("POST "+bp+"/login", s.handleLoginSubmit)
 		mux.HandleFunc("GET "+bp+"/login", spa)
 	}
-	mux.Handle("GET /settings/api/config/current", s.requireSession(http.HandlerFunc(s.handleAPISettingsCurrent)))
-	mux.Handle("POST /settings/api/config/import", s.requireSession(http.HandlerFunc(s.handleAPISettingsImport)))
-	mux.Handle("POST /settings/api/config/remove", s.requireSession(http.HandlerFunc(s.handleAPISettingsRemove)))
-	mux.Handle("POST /settings/api/config/apply", s.requireSession(http.HandlerFunc(s.handleAPISettingsApply)))
-	mux.Handle("POST /settings/api/config/ports", s.requireSession(http.HandlerFunc(s.handleAPISettingsSave("ports"))))
-	mux.Handle("POST /settings/api/config/settings", s.requireSession(http.HandlerFunc(s.handleAPISettingsSave("settings"))))
-	mux.Handle("POST /settings/api/config/chain", s.requireSession(http.HandlerFunc(s.handleAPISettingsSave("chain"))))
-	mux.Handle("POST /settings/api/config/vops", s.requireSession(http.HandlerFunc(s.handleAPISettingsSave("vops"))))
-	mux.Handle("POST /settings/api/config/intel-keys", s.requireSession(http.HandlerFunc(s.handleAPIIntelKeys)))
-	mux.Handle("POST /settings/api/config/fleet", s.requireSession(http.HandlerFunc(s.handleAPISettingsSave("fleet"))))
-	mux.Handle("POST /settings/api/config/infra", s.requireSession(http.HandlerFunc(s.handleAPISettingsSave("infra"))))
-	mux.Handle("POST /settings/api/config/backup", s.requireSession(http.HandlerFunc(s.handleAPISettingsSave("backup"))))
-	mux.Handle("POST /settings/api/config/done", s.requireSession(http.HandlerFunc(s.handleAPISettingsDone)))
+	// Config-file-driven edit surface retired: the wizard, config snapshot
+	// (current), import/remove/apply, and per-section save endpoints were
+	// decommissioned. TOML-backed settings are managed via config files / CLI.
+	// Only the live key/credential generators and appearance preferences remain.
 	mux.Handle("POST /settings/api/config/preferences", s.requireSession(http.HandlerFunc(s.handleAPISettingsPreferences)))
 	mux.Handle("GET /settings/api/gen-api-key", s.requireSession(http.HandlerFunc(s.handleAPIGenAPIKey)))
 	mux.Handle("POST /settings/api/hash-password", s.requireSession(http.HandlerFunc(s.handleAPIHashPassword)))
@@ -661,9 +650,31 @@ func (s *Server) pamCheckCredentials(username, password string, allowedGroups []
 		HostKeyCallback: gossh.InsecureIgnoreHostKey(), //nolint:gosec // localhost-only dial
 		Timeout:         5 * time.Second,
 	}
-	client, err := gossh.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", sshPort), sshCfg)
+	addr := fmt.Sprintf("127.0.0.1:%d", sshPort)
+	client, err := gossh.Dial("tcp", addr, sshCfg)
 	if err != nil {
-		// Authentication failure or sshd unavailable.
+		// Distinguish a genuine credential rejection (expected, and noisy under
+		// brute force) from a misconfigured/unreachable sshd gateway (an
+		// operator problem that otherwise masquerades as "invalid login").
+		//
+		// A wrong password yields "unable to authenticate ... no supported
+		// methods remain" AFTER sshd offered the "password" method. If the
+		// loopback sshd Match block omits `AuthenticationMethods password` /
+		// `PasswordAuthentication yes`, sshd never offers password auth and the
+		// handshake fails at preauth ("no common algorithm"/"none"); a stopped
+		// sshd yields "connection refused". Surface those as WRN so the
+		// gateway misconfiguration is diagnosable next time.
+		msg := err.Error()
+		switch {
+		case strings.Contains(msg, "no supported methods remain"):
+			// sshd offered password auth and rejected the credentials.
+			// Expected on bad login — keep quiet to avoid brute-force spam.
+		default:
+			logging.Print("WRN", "vops/auth",
+				"PAM gateway dial failed — check sshd loopback Match block (PasswordAuthentication yes + AuthenticationMethods password)",
+				logging.F("addr", addr),
+				logging.F("err", msg))
+		}
 		return false
 	}
 	defer client.Close()

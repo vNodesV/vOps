@@ -491,6 +491,9 @@ func TestIsChainTOML(t *testing.T) {
 		{"Ports.TOML", false},    // case-insensitive skip
 		{"Services.TOML", false}, // case-insensitive skip
 		{"Backup.Toml", false},
+		{"cosmos.toml.bak", false}, // backup artifact skipped
+		{"osmosis.bak", false},     // generic .bak skipped
+		{"cosmos.toml.BAK", false}, // uppercase .BAK doesn't end in .toml → rejected by suffix check
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

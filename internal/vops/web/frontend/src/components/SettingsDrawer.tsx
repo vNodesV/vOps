@@ -5,14 +5,9 @@
  * Exports:
  *   default  SettingsDrawer  — the drawer shell (portal-based)
  *   GearButton               — reusable ⚙ trigger button
- *   ConfigPanel              — render-prop that fetches config before rendering panels
  */
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { useQuery } from '@tanstack/react-query';
-import { getConfig } from '../api';
-import type { ConfigSnapshot } from '../api/types';
-import Spinner from './Spinner';
 
 /* ── GearButton ──────────────────────────────────────────────── */
 
@@ -54,23 +49,6 @@ export function GearButton({
       </svg>
     </button>
   );
-}
-
-/* ── ConfigPanel ─────────────────────────────────────────────── */
-
-/**
- * Fetches the live config snapshot and passes it to `children` as a
- * render prop. Renders a spinner while loading and a fallback on error.
- */
-export function ConfigPanel({ children }: { children: (cfg: ConfigSnapshot) => React.ReactNode }) {
-  const { data: config, isLoading } = useQuery({ queryKey: ['config'], queryFn: getConfig });
-  if (isLoading) return <Spinner label="Loading settings…" />;
-  if (!config) return (
-    <p style={{ fontSize: '0.875rem', color: 'var(--vn-text-muted)' }}>
-      Configuration unavailable — check that vOps can reach its config file.
-    </p>
-  );
-  return <>{children(config)}</>;
 }
 
 /* ── SettingsDrawer ──────────────────────────────────────────── */

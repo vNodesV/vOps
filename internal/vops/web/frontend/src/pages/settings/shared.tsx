@@ -2,9 +2,8 @@
  * settings/shared.tsx
  * Shared utility components and helpers used across Settings panel files.
  */
-import { useState, useCallback } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { saveConfig, getVMHistory } from '../../api';
+import { useQuery } from '@tanstack/react-query';
+import { getVMHistory } from '../../api';
 import type { VMMetricPoint } from '../../api/types';
 
 /* ── SectionCard ─────────────────────────────────────────────── */
@@ -28,6 +27,38 @@ export function SectionCard({
       </div>
       {children}
     </div>
+  );
+}
+
+/* ── RetiredPanel ────────────────────────────────────────────── */
+
+/**
+ * RetiredPanel renders an honest "this panel has been retired" notice for
+ * settings sections whose config-edit surface was decommissioned. These
+ * settings are now managed exclusively via config files / CLI. The notice
+ * never implies a config-file reachability problem and exposes no Save button.
+ */
+export function RetiredPanel({
+  title,
+  detail,
+}: {
+  title: string;
+  detail?: string;
+}) {
+  return (
+    <SectionCard title={title}>
+      <div
+        className="rounded-lg p-4 text-xs space-y-2"
+        style={{ backgroundColor: 'var(--vn-surface-2)', border: '1px solid var(--vn-border)' }}
+      >
+        <p style={{ color: 'var(--vn-text)' }}>
+          Settings are managed via config files / CLI — this panel has been retired.
+        </p>
+        {detail && (
+          <p style={{ color: 'var(--vn-text-muted)' }}>{detail}</p>
+        )}
+      </div>
+    </SectionCard>
   );
 }
 
@@ -159,206 +190,6 @@ export function VMHistorySparkline({ vmName }: { vmName: string }) {
       <div style={{ position: 'absolute', top: 0, left: 0 }}>
         <Sparkline pts={pts.map((p) => p.cpu_pct)} color="var(--vn-primary)" />
       </div>
-    </div>
-  );
-}
-
-/* ── SaveBar ─────────────────────────────────────────────────── */
-
-export function SaveBar({
-  onSave,
-  onCancel,
-  isPending,
-  isSuccess,
-  isError,
-  error,
-}: {
-  onSave: () => void;
-  onCancel?: () => void;
-  isPending: boolean;
-  isSuccess: boolean;
-  isError: boolean;
-  error: Error | null;
-}) {
-  return (
-    <div className="space-y-2">
-      <div className="flex gap-2">
-        <button
-          onClick={onSave}
-          disabled={isPending}
-          className="btn btn-primary btn-sm disabled:opacity-50"
-        >
-          {isPending ? 'Saving…' : 'Save'}
-        </button>
-        {onCancel && (
-          <button onClick={onCancel} className="btn btn-secondary btn-sm">
-            Cancel
-          </button>
-        )}
-      </div>
-      {isSuccess && (
-        <p className="text-xs" style={{ color: 'var(--vn-success)' }} role="alert">
-          ✓ Saved successfully.
-        </p>
-      )}
-      {isError && (
-        <p className="text-xs" style={{ color: 'var(--vn-danger)' }} role="alert">
-          ✗ {(error as Error)?.message ?? 'Save failed.'}
-        </p>
-      )}
-    </div>
-  );
-}
-
-/* ── TOMLEditor ──────────────────────────────────────────────── */
-
-export function TOMLEditor({
-  sectionKey,
-  rawValue,
-  fieldDocs,
-}: {
-  sectionKey: string;
-  rawValue: unknown;
-  fieldDocs?: { label: string; hint: string; example?: string }[];
-}) {
-  const queryClient = useQueryClient();
-  const [editing, setEditing] = useState(false);
-
-  const toDisplay = (v: unknown) =>
-    typeof v === 'string' ? v : JSON.stringify(v ?? 'Not configured', null, 2);
-
-  const [text, setText] = useState(() => toDisplay(rawValue));
-
-  const saveMut = useMutation({
-    mutationFn: (payload: unknown) => saveConfig(sectionKey, payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['config'] });
-      setEditing(false);
-    },
-  });
-
-  const handleSave = useCallback(() => {
-    try {
-      saveMut.mutate(JSON.parse(text));
-    } catch {
-      saveMut.mutate(text);
-    }
-  }, [text, saveMut]);
-
-  return (
-    <div className="space-y-3">
-      {fieldDocs && !editing && (
-        <div className="space-y-0">
-          {fieldDocs.map((f) => (
-            <FieldDoc key={f.label} label={f.label} hint={f.hint} example={f.example} />
-          ))}
-        </div>
-      )}
-
-      {!editing ? (
-        <div>
-          <pre
-            className="p-3 rounded-md text-xs overflow-x-auto"
-            style={{
-              backgroundColor: 'var(--vn-surface-2)',
-              border: '1px solid var(--vn-border)',
-              color: 'var(--vn-text)',
-              maxHeight: 320,
-            }}
-          >
-            {toDisplay(rawValue) || 'Not configured — click Edit to add.'}
-          </pre>
-          <button
-            onClick={() => {
-              setText(toDisplay(rawValue));
-              setEditing(true);
-            }}
-            className="btn btn-primary btn-sm mt-2"
-          >
-            Edit
-          </button>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          <label htmlFor={`cfg-${sectionKey}`} className="sr-only">
-            {sectionKey} configuration
-          </label>
-          <textarea
-            id={`cfg-${sectionKey}`}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            rows={18}
-            className="vn-input w-full font-mono text-xs resize-y
-                       focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-          />
-          <SaveBar
-            onSave={handleSave}
-            onCancel={() => setEditing(false)}
-            isPending={saveMut.isPending}
-            isSuccess={saveMut.isSuccess}
-            isError={saveMut.isError}
-            error={saveMut.error as Error | null}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ── parseTOML ───────────────────────────────────────────────── */
-
-export function parseTOML(raw: string): Record<string, string> {
-  const result: Record<string, string> = {};
-  let section = '';
-  for (const line of (raw || '').split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    // [[array]] section headers — treat like [section] so fields inside are accessible
-    if (trimmed.startsWith('[[') && trimmed.endsWith(']]')) {
-      section = trimmed.slice(2, -2).trim();
-      continue;
-    }
-    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
-      section = trimmed.slice(1, -1).trim();
-      continue;
-    }
-    const eqIdx = trimmed.indexOf('=');
-    if (eqIdx <= 0) continue;
-    const key = trimmed.slice(0, eqIdx).trim();
-    let val = trimmed.slice(eqIdx + 1).trim();
-    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-      val = val.slice(1, -1);
-    } else {
-      const hi = val.indexOf(' #');
-      if (hi > 0) val = val.slice(0, hi).trim();
-    }
-    result[section ? `${section}.${key}` : key] = val;
-    // For dotted keys (e.g. rate_limit.rps), also store without the section prefix
-    // so panels can look up keys directly by their dotted form.
-    if (key.includes('.') && section) {
-      result[key] = val;
-    }
-  }
-  return result;
-}
-
-/* ── LabeledInput ────────────────────────────────────────────── */
-
-export function LabeledInput({
-  label, value, onChange, placeholder, wide,
-}: {
-  label: string; value: string; onChange: (v: string) => void; placeholder?: string; wide?: boolean;
-}) {
-  return (
-    <div className={wide ? 'col-span-2' : ''}>
-      <label className="block text-xs mb-0.5" style={{ color: 'var(--vn-text-muted)' }}>{label}</label>
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="vn-input w-full focus-visible:ring-2 focus-visible:ring-[var(--vn-primary)]"
-      />
     </div>
   );
 }
