@@ -197,7 +197,7 @@ function OverviewTab({
           ) : (
             <>
               <p className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>
-                Last 100 lines from <code>$VOPS_HOME/data/logs/main.log</code>
+                Last 100 lines from <code>{data?.log_path ?? '$VOPS_HOME/data/logs/main.log'}</code>
               </p>
               <pre className="text-xs font-mono rounded p-3 overflow-auto"
                 style={{ backgroundColor: 'var(--vn-surface-2)', color: 'var(--vn-text)', border: '1px solid var(--vn-border)', maxHeight: 400 }}>

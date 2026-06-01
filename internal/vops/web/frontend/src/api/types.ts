@@ -360,4 +360,5 @@ export interface ProxyStatus {
   status: 'running' | 'stopped' | 'starting' | 'error' | 'not_configured';
   error: string;
   uptime_sec: number;
+  log_path?: string;
 }

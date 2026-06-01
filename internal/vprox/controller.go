@@ -262,16 +262,61 @@ func (c *Controller) ConfigFilePath() string {
 // Home returns the vProx home directory configured for this controller.
 func (c *Controller) Home() string { return c.cfg.Home }
 
-// LogFilePath returns the expected path to the main vProx log file
-// (i.e. $VPROX_HOME/data/logs/main.log), honouring the LogFile override if set.
+// LogFilePath returns the expected path to the main vProx log file.
+// Prefer $HOME/data/logs/main.log but fall back to a few legacy/alternate
+// layouts when the primary path is not present. If a LogFile override is
+// configured we honour it (absolute or relative to Home) but only return it
+// immediately if it exists — otherwise we continue to try sensible fallbacks.
 func (c *Controller) LogFilePath() string {
-	if c.cfg.LogFile != "" {
-		if filepath.IsAbs(c.cfg.LogFile) {
-			return c.cfg.LogFile
+	// helper to test existence
+	exists := func(p string) bool {
+		if p == "" {
+			return false
 		}
-		return filepath.Join(c.cfg.Home, "data", "logs", c.cfg.LogFile)
+		_, err := os.Stat(p)
+		return err == nil
 	}
-	return filepath.Join(c.cfg.Home, "data", "logs", "main.log")
+
+	// If user provided a log file override, resolve and prefer it when present.
+	if c.cfg.LogFile != "" {
+		var candidate string
+		if filepath.IsAbs(c.cfg.LogFile) {
+			candidate = c.cfg.LogFile
+		} else {
+			candidate = filepath.Join(c.cfg.Home, "data", "logs", c.cfg.LogFile)
+		}
+		if exists(candidate) {
+			return candidate
+		}
+		// fall through to other fallbacks if the override file doesn't exist
+	}
+
+	// Primary expected location
+	primary := filepath.Join(c.cfg.Home, "data", "logs", "main.log")
+	if exists(primary) {
+		return primary
+	}
+
+	// Legacy or alternate layout where config/vprox is part of the provided Home
+	// e.g. Home = ~/.vOps/config/vprox -> real prefix likely ~/.vOps
+	// Try moving up two directories and checking there.
+	if strings.HasSuffix(filepath.ToSlash(c.cfg.Home), "/config/vprox") {
+		altBase := filepath.Dir(filepath.Dir(c.cfg.Home)) // strip /config/vprox
+		alt := filepath.Join(altBase, "data", "logs", "main.log")
+		if exists(alt) {
+			return alt
+		}
+	}
+
+	// Another possible layout: Home might already be the repo root and the
+	// actual logs live under Home/config/vprox/data/logs
+	alt2 := filepath.Join(c.cfg.Home, "config", "vprox", "data", "logs", "main.log")
+	if exists(alt2) {
+		return alt2
+	}
+
+	// Fallback to the primary (non-existent) path to preserve original behaviour.
+	return primary
 }
 
 // Wait blocks until the server goroutine exits.

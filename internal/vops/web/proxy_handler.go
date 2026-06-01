@@ -16,6 +16,7 @@ type proxyStatusResponse struct {
 	Status    string `json:"status"`
 	Error     string `json:"error"`
 	UptimeSec int64  `json:"uptime_sec"`
+	LogPath   string `json:"log_path,omitempty"`
 }
 
 // handleProxyStatus returns the current vProx controller state.
@@ -31,6 +32,7 @@ func (s *Server) handleProxyStatus(w http.ResponseWriter, _ *http.Request) {
 	resp := proxyStatusResponse{
 		Status:    st.String(),
 		UptimeSec: s.proxyCtrl.UptimeSec(),
+		LogPath:   s.proxyCtrl.LogFilePath(),
 	}
 	if lastErr != nil {
 		resp.Error = lastErr.Error()
