@@ -7,6 +7,53 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [v1.5.2] — 2026-06-01 (branch: `vOps_v1.5.5`)
+
+### Added
+- **Supply-chain integrity**: integrity manifests + CI verification workflow (`supply-chain-integrity.yml`) — `a5aef82`
+- **vProx build target**: `make build-vprox` with VERSION + ldflags; vProx binary now embeds version/commit — `65bf7f1`
+- **IP disconnect**: sever live connections via conntrack (`POST /api/v1/accounts/{ip}/sever`) — `9fc7514`
+
+### Fixed
+- **Settings API**: return full config snapshot instead of 501 Not Implemented — `ca304b2`
+- **vProx log path**: display correct `main.log` path in UI; include `log_path` in API response — `81f5d55`
+- **SSH key rename**: `id.push` → `vops_ssh_key` for fleet operations; deploy script moved to internal_memo — `3025d9f`
+- **vProx home default**: `.vProx` → `.vOps`; consolidate deploy + sudoers in Makefile — `ecf2686`
+- **Deploy scripts**: `install-*` (local) split from `deploy-*` (remote SSH); `install-fix-bins` uses `ln -sf` — `35f4b77`, `64cf0a3`
+- **Deploy sudoers**: SSH `-tt` flag for interactive sudo password prompt — `7640ecd`
+
+### Performance
+- **vProx HTTP transport**: tune upstream connection reuse (keep-alive, idle conns, timeouts) — `5c3cd39`
+
+---
+
+## [v1.5.0] — 2026-05-13 (branch: `vOps_v1.5.0`)
+
+### Added
+- **Login page**: Matrix rain animation, vNodes[V] header, tagline, button color — `5deee74`, `caa39e3`
+- **Auto-ban**: automatic IP ban after configurable rate-limit threshold — `caa39e3`
+- **GR theme**: sitewide rebrand (footer/nav), online/offline Badge fixes — `7a33961`
+- **ChainDetailDrawer + VMDetailDrawer**: T5+T6 — inline chain/VM detail drawers replace page navigation — `301d9b0`
+- **vProx standalone build**: `make build-vprox` target — `65bf7f1`
+
+### Fixed
+- **Security**: SSRF guard (`isPrivateIP`) + safe config path (`safeConfigPath`) — `6588b7f`
+- **Security**: All audit findings remediated — H-B, L-A, M-C, M-D, I-B, M-B, I-A, L-B, L-C, CSRF — `23cc5e6`
+- **Dashboard**: validator bonded count uses `service_active` instead of `voting_power` — `f614dfc`
+- **Fleet**: Topology blank canvas, VM duplicates (seen-dedup in MergeInfraConfig), isPrivateIP CIDR pre-compile — `0cc0176`
+- **CSP**: `unsafe-inline` added to `style-src` for ReactFlow inline positioning — `902a21a`
+- **Apache config**: resolve agentic-eval B-1/B-2/B-3 findings in `web2.conf` — `c542e68`
+- **OpsCenter RBX**: `sameSubnet24` auto-infers ProxyJump when host has `vrack_ip` set — `f49347f`
+- **IP Accounts**: DISMISS no-op, blank page at `accounts/<IP>`, sort loss on investigation complete — `dd7f62b`
+- **Dashboard perf**: `MaxOpenConns(1)→10` + `MaxIdleConns(5)` — fixes 17s page-load burst — `119afdf`
+- **Dashboard charts**: restore static ChartPanel ×2 (requests_over_time + ips_over_time) — `e5d37ba`
+- **Makefile**: `build-vops` never touches config TOMLs — `410c202`
+
+### Removed
+- **Topology page**: ReactFlow/dagre dropped; bundle −212 KB — `c03abb0`
+
+---
+
 ## [v1.4.5] — 2026-04-06 (branch: `vLog_v1.4.5`)
 
 ### Added — vOps v1.4.5
