@@ -54,8 +54,8 @@ DIR_LIST := $(DATA_DIR) $(LOG_DIR) $(CFG_DIR) $(CFG_DIR)/chains $(CFG_DIR)/backu
 # Injected into the "# rev: {{SAMPLE_REV}}" placeholder in every .sample file at install/refresh time.
 SAMPLE_REV := r5_031126_0
 
-# GeoLocation database — bundled in assets/_geo/, extracted to user data dir
-GEO_DB_SRC := assets/_geo/ip2location.mmdb.gz
+# GeoLocation database — bundled in assets/geo/, extracted to user data dir
+GEO_DB_SRC := assets/geo/ip2location.mmdb.gz
 GEO_DB_DST := $(GEO_DIR)/ip2location.mmdb
 
 ENV_FILE := $(VOPS_HOME)/._env
