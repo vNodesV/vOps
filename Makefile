@@ -808,7 +808,7 @@ upgrade-1.2.1-1.4.4:
 
 ## Full local install: sudoers → fix-bins → build both binaries.
 ## Run this directly on the server: make install
-install: install-sudoers install-fix-bins build-vops build-vprox _geo
+install: install-sudoers install-fix-bins _dirs _geo _env _config _config-vops _config-vprox _samples-fleet build-vops build-vprox
 	@echo "── Service status ───────────────────────────────────────────────────────"
 	@for S in vOps vProx; do printf "  %-8s %s\n" "$$S:" "$$(systemctl is-active $$S 2>/dev/null || echo inactive)"; done
 	@echo "[ ok ]  install complete"
