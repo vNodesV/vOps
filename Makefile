@@ -233,6 +233,8 @@ _geo:
 	@if [[ ! -f "$(GEO_DB_SRC)" ]]; then \
 		echo "WARNING: GEO DB not found at $(GEO_DB_SRC)"; \
 		echo "Geolocation features will be disabled until a database is provided."; \
+	elif [[ -f "$(GEO_DB_DST)" ]]; then \
+		echo "✓ GEO DB already present at $(GEO_DB_DST) — skipping (run make _geo to force refresh)"; \
 	else \
 		mkdir -p "$(GEO_DIR)"; \
 		gunzip -c "$(GEO_DB_SRC)" > "$(GEO_DB_DST)"; \
@@ -806,7 +808,7 @@ upgrade-1.2.1-1.4.4:
 
 ## Full local install: sudoers → fix-bins → build both binaries.
 ## Run this directly on the server: make install
-install: install-sudoers install-fix-bins build-vops build-vprox
+install: install-sudoers install-fix-bins build-vops build-vprox _geo
 	@echo "── Service status ───────────────────────────────────────────────────────"
 	@for S in vOps vProx; do printf "  %-8s %s\n" "$$S:" "$$(systemctl is-active $$S 2>/dev/null || echo inactive)"; done
 	@echo "[ ok ]  install complete"
