@@ -65,10 +65,9 @@ func (s *Server) handleAPIBackupAndIngest(w http.ResponseWriter, r *http.Request
 	ctx, cancel := context.WithTimeout(r.Context(), 120*time.Second)
 	defer cancel()
 
-	args := []string{"--new-backup"}
-	if home := s.cfg.Vprox.ConfigPath; home != "" {
-		args = append([]string{"--home", home}, args...)
-	}
+	// Always pass --home explicitly so vProx writes the backup into the same
+	// home directory that vOps reads archives from. vOps and vProx share ~/.vOps.
+	args := []string{"--home", s.home, "--new-backup"}
 	out, err := exec.CommandContext(ctx, bin, args...).CombinedOutput() //nolint:gosec
 	if err != nil {
 		logging.Print("ERR", "web", "backup failed", logging.F("err", err), logging.F("output", string(out)))

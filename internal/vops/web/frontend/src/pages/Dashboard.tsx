@@ -833,7 +833,7 @@ function IngestBar() {
           title="Run vprox --new-backup then ingest all new archives"
           className="btn btn-primary btn-sm disabled:opacity-50"
         >
-          {importsMut.isPending ? 'vProx…' : '⬇ vProx'}
+          {importsMut.isPending ? 'Importing…' : '⬇ IMPORT'}
         </button>
         <GearButton onClick={() => setSettingsOpen(true)} label="Import & backup settings" />
       </div>
