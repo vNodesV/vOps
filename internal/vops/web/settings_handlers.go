@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -18,6 +19,8 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
+	bkp "github.com/vNodesV/vOps/internal/backup"
+	proxycfg "github.com/vNodesV/vOps/internal/config"
 	"github.com/vNodesV/vOps/internal/logging"
 	"golang.org/x/crypto/ssh"
 
@@ -159,41 +162,321 @@ func (s *Server) handleAPIGenSSHKey(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
-func (s *Server) handleAPISettingsCurrent(w http.ResponseWriter, _ *http.Request) {
-	// Resolve config path (server may have been started with an explicit path).
-	cfgPath := s.cfgPath
-	if cfgPath == "" {
-		cfgPath = filepath.Join(s.home, "config", "vops", "vops.toml")
-	}
+// ── Config path helpers ───────────────────────────────────────────────────
 
-	// Try reading the on-disk TOML. If it doesn't exist, build a snapshot
-	// from the default config so the UI can still render sensible defaults.
-	b, err := os.ReadFile(cfgPath)
-	var snapshot map[string]any
+// vopsConfigPath returns the effective path to vops.toml.
+func (s *Server) vopsConfigPath() string {
+	if s.cfgPath != "" {
+		return s.cfgPath
+	}
+	return filepath.Join(s.home, "config", "vops", "vops.toml")
+}
+
+// vproxHome returns the vProx home directory. When Vprox.ConfigPath is set in
+// vops.toml (external vProx install), it is used directly; otherwise the vOps
+// home directory is shared.
+func (s *Server) vproxHome() string {
+	if p := strings.TrimSpace(s.cfg.Vprox.ConfigPath); p != "" {
+		return p
+	}
+	return s.home
+}
+
+// writeConfig atomically writes data to path, creating parent dirs as needed.
+func writeConfig(path string, data []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("mkdir: %w", err)
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+		return fmt.Errorf("write tmp: %w", err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("rename: %w", err)
+	}
+	return nil
+}
+
+// ── JSON map extraction helpers ───────────────────────────────────────────
+
+func mapStr(m map[string]any, key string) (string, bool) {
+	v, ok := m[key]
+	if !ok {
+		return "", false
+	}
+	s, ok := v.(string)
+	return s, ok
+}
+
+func mapInt(m map[string]any, key string) (int, bool) {
+	v, ok := m[key]
+	if !ok {
+		return 0, false
+	}
+	switch n := v.(type) {
+	case float64:
+		return int(n), true
+	case int:
+		return n, true
+	}
+	return 0, false
+}
+
+func mapBool(m map[string]any, key string) (bool, bool) {
+	v, ok := m[key]
+	if !ok {
+		return false, false
+	}
+	b, ok := v.(bool)
+	return b, ok
+}
+
+func asMap(v any) (map[string]any, bool) {
+	m, ok := v.(map[string]any)
+	return m, ok
+}
+
+// ── Snapshot helpers ──────────────────────────────────────────────────────
+
+// redactVopsConfig returns a copy of cfg with secret fields replaced by "[REDACTED]".
+func redactVopsConfig(cfg vopscfg.Config) vopscfg.Config {
+	if cfg.VOps.Intel.Keys.AbuseIPDB != "" {
+		cfg.VOps.Intel.Keys.AbuseIPDB = "[REDACTED]"
+	}
+	if cfg.VOps.Intel.Keys.VirusTotal != "" {
+		cfg.VOps.Intel.Keys.VirusTotal = "[REDACTED]"
+	}
+	if cfg.VOps.Intel.Keys.Shodan != "" {
+		cfg.VOps.Intel.Keys.Shodan = "[REDACTED]"
+	}
+	if cfg.VOps.Auth.PasswordHash != "" {
+		cfg.VOps.Auth.PasswordHash = "[REDACTED]"
+	}
+	return cfg
+}
+
+// buildFleetTOML synthesises a TOML string in the format FleetSSHPanel's
+// parseTOML expects: [ssh], [poll], [defaults] sections.
+func buildFleetTOML(cfg vopscfg.Config) string {
+	d := cfg.VOps.Push.Defaults
+	port := cfg.VOps.Auth.SSHPort
+	if port == 0 {
+		port = 22
+	}
+	poll := cfg.VOps.Push.PollIntervalSec
+	if poll == 0 {
+		poll = 60
+	}
+	return fmt.Sprintf(
+		"[ssh]\nuser = %q\nkey_path = %q\nknown_hosts_path = %q\nport = %d\ntimeout_sec = 15\n\n[poll]\ninterval_sec = %d\n\n[defaults]\ndatacenter = \"\"\n",
+		d.User, d.KeyPath, d.KnownHostsPath, port, poll,
+	)
+}
+
+// readBackupTOML returns the contents of backup.toml as a string.
+func (s *Server) readBackupTOML() string {
+	vh := s.vproxHome()
+	paths := []string{
+		filepath.Join(vh, "config", "backup", "backup.toml"),
+		filepath.Join(vh, "config", "backup.toml"),
+	}
+	for _, p := range paths {
+		if b, err := os.ReadFile(p); err == nil {
+			return string(b)
+		}
+	}
+	// Return marshaled defaults.
+	cfg := bkp.DefaultConfig()
+	b, _ := toml.Marshal(cfg)
+	return string(b)
+}
+
+// readPortsTOML returns the contents of ports.toml as a string.
+func (s *Server) readPortsTOML() string {
+	vh := s.vproxHome()
+	paths := []string{
+		filepath.Join(vh, "config", "chains", "ports.toml"),
+		filepath.Join(vh, "config", "ports.toml"),
+	}
+	for _, p := range paths {
+		if b, err := os.ReadFile(p); err == nil {
+			return string(b)
+		}
+	}
+	return ""
+}
+
+// readProxySettingsTOML returns the contents of vprox/settings.toml as a string.
+func (s *Server) readProxySettingsTOML() string {
+	p := filepath.Join(s.vproxHome(), "config", "vprox", "settings.toml")
+	if b, err := os.ReadFile(p); err == nil {
+		return string(b)
+	}
+	return ""
+}
+
+// infraEntry mirrors the InfraEntry shape the UI expects.
+type infraEntry struct {
+	File       string         `json:"file"`
+	Datacenter string         `json:"datacenter"`
+	Host       map[string]any `json:"host"`
+	Vprox      map[string]any `json:"vprox"`
+	VMs        []map[string]any `json:"vms"`
+}
+
+// readInfraEntries scans the infra dir and returns structured entries.
+func (s *Server) readInfraEntries() []infraEntry {
+	dir := s.cfg.VOps.Push.InfraDir
+	if dir == "" {
+		dir = filepath.Join(s.home, "config", "infra")
+	}
+	entries, err := os.ReadDir(dir)
 	if err != nil {
-		if os.IsNotExist(err) {
-			def := vopscfg.DefaultConfig(s.home)
-			b2, mErr := toml.Marshal(def)
-			if mErr != nil {
-				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not marshal default config"})
-				return
-			}
-			if uErr := toml.Unmarshal(b2, &snapshot); uErr != nil {
-				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not build config snapshot"})
-				return
-			}
-		} else {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not read vops.toml"})
-			return
+		return []infraEntry{}
+	}
+	var result []infraEntry
+	for _, e := range entries {
+		if e.IsDir() || filepath.Ext(e.Name()) != ".toml" {
+			continue
 		}
-	} else {
-		if uErr := toml.Unmarshal(b, &snapshot); uErr != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not parse vops.toml"})
-			return
+		data, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			continue
 		}
+		var schema struct {
+			Host  fleetcfg.Host `toml:"host"`
+			Vprox struct {
+				User       string `toml:"user"`
+				SSHKeyPath string `toml:"ssh_key_path"`
+			} `toml:"vprox"`
+			VMs []fleetcfg.VM `toml:"vm"`
+		}
+		if err := toml.Unmarshal(data, &schema); err != nil {
+			continue
+		}
+		dc := strings.TrimSuffix(e.Name(), ".toml")
+		entry := infraEntry{
+			File:       e.Name(),
+			Datacenter: dc,
+			Host: map[string]any{
+				"name":         schema.Host.Name,
+				"lan_ip":       schema.Host.LanIP,
+				"public_ip":    schema.Host.PublicIP,
+				"vrack_ip":     schema.Host.VRackIP,
+				"user":         schema.Host.User,
+				"ssh_key_path": schema.Host.SSHKeyPath,
+				"port":         schema.Host.Port,
+			},
+			Vprox: map[string]any{
+				"user":         schema.Vprox.User,
+				"ssh_key_path": schema.Vprox.SSHKeyPath,
+			},
+			VMs: make([]map[string]any, 0, len(schema.VMs)),
+		}
+		for _, vm := range schema.VMs {
+			entry.VMs = append(entry.VMs, map[string]any{
+				"name":          vm.Name,
+				"host":          vm.Host,
+				"host_ref":      vm.HostRef,
+				"lan_ip":        vm.LanIP,
+				"public_ip":     vm.PublicIP,
+				"port":          vm.Port,
+				"user":          vm.User,
+				"key_path":      vm.KeyPath,
+				"datacenter":    vm.Datacenter,
+				"type":          vm.Type,
+				"chain_name":    vm.ChainName,
+				"ping_country":  vm.Ping.Country,
+				"ping_provider": vm.Ping.Provider,
+				"proxy_jump_host": vm.ProxyJumpHost,
+			})
+		}
+		result = append(result, entry)
+	}
+	if result == nil {
+		return []infraEntry{}
+	}
+	return result
+}
+
+// chainEntry mirrors the ChainEntry shape the UI expects.
+type chainEntry struct {
+	File   string         `json:"file"`
+	Name   string         `json:"name"`
+	Raw    string         `json:"raw,omitempty"`
+	Fields map[string]any `json:"fields,omitempty"`
+}
+
+// readChainEntries scans the chains dir and returns structured entries.
+func (s *Server) readChainEntries() []chainEntry {
+	dir := s.cfg.VOps.Push.ChainsDir
+	if dir == "" {
+		dir = filepath.Join(s.home, "config", "chains")
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return []chainEntry{}
+	}
+	var result []chainEntry
+	for _, e := range entries {
+		if e.IsDir() || filepath.Ext(e.Name()) != ".toml" {
+			continue
+		}
+		if !proxycfg.IsChainTOML(e.Name()) {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			continue
+		}
+		var cc proxycfg.ChainConfig
+		if err := toml.Unmarshal(data, &cc); err != nil {
+			continue
+		}
+		result = append(result, chainEntry{
+			File: e.Name(),
+			Name: cc.ChainName,
+			Raw:  string(data),
+			Fields: map[string]any{
+				"chain_name":          cc.ChainName,
+				"chain_id":            cc.ChainID,
+				"dashboard_name":      cc.DashboardName,
+				"explorer_base":       cc.ExplorerBase,
+				"chain_ping_country":  cc.ChainPing.Country,
+				"chain_ping_provider": cc.ChainPing.Provider,
+			},
+		})
+	}
+	if result == nil {
+		return []chainEntry{}
+	}
+	return result
+}
+
+func (s *Server) handleAPISettingsCurrent(w http.ResponseWriter, _ *http.Request) {
+	cfg, err := vopscfg.Load(s.vopsConfigPath())
+	if err != nil && !os.IsNotExist(err) {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not read vops.toml"})
+		return
+	}
+	if os.IsNotExist(err) {
+		cfg = vopscfg.DefaultConfig(s.home)
 	}
 
-	// Return the raw config snapshot (top-level keys mirror the TOML sections).
+	// Marshal redacted config as TOML string for the vops panel.
+	redacted := redactVopsConfig(cfg)
+	vopsData, _ := toml.Marshal(redacted)
+
+	snapshot := map[string]any{
+		"vops":     string(vopsData),
+		"fleet":    buildFleetTOML(cfg),
+		"backup":   s.readBackupTOML(),
+		"ports":    s.readPortsTOML(),
+		"settings": s.readProxySettingsTOML(),
+		"infras":   s.readInfraEntries(),
+		"chains":   s.readChainEntries(),
+	}
 	writeJSON(w, http.StatusOK, snapshot)
 }
 
@@ -304,14 +587,503 @@ func (s *Server) reloadFleetRuntime(ctx context.Context) {
 	s.fleetSvc.Poll(pollCtx)
 }
 
-func (s *Server) handleAPISettingsSave(_ string) http.HandlerFunc {
-	return func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "config wizard removed"})
+// ── Section savers ────────────────────────────────────────────────────────
+
+func (s *Server) saveVopsSection(raw any) error {
+	cfgPath := s.vopsConfigPath()
+	cfg, err := vopscfg.Load(cfgPath)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("load vops.toml: %w", err)
+	}
+	if os.IsNotExist(err) {
+		cfg = vopscfg.DefaultConfig(s.home)
+	}
+	switch p := raw.(type) {
+	case map[string]any:
+		if v, ok := mapInt(p, "port"); ok {
+			cfg.VOps.Port = v
+		}
+		if v, ok := mapStr(p, "bind_address"); ok {
+			cfg.VOps.BindAddress = v
+		}
+		if v, ok := mapStr(p, "base_path"); ok {
+			cfg.VOps.BasePath = v
+		}
+		if v, ok := mapStr(p, "username"); ok {
+			cfg.VOps.Auth.Username = v
+		}
+		if v, ok := mapBool(p, "auto_enrich"); ok {
+			cfg.VOps.Intel.AutoEnrich = v
+		}
+		if v, ok := mapInt(p, "cache_ttl_hours"); ok {
+			cfg.VOps.Intel.CacheTTLHours = v
+		}
+		if v, ok := mapInt(p, "rate_limit_rpm"); ok {
+			cfg.VOps.Intel.RateLimitRPM = v
+		}
+		if v, ok := mapInt(p, "watch_interval_sec"); ok {
+			cfg.VOps.WatchIntervalSec = v
+		}
+		if v, ok := mapInt(p, "poll_interval_sec"); ok {
+			cfg.VOps.Push.PollIntervalSec = v
+		}
+		if v, ok := mapBool(p, "auto_ban_enabled"); ok {
+			cfg.VOps.Intel.AutoBanEnabled = v
+		}
+		if v, ok := mapInt(p, "auto_ban_threshold"); ok {
+			cfg.VOps.Intel.AutoBanThreshold = v
+		}
+		if v, ok := mapInt(p, "ban_duration_seconds"); ok {
+			cfg.VOps.Intel.BanDurationSeconds = v
+		}
+		if v, ok := mapBool(p, "ban_permanent"); ok {
+			cfg.VOps.Intel.BanPermanent = v
+		}
+		if v, ok := mapStr(p, "ban_whitelist"); ok {
+			if v == "" {
+				cfg.VOps.Intel.BanWhitelist = nil
+			} else {
+				parts := strings.Split(v, ",")
+				cfg.VOps.Intel.BanWhitelist = make([]string, 0, len(parts))
+				for _, part := range parts {
+					if t := strings.TrimSpace(part); t != "" {
+						cfg.VOps.Intel.BanWhitelist = append(cfg.VOps.Intel.BanWhitelist, t)
+					}
+				}
+			}
+		}
+	case string:
+		var overlay vopscfg.Config
+		if err := toml.Unmarshal([]byte(p), &overlay); err != nil {
+			return fmt.Errorf("parse vops TOML: %w", err)
+		}
+		cfg = overlay
+	}
+	data, err := toml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("marshal vops.toml: %w", err)
+	}
+	return writeConfig(cfgPath, data)
+}
+
+func (s *Server) saveFleetSection(raw any) error {
+	cfgPath := s.vopsConfigPath()
+	cfg, err := vopscfg.Load(cfgPath)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("load vops.toml: %w", err)
+	}
+	if os.IsNotExist(err) {
+		cfg = vopscfg.DefaultConfig(s.home)
+	}
+	if p, ok := asMap(raw); ok {
+		if v, ok := mapStr(p, "ssh_user"); ok {
+			cfg.VOps.Push.Defaults.User = v
+		}
+		if v, ok := mapStr(p, "ssh_key_path"); ok {
+			cfg.VOps.Push.Defaults.KeyPath = v
+		}
+		if v, ok := mapStr(p, "known_hosts_path"); ok {
+			cfg.VOps.Push.Defaults.KnownHostsPath = v
+		}
+		if v, ok := mapInt(p, "poll_interval_sec"); ok {
+			cfg.VOps.Push.PollIntervalSec = v
+		}
+		if v, ok := mapInt(p, "ssh_port"); ok {
+			cfg.VOps.Auth.SSHPort = v
+		}
+	}
+	data, err := toml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("marshal vops.toml (fleet): %w", err)
+	}
+	return writeConfig(cfgPath, data)
+}
+
+func (s *Server) saveBackupSection(raw any) error {
+	vh := s.vproxHome()
+	path := filepath.Join(vh, "config", "backup", "backup.toml")
+	// Prefer new path; fall back to legacy.
+	legacyPath := filepath.Join(vh, "config", "backup.toml")
+	if _, statErr := os.Stat(path); os.IsNotExist(statErr) {
+		if _, legErr := os.Stat(legacyPath); legErr == nil {
+			path = legacyPath
+		}
+	}
+	cfg, _, err := bkp.LoadConfig(path)
+	if err != nil {
+		return fmt.Errorf("load backup.toml: %w", err)
+	}
+	if p, ok := asMap(raw); ok {
+		if v, ok := mapBool(p, "automation"); ok {
+			cfg.Backup.Automation = v
+		}
+		if v, ok := mapInt(p, "interval_days"); ok {
+			cfg.Backup.IntervalDays = v
+		}
+		if v, ok := mapInt(p, "max_size_mb"); ok {
+			cfg.Backup.MaxSizeMB = int64(v)
+		}
+		if v, ok := mapInt(p, "check_interval_min"); ok {
+			cfg.Backup.CheckIntervalMin = v
+		}
+		if v, ok := mapStr(p, "destination"); ok {
+			cfg.Backup.Destination = v
+		}
+		if v, ok := mapStr(p, "compression"); ok && v != "" {
+			cfg.Backup.Compression = v
+		}
+	} else if str, ok := raw.(string); ok {
+		if err := toml.Unmarshal([]byte(str), &cfg); err != nil {
+			return fmt.Errorf("parse backup TOML: %w", err)
+		}
+	}
+	data, err := toml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("marshal backup.toml: %w", err)
+	}
+	return writeConfig(path, data)
+}
+
+func (s *Server) savePortsSection(raw any) error {
+	vh := s.vproxHome()
+	// Prefer legacy config/ports.toml if it already exists.
+	path := filepath.Join(vh, "config", "chains", "ports.toml")
+	legacyPath := filepath.Join(vh, "config", "ports.toml")
+	if _, err := os.Stat(legacyPath); err == nil {
+		path = legacyPath
+	}
+	var ports proxycfg.Ports
+	if b, err := os.ReadFile(path); err == nil {
+		_ = toml.Unmarshal(b, &ports)
+	}
+	if p, ok := asMap(raw); ok {
+		if v, ok := mapInt(p, "rpc"); ok {
+			ports.RPC = v
+		}
+		if v, ok := mapInt(p, "rest"); ok {
+			ports.REST = v
+		}
+		if v, ok := mapInt(p, "grpc"); ok {
+			ports.GRPC = v
+		}
+		if v, ok := mapInt(p, "grpc_web"); ok {
+			ports.GRPCWeb = v
+		}
+		if v, ok := mapInt(p, "api"); ok {
+			ports.API = v
+		}
+		if v, ok := mapStr(p, "vops_url"); ok {
+			ports.VOpsURL = v
+		}
+	} else if str, ok := raw.(string); ok {
+		if err := toml.Unmarshal([]byte(str), &ports); err != nil {
+			return fmt.Errorf("parse ports TOML: %w", err)
+		}
+	}
+	data, err := toml.Marshal(ports)
+	if err != nil {
+		return fmt.Errorf("marshal ports.toml: %w", err)
+	}
+	return writeConfig(path, data)
+}
+
+// proxySettingsFile mirrors the vprox proxySettings struct for TOML marshaling.
+type proxySettingsFile struct {
+	RateLimit struct {
+		RPS   float64 `toml:"rps"`
+		Burst int     `toml:"burst"`
+	} `toml:"rate_limit"`
+	AutoQuarantine struct {
+		Enabled   *bool `toml:"enabled"`
+		Threshold int   `toml:"threshold"`
+		WindowSec int   `toml:"window_sec"`
+		TTLSec    int   `toml:"ttl_sec"`
+	} `toml:"auto_quarantine"`
+	Debug struct {
+		Enabled bool `toml:"enabled"`
+		Port    int  `toml:"port"`
+	} `toml:"debug"`
+}
+
+func (s *Server) saveProxySettingsSection(raw any) error {
+	path := filepath.Join(s.vproxHome(), "config", "vprox", "settings.toml")
+	var ps proxySettingsFile
+	if b, err := os.ReadFile(path); err == nil {
+		_ = toml.Unmarshal(b, &ps)
+	}
+	if p, ok := asMap(raw); ok {
+		if v, ok := p["rps"]; ok {
+			if f, fok := v.(float64); fok {
+				ps.RateLimit.RPS = f
+			}
+		}
+		if v, ok := mapInt(p, "burst"); ok {
+			ps.RateLimit.Burst = v
+		}
+		if v, ok := mapBool(p, "aq_enabled"); ok {
+			ps.AutoQuarantine.Enabled = &v
+		}
+		if v, ok := mapInt(p, "aq_threshold"); ok {
+			ps.AutoQuarantine.Threshold = v
+		}
+		if v, ok := mapInt(p, "aq_window_sec"); ok {
+			ps.AutoQuarantine.WindowSec = v
+		}
+		if v, ok := mapInt(p, "aq_ttl_sec"); ok {
+			ps.AutoQuarantine.TTLSec = v
+		}
+		if v, ok := mapBool(p, "debug_enabled"); ok {
+			ps.Debug.Enabled = v
+		}
+		if v, ok := mapInt(p, "debug_port"); ok {
+			ps.Debug.Port = v
+		}
+	} else if str, ok := raw.(string); ok {
+		if err := toml.Unmarshal([]byte(str), &ps); err != nil {
+			return fmt.Errorf("parse settings TOML: %w", err)
+		}
+	}
+	data, err := toml.Marshal(ps)
+	if err != nil {
+		return fmt.Errorf("marshal settings.toml: %w", err)
+	}
+	return writeConfig(path, data)
+}
+
+// vmJSON is a local struct for JSON-decoding VMs from the frontend vms_json field.
+type vmJSON struct {
+	Name          string `json:"name"`
+	Host          string `json:"host"`
+	HostRef       string `json:"host_ref"`
+	LanIP         string `json:"lan_ip"`
+	PublicIP      string `json:"public_ip"`
+	Port          int    `json:"port"`
+	User          string `json:"user"`
+	KeyPath       string `json:"key_path"`
+	Datacenter    string `json:"datacenter"`
+	Type          string `json:"type"`
+	ChainName     string `json:"chain_name"`
+	PingCountry   string `json:"ping_country"`
+	PingProvider  string `json:"ping_provider"`
+	ProxyJumpHost string `json:"proxy_jump_host"`
+}
+
+func (s *Server) saveInfraSection(raw any) error {
+	p, ok := asMap(raw)
+	if !ok {
+		return fmt.Errorf("infra section requires a JSON object payload")
+	}
+	datacenter, _ := mapStr(p, "datacenter")
+	if datacenter == "" {
+		return fmt.Errorf("datacenter name is required")
+	}
+	infraDir := s.cfg.VOps.Push.InfraDir
+	if infraDir == "" {
+		infraDir = filepath.Join(s.home, "config", "infra")
+	}
+	path := filepath.Join(infraDir, datacenter+".toml")
+
+	// Load existing to preserve unknown fields.
+	var schema struct {
+		Host  fleetcfg.Host `toml:"host"`
+		Vprox struct {
+			User       string `toml:"user"`
+			SSHKeyPath string `toml:"ssh_key_path"`
+		} `toml:"vprox"`
+		VMs []fleetcfg.VM `toml:"vm"`
+	}
+	if b, err := os.ReadFile(path); err == nil {
+		_ = toml.Unmarshal(b, &schema)
+	}
+
+	if v, ok := mapStr(p, "host_name"); ok {
+		schema.Host.Name = v
+	}
+	if v, ok := mapStr(p, "host_lan_ip"); ok {
+		schema.Host.LanIP = v
+	}
+	if v, ok := mapStr(p, "host_public_ip"); ok {
+		schema.Host.PublicIP = v
+	}
+	if v, ok := mapStr(p, "host_vrack_ip"); ok {
+		schema.Host.VRackIP = v
+	}
+	if v, ok := mapStr(p, "host_user"); ok {
+		schema.Host.User = v
+	}
+	if v, ok := mapStr(p, "host_ssh_key_path"); ok {
+		schema.Host.SSHKeyPath = v
+	}
+	if v, ok := mapInt(p, "host_port"); ok {
+		schema.Host.Port = v
+	}
+	if v, ok := mapStr(p, "vprox_user"); ok {
+		schema.Vprox.User = v
+	}
+	if v, ok := mapStr(p, "vprox_ssh_key_path"); ok {
+		schema.Vprox.SSHKeyPath = v
+	}
+	if vmsJSON, ok := mapStr(p, "vms_json"); ok && vmsJSON != "" {
+		var jvms []vmJSON
+		if err := json.Unmarshal([]byte(vmsJSON), &jvms); err != nil {
+			return fmt.Errorf("parse vms_json: %w", err)
+		}
+		vms := make([]fleetcfg.VM, 0, len(jvms))
+		for _, jv := range jvms {
+			port := jv.Port
+			if port == 0 {
+				port = 22
+			}
+			vms = append(vms, fleetcfg.VM{
+				Name:          jv.Name,
+				Host:          jv.Host,
+				HostRef:       jv.HostRef,
+				LanIP:         jv.LanIP,
+				PublicIP:      jv.PublicIP,
+				Port:          port,
+				User:          jv.User,
+				KeyPath:       jv.KeyPath,
+				Datacenter:    jv.Datacenter,
+				Type:          jv.Type,
+				ChainName:     jv.ChainName,
+				Ping:          fleetcfg.VMPing{Country: jv.PingCountry, Provider: jv.PingProvider},
+				ProxyJumpHost: jv.ProxyJumpHost,
+			})
+		}
+		schema.VMs = vms
+	}
+
+	data, err := toml.Marshal(schema)
+	if err != nil {
+		return fmt.Errorf("marshal infra TOML: %w", err)
+	}
+	return writeConfig(path, data)
+}
+
+func (s *Server) saveChainSection(raw any) error {
+	p, ok := asMap(raw)
+	if !ok {
+		return fmt.Errorf("chain section requires a JSON object payload")
+	}
+	chainName, _ := mapStr(p, "chain_name")
+	if chainName == "" {
+		return fmt.Errorf("chain_name is required")
+	}
+	chainsDir := s.cfg.VOps.Push.ChainsDir
+	if chainsDir == "" {
+		chainsDir = filepath.Join(s.home, "config", "chains")
+	}
+	path := filepath.Join(chainsDir, chainName+".toml")
+
+	var cc proxycfg.ChainConfig
+	if b, err := os.ReadFile(path); err == nil {
+		_ = toml.Unmarshal(b, &cc)
+	}
+	cc.ChainName = chainName
+	if v, ok := mapStr(p, "chain_id"); ok {
+		cc.ChainID = v
+	}
+	if v, ok := mapStr(p, "dashboard_name"); ok {
+		cc.DashboardName = v
+	}
+	if v, ok := mapStr(p, "explorer_base"); ok {
+		cc.ExplorerBase = v
+	}
+	if v, ok := mapStr(p, "chain_ping_country"); ok {
+		cc.ChainPing.Country = v
+	}
+	if v, ok := mapStr(p, "chain_ping_provider"); ok {
+		cc.ChainPing.Provider = v
+	}
+
+	data, err := toml.Marshal(cc)
+	if err != nil {
+		return fmt.Errorf("marshal chain TOML: %w", err)
+	}
+	return writeConfig(path, data)
+}
+
+func (s *Server) handleAPISettingsSave(section string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, 256*1024)
+		var raw any
+		if err := json.NewDecoder(r.Body).Decode(&raw); err != nil && !errors.Is(err, io.EOF) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+			return
+		}
+		var saveErr error
+		switch section {
+		case "vops":
+			saveErr = s.saveVopsSection(raw)
+		case "backup":
+			saveErr = s.saveBackupSection(raw)
+		case "fleet":
+			saveErr = s.saveFleetSection(raw)
+		case "infra":
+			saveErr = s.saveInfraSection(raw)
+		case "ports":
+			saveErr = s.savePortsSection(raw)
+		case "settings":
+			saveErr = s.saveProxySettingsSection(raw)
+		case "chain":
+			saveErr = s.saveChainSection(raw)
+		default:
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unknown section"})
+			return
+		}
+		if saveErr != nil {
+			logging.Print("ERR", "settings", "config save failed",
+				logging.F("section", section),
+				logging.F("err", saveErr))
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not save config"})
+			return
+		}
+		logging.Print("INF", "settings", "config saved", logging.F("section", section))
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "section": section})
 	}
 }
 
-func (s *Server) handleAPIIntelKeys(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "config wizard removed"})
+func (s *Server) handleAPIIntelKeys(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 4*1024)
+	var req struct {
+		AbuseIPDB  string `json:"abuseipdb"`
+		VirusTotal string `json:"virustotal"`
+		Shodan     string `json:"shodan"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		return
+	}
+	cfgPath := s.vopsConfigPath()
+	cfg, err := vopscfg.Load(cfgPath)
+	if err != nil && !os.IsNotExist(err) {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not load config"})
+		return
+	}
+	if os.IsNotExist(err) {
+		cfg = vopscfg.DefaultConfig(s.home)
+	}
+	// Only update keys that are non-empty — empty = keep existing.
+	if v := strings.TrimSpace(req.AbuseIPDB); v != "" {
+		cfg.VOps.Intel.Keys.AbuseIPDB = v
+	}
+	if v := strings.TrimSpace(req.VirusTotal); v != "" {
+		cfg.VOps.Intel.Keys.VirusTotal = v
+	}
+	if v := strings.TrimSpace(req.Shodan); v != "" {
+		cfg.VOps.Intel.Keys.Shodan = v
+	}
+	data, err := toml.Marshal(cfg)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not marshal config"})
+		return
+	}
+	if err := writeConfig(cfgPath, data); err != nil {
+		logging.Print("ERR", "settings", "intel keys save failed", logging.F("err", err))
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not save config"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 // handleAPISettingsPreferences persists UI preferences (theme) to vops.toml,
