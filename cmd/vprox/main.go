@@ -381,6 +381,7 @@ os.Args = append([]string{os.Args[0]}, rawArgs...)
 
 // --- Flag definitions ---
 newBackupFlag := flag.Bool("new-backup", false, "create a new backup archive and exit")
+noRotateFlag := flag.Bool("no-rotate", false, "snapshot logs into backup but do not truncate them (safe for on-demand backups)")
 listBackupFlag := flag.Bool("list-backup", false, "list available backup archives and exit")
 statusFlag := flag.Bool("backup-status", false, "show backup automation status and next-run ETA")
 daemonFlag := flag.Bool("daemon", false, "start as background daemon (sudo service vProx start)")
@@ -530,6 +531,7 @@ Method:      "MANUAL",
 RotateExtra: rotateExtra,
 ExtraFiles:  extraFiles,
 ListSource:  listSrc,
+NoRotate:    *noRotateFlag,
 }); err != nil {
 log.Fatalf("Backup failed: %v", err)
 }

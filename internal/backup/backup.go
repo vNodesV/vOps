@@ -52,6 +52,12 @@ type Options struct {
 	// (snapshotted but NOT truncated — e.g. access-counts.json).
 	ExtraFiles []string
 
+	// NoRotate disables log truncation after archive write. When true, LogPath
+	// and RotateExtra are snapshotted and included in the archive but are NOT
+	// truncated. Use for on-demand backups (e.g. triggered via vOps UI) where
+	// the live log must be preserved.
+	NoRotate bool
+
 	// ListSource is "loaded" (from backup.toml) or "default" (built-in).
 	ListSource string
 }
@@ -184,15 +190,17 @@ func RunOnce(opts Options) error {
 		return err
 	}
 
-	// Truncate source logs AFTER archive write succeeds.
-	// If truncation fails the archive is already safe; log and continue.
-	for _, p := range append([]string{logPath}, opts.RotateExtra...) {
-		if containsPath(presentSources, filepath.Clean(p)) {
-			if err := os.Truncate(filepath.Clean(p), 0); err != nil {
-				applog.Print("WARN", "backup", "truncate failed after archive write",
-					applog.F("file", filepath.Base(p)),
-					applog.F("error", err.Error()),
-				)
+	// Truncate source logs AFTER archive write succeeds — unless NoRotate is
+	// set (on-demand backups triggered via vOps UI must not clear the live log).
+	if !opts.NoRotate {
+		for _, p := range append([]string{logPath}, opts.RotateExtra...) {
+			if containsPath(presentSources, filepath.Clean(p)) {
+				if err := os.Truncate(filepath.Clean(p), 0); err != nil {
+					applog.Print("WARN", "backup", "truncate failed after archive write",
+						applog.F("file", filepath.Base(p)),
+						applog.F("error", err.Error()),
+					)
+				}
 			}
 		}
 	}

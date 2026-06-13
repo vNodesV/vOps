@@ -67,7 +67,9 @@ func (s *Server) handleAPIBackupAndIngest(w http.ResponseWriter, r *http.Request
 
 	// Always pass --home explicitly so vProx writes the backup into the same
 	// home directory that vOps reads archives from. vOps and vProx share ~/.vOps.
-	args := []string{"--home", s.home, "--new-backup"}
+	// --no-rotate: do not truncate main.log — IMPORT is an on-demand snapshot,
+	// not a rotation. Log rotation is a separate manual operation.
+	args := []string{"--home", s.home, "--new-backup", "--no-rotate"}
 	out, err := exec.CommandContext(ctx, bin, args...).CombinedOutput() //nolint:gosec
 	if err != nil {
 		logging.Print("ERR", "web", "backup failed", logging.F("err", err), logging.F("output", string(out)))

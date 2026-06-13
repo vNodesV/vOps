@@ -60,17 +60,6 @@ GEO_DB_DST := $(GEO_DIR)/ip2location.mmdb
 
 ENV_FILE := $(VOPS_HOME)/._env
 
-# Remote infra host for TOML patching — override: make toml-upgrade INFRA_HOST=user@host
-INFRA_HOST ?= www.qc
-
-# Remote deploy target — override any var: make deploy DEPLOY_HOST=srvs.vnodesv.net
-DEPLOY_HOST   ?= www.fr
-DEPLOY_USER   ?= vnodesv
-DEPLOY_DIR    ?= /home/$(DEPLOY_USER)/gitHub/vOps
-DEPLOY_BRANCH ?= vOps_v1.5.0
-_SSH          := ssh -i "$(VOPS_HOME)/secret/vops_ssh_key" -o StrictHostKeyChecking=no
-_SSH_TTY      := ssh -tt -i "$(VOPS_HOME)/secret/vops_ssh_key" -o StrictHostKeyChecking=no
-
 # Validate Go environment
 _RAW_GOPATH := $(shell go env GOPATH)
 GOPATH      := $(patsubst %/,%,$(_RAW_GOPATH))
@@ -92,10 +81,9 @@ EFFECTIVE_GOROOT  := $(if $(_TOOLCHAIN_GOROOT),$(_TOOLCHAIN_GOROOT),$(GOROOT))
 
 # Public targets only — internal helpers (_dirs, _geo, config-*, _env, _frontend, …) are intentionally
 # excluded from .PHONY so they don't pollute tab-completion.
-.PHONY: all help install install-sudoers install-fix-bins build build-vops build-vops-reset release-vops \
+.PHONY: all help install install-sudoers install-fix-bins build build-vops build-vops-reset \
         clean ufw reset-services service-vops service-vprox system-user-vops \
-        bump-patch bump-minor bump-major toml-upgrade upgrade-1.2.1-1.4.4 \
-        deploy deploy-vops deploy-vprox deploy-sudoers deploy-fix-bins \
+        bump-patch bump-minor bump-major \
         _config-reset
 
 all: help
@@ -112,20 +100,9 @@ help:
 	@echo "  make build-vops-reset Build vOps binary + reset config files from samples (backs up first)"
 	@echo "  make service-vops     Render + optionally install vOps.service from template"
 	@echo "  make service-vprox    Render + optionally install vProx.service from template"
-	@echo "  make reset-services   Stop + remove stale service units (vProx, vLog) before fresh deploy"
-		@echo "  make release-vops     Cross-compile linux/amd64 → vops-linux-amd64, commit + push"
+	@echo "  make reset-services   Stop + remove stale service units (vProx, vLog) before fresh install"
 	@echo "  make clean            Remove local build artifacts"
 	@echo "  make ufw              Consolidated sudoers for vnodesv (UFW + apt + systemctl)"
-	@echo "  make toml-upgrade     SSH to INFRA_HOST ($(INFRA_HOST)) and patch infra TOML files"
-	@echo "  make upgrade-1.2.1-1.4.4  Migrate ~/.vProx config → ~/.vOps, rebuild + restart (run ON server)"
-	@echo ""
-	@echo "  Remote deploy (DEPLOY_HOST=$(DEPLOY_HOST)):"
-	@echo "    make deploy           git pull + make install on DEPLOY_HOST via SSH"
-	@echo "    make deploy-vops      Pull + build-vops only on DEPLOY_HOST"
-	@echo "    make deploy-vprox     Pull + build-vprox only on DEPLOY_HOST"
-	@echo "    make deploy-sudoers   Write sudoers on DEPLOY_HOST via SSH (interactive)"
-	@echo "    make deploy-fix-bins  Fix /usr/local/bin symlinks on DEPLOY_HOST via SSH"
-	@echo "    Override: make deploy DEPLOY_HOST=srvs.vnodesv.net DEPLOY_BRANCH=main"
 	@echo ""
 	@echo "  Local install (run ON the server after git pull):"
 	@echo "    make install          sudoers + fix-bins + build vOps + vProx"
@@ -437,7 +414,7 @@ _frontend:
 	if [ "$$HAVE_NODE" = "0" ]; then \
 		echo "  ℹ  Node.js not found — skipping _frontend build (using committed dist/)"; \
 	else \
-		cd internal/vops/web/frontend && npm install && npm audit fix && npm run build; \
+		cd internal/vops/web/frontend && npm install && npm run build; \
 		echo "✓ Frontend built → internal/vops/web/dist/"; \
 	fi
 
@@ -530,24 +507,6 @@ reset-services:
 	@echo "  ✓ vOps.service stopped + disabled (unit preserved for reinstall)"
 	@sudo systemctl daemon-reload
 	@echo "✓ daemon-reload complete — run 'make service-vops' to reinstall vOps.service"
-
-## Cross-compile vOps for linux/amd64, commit the binary, and push.
-## Run this on macOS (or any dev machine) to deploy via git pull on the server.
-## Usage: make release-vops  (optionally: make release-vops VOPS_VERSION=0.2.0)
-
-release-vops: _frontend
-	@echo "Cross-compiling vOps $(VOPS_VERSION) for linux/amd64..."
-	mkdir -p "$(BUILD_DIR)"
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOROOT="$(EFFECTIVE_GOROOT)" \
-		go build -ldflags "-s -w $(VOPS_LDFLAGS)" -o vops-linux-amd64 "$(VOPS_SRC)"
-	@echo "✓ vops-linux-amd64 built (v$(VOPS_VERSION))"
-	@echo "Committing and pushing..."
-	git add vops-linux-amd64 cmd/vops/VERSION
-	git diff --cached --quiet || git commit -m "release(vops): v$(VOPS_VERSION) linux/amd64 binary" \
-		-m "" \
-		-m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
-	git push
-	@echo "✓ Pushed — pull on server: git pull && sudo mv vops-linux-amd64 /usr/local/bin/vops && sudo systemctl restart vops"
 
 ## Install .samples/vops/vops.sample → $(VOPS_HOME)/config/vops/vops.toml (only if absent)
 ## Migrates automatically from the legacy $(VPROX_HOME)/config/vops/vops.toml path.
@@ -785,25 +744,6 @@ bump-major-vprox:
 	printf "$$new\n" > cmd/vprox/VERSION; \
 	echo "✓ vProx version: $$ver → $$new  (cmd/vprox/VERSION updated)"
 
-## ─── Infra config maintenance ────────────────────────────────────────────────
-
-## Patch live infra TOML files on the remote control VM.
-## Creates timestamped backups before modifying. Shows exactly what was changed.
-## Override host: make toml-upgrade INFRA_HOST=user@host
-
-toml-upgrade:
-	@echo "→ Patching infra TOMLs on $(INFRA_HOST) ..."
-	@ssh $(INFRA_HOST) python3 - < scripts/toml-upgrade.py
-
-## ─── Version upgrade (v1.2.x → v1.4.4) ─────────────────────────────────────
-
-## Full upgrade: migrate ~/.vProx config layout → ~/.vOps, rebuild binary, restart.
-## Run this ON the target server after `git pull origin vOps_v1.4.0`.
-## Idempotent — safe to re-run; existing files in ~/.vOps are never overwritten.
-
-upgrade-1.2.1-1.4.4:
-	@bash scripts/upgrade-1.2.1-to-1.4.4.sh
-
 ## ─── Local install (run ON the server after git pull) ────────────────────────
 
 ## Full local install: sudoers → fix-bins → build both binaries.
@@ -830,35 +770,3 @@ install-fix-bins:
 		&& echo "  [ ok ]  /usr/local/bin/$$BIN → $(GOPATH_BIN)/$$BIN"; \
 	done
 
-## ─── Remote deploy (run from dev machine) ────────────────────────────────────
-## SSH key: $(VOPS_HOME)/secret/vops_ssh_key
-## Override: make deploy DEPLOY_HOST=srvs.vnodesv.net DEPLOY_BRANCH=main
-
-## Full remote deploy: pull branch + make install on DEPLOY_HOST.
-deploy:
-	@echo "[info]  deploy → $(DEPLOY_HOST) branch=$(DEPLOY_BRANCH)"
-	@$(_SSH) "$(DEPLOY_USER)@$(DEPLOY_HOST)" \
-		"cd $(DEPLOY_DIR) && git pull origin $(DEPLOY_BRANCH) && make install"
-	@echo "[ ok ]  deploy complete → $(DEPLOY_HOST)"
-
-## Pull + build-vops only on DEPLOY_HOST.
-deploy-vops:
-	@echo "[info]  deploy-vops → $(DEPLOY_HOST)"
-	@$(_SSH) "$(DEPLOY_USER)@$(DEPLOY_HOST)" \
-		"cd $(DEPLOY_DIR) && git pull origin $(DEPLOY_BRANCH) && make build-vops"
-
-## Pull + build-vprox only on DEPLOY_HOST.
-deploy-vprox:
-	@echo "[info]  deploy-vprox → $(DEPLOY_HOST)"
-	@$(_SSH) "$(DEPLOY_USER)@$(DEPLOY_HOST)" \
-		"cd $(DEPLOY_DIR) && git pull origin $(DEPLOY_BRANCH) && make build-vprox"
-
-## Write sudoers on DEPLOY_HOST via SSH (requires sudo password on first run).
-deploy-sudoers:
-	@echo "[info]  sudoers → $(DEPLOY_HOST)"
-	@$(_SSH_TTY) "$(DEPLOY_USER)@$(DEPLOY_HOST)" "cd $(DEPLOY_DIR) && make install-sudoers"
-
-## Fix /usr/local/bin symlinks on DEPLOY_HOST via SSH.
-deploy-fix-bins:
-	@echo "[info]  fix-bins → $(DEPLOY_HOST)"
-	@$(_SSH) "$(DEPLOY_USER)@$(DEPLOY_HOST)" "cd $(DEPLOY_DIR) && make install-fix-bins"

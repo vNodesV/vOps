@@ -182,6 +182,75 @@ func (s *Server) vproxHome() string {
 	return s.home
 }
 
+// patchTOMLTheme surgically updates the `theme = "..."` line inside [vops.ui]
+// in the given vops.toml file without touching any other field or comment.
+// If the file doesn't exist yet it is created with just the [vops.ui] section.
+// If [vops.ui] exists but has no `theme` key, one is appended before the next
+// section header (or at the end of file). This avoids the full marshal round-trip
+// that would silently clobber user-edited values.
+func patchTOMLTheme(path, theme string) error {
+	raw, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("read vops.toml: %w", err)
+	}
+
+	lines := strings.Split(string(raw), "\n")
+	inUISection := false
+	themeLineIdx := -1
+	uiSectionIdx := -1
+	nextSectionIdx := -1
+
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "[") {
+			if trimmed == "[vops.ui]" {
+				inUISection = true
+				uiSectionIdx = i
+			} else if inUISection {
+				// Hit the next section — record it and stop scanning.
+				nextSectionIdx = i
+				break
+			} else {
+				inUISection = false
+			}
+			continue
+		}
+		if inUISection && strings.HasPrefix(trimmed, "theme") {
+			key, _, ok := strings.Cut(trimmed, "=")
+			if ok && strings.TrimSpace(key) == "theme" {
+				themeLineIdx = i
+			}
+		}
+	}
+
+	newLine := `theme = "` + theme + `"`
+
+	switch {
+	case themeLineIdx >= 0:
+		// Replace existing theme line, preserving leading whitespace.
+		lines[themeLineIdx] = newLine
+	case uiSectionIdx >= 0:
+		// [vops.ui] exists but no theme key — insert after the section header.
+		insertAt := uiSectionIdx + 1
+		if nextSectionIdx > 0 {
+			insertAt = nextSectionIdx
+		}
+		lines = append(lines[:insertAt], append([]string{newLine}, lines[insertAt:]...)...)
+	default:
+		// No [vops.ui] section at all — append it.
+		if len(lines) > 0 && lines[len(lines)-1] != "" {
+			lines = append(lines, "")
+		}
+		lines = append(lines, "[vops.ui]", newLine)
+	}
+
+	out := strings.Join(lines, "\n")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("mkdir: %w", err)
+	}
+	return os.WriteFile(path, []byte(out), 0o600)
+}
+
 // writeConfig atomically writes data to path, creating parent dirs as needed.
 func writeConfig(path string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -1102,30 +1171,15 @@ func (s *Server) handleAPISettingsPreferences(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Load, patch, and write back vops.toml using the resolved config path.
+	// Surgically update only the `theme` field in vops.toml.
+	// A full toml.Marshal(struct) round-trip would clobber comments, field order,
+	// and any values added post-startup that differ from the in-memory struct.
 	cfgPath := s.cfgPath
 	if cfgPath == "" {
 		cfgPath = filepath.Join(s.home, "config", "vops", "vops.toml")
 	}
-	cfg, err := vopscfg.Load(cfgPath)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not load vops.toml"})
-		return
-	}
-	cfg.VOps.UI.Theme = req.Theme
-
-	data, err := toml.Marshal(cfg)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not marshal config"})
-		return
-	}
-	// Ensure parent directory exists (in case vops.toml doesn't exist yet).
-	if mkErr := os.MkdirAll(filepath.Dir(cfgPath), 0o755); mkErr != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not create config directory"})
-		return
-	}
-	if err := os.WriteFile(cfgPath, data, 0o600); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not write vops.toml"})
+	if err := patchTOMLTheme(cfgPath, req.Theme); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not update theme in vops.toml"})
 		return
 	}
 
