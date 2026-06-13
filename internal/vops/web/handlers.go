@@ -48,15 +48,15 @@ func (s *Server) handleAPIArchiveStats(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, sum)
 }
 
-// handleAPIBackupAndIngest runs `vprox --new-backup` then ingests the result.
+// handleAPIBackupAndIngest runs `vProx --new-backup` then ingests the result.
 func (s *Server) handleAPIBackupAndIngest(w http.ResponseWriter, r *http.Request) {
 	bin := s.cfg.VOps.VProxBin
 	if bin == "" {
 		var err error
-		bin, err = exec.LookPath("vprox")
+		bin, err = exec.LookPath("vProx")
 		if err != nil {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{
-				"error": "vprox binary not found in PATH; set vprox_bin in vops.toml",
+				"error": "vProx binary not found in PATH; set vprox_bin in vops.toml",
 			})
 			return
 		}

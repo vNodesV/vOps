@@ -802,7 +802,7 @@ function IngestBar() {
       background: 'var(--vn-surface)', fontSize: '0.78rem',
     }}>
       <span style={{ color: 'var(--vn-text-muted)', fontWeight: 600, flexShrink: 0 }}>
-        IMPORTS
+        IMPORT
       </span>
 
       {s && (
@@ -833,7 +833,7 @@ function IngestBar() {
           title="Run vprox --new-backup then ingest all new archives"
           className="btn btn-primary btn-sm disabled:opacity-50"
         >
-          {importsMut.isPending ? 'Importing…' : '⬇ IMPORTS'}
+          {importsMut.isPending ? 'vProx…' : '⬇ vProx'}
         </button>
         <GearButton onClick={() => setSettingsOpen(true)} label="Import & backup settings" />
       </div>
