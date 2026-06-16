@@ -77,6 +77,11 @@ type Config struct {
 	DryRun   bool // load everything, print dry-run summary, do NOT serve
 	Validate bool // validate configs and print summary
 	Info     bool // print config info
+
+	// Build metadata — logged at startup. Set from ldflags via cmd/vprox/main.go.
+	Version   string
+	Commit    string
+	BuildDate string
 }
 
 // --------------------- CONSTANTS ---------------------
@@ -162,6 +167,8 @@ func resolveVProxHome() string {
 // It blocks until shutdown is complete.
 func (s *Server) Start(ctx context.Context) error {
 	s.startTime = time.Now()
+	fmt.Printf("vProx booting up...\n")
+	fmt.Printf("Version: %s  built: %s  commit: %s\n", s.cfg.Version, s.cfg.BuildDate, s.cfg.Commit)
 	s.home = s.cfg.Home
 	if s.home != "" {
 		_ = os.Setenv("VPROX_HOME", s.home)
@@ -256,6 +263,15 @@ func (s *Server) Start(ctx context.Context) error {
 		}
 		foundChains = true
 		applog.Print("INFO", "config", "chains_loaded", applog.F("dir", scanDir))
+		seen := make(map[string]struct{})
+		var names []string
+		for _, c := range s.chains {
+			if _, ok := seen[c.ChainName]; !ok {
+				seen[c.ChainName] = struct{}{}
+				names = append(names, c.ChainName)
+			}
+		}
+		fmt.Printf("Loading Chains: %s\n", strings.Join(names, ", "))
 	}
 	if !foundChains {
 		return fmt.Errorf("vprox: no chain configs found in %s or %s", s.chainsConfigDir, s.chainsDir)
@@ -456,6 +472,10 @@ func (s *Server) Start(ctx context.Context) error {
 		IdleTimeout:       120 * time.Second,
 	}
 
+	if len(proxyCfg.RateLimit.BypassIPs) > 0 {
+		fmt.Printf("Loading Whitelisted IPs: %s\n", strings.Join(proxyCfg.RateLimit.BypassIPs, ", "))
+	}
+	fmt.Printf("Loaded... now starting.\n")
 	applog.Print("INFO", "server", "started", applog.F("addr", addr))
 
 	errCh := make(chan error, 1)

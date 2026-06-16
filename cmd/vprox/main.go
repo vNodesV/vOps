@@ -579,6 +579,9 @@ AutoBurst:     *autoBurstFlag,
 DryRun:        *dryRunFlag,
 Validate:      *validateFlag,
 Info:          *infoFlag,
+Version:       version,
+Commit:        commit,
+BuildDate:     buildDate,
 })
 if err := srv.Start(ctx); err != nil {
 log.Fatalf("vProx error: %v", err)
