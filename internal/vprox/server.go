@@ -580,6 +580,9 @@ func (s *Server) buildLimiterOpts(proxyCfg proxySettings) (rps float64, burst in
 	if len(s.defaultPorts.TrustedProxies) > 0 {
 		opts = append(opts, limit.WithTrustedProxies(s.defaultPorts.TrustedProxies))
 	}
+	if len(proxyCfg.RateLimit.BypassIPs) > 0 {
+		opts = append(opts, limit.WithBypassIPs(proxyCfg.RateLimit.BypassIPs))
+	}
 	if autoEnabled {
 		opts = append(opts, limit.WithAutoQuarantine(limit.AutoRule{
 			Threshold: autoThreshold,
@@ -596,8 +599,9 @@ func (s *Server) buildLimiterOpts(proxyCfg proxySettings) (rps float64, burst in
 // proxySettings holds values loaded from config/vprox/settings.toml.
 type proxySettings struct {
 	RateLimit struct {
-		RPS   float64 `toml:"rps"`
-		Burst int     `toml:"burst"`
+		RPS       float64  `toml:"rps"`
+		Burst     int      `toml:"burst"`
+		BypassIPs []string `toml:"bypass_ips"` // skip rate limiting entirely for these IPs
 	} `toml:"rate_limit"`
 	AutoQuarantine struct {
 		Enabled      *bool   `toml:"enabled"`
@@ -1222,6 +1226,7 @@ func (s *Server) handler(w http.ResponseWriter, r *http.Request) {
 			w.Header().Add(k, vv)
 		}
 	}
+	w.Header().Del(applog.RequestIDHeader)
 	if !willModify {
 		w.WriteHeader(resp.StatusCode)
 		_, _ = io.Copy(w, resp.Body)
@@ -1246,6 +1251,7 @@ func (s *Server) handler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(resp.StatusCode)
 
 	var absoluteHost string
+
 	switch strings.ToLower(chain.Features.AbsoluteLinks) {
 	case "always":
 		absoluteHost = host

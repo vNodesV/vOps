@@ -70,7 +70,8 @@ type IPLimiter struct {
 	ipHeader       string       // explicit header (e.g., X-Real-IP)
 
 	// behavior
-	enforceDefaults bool // if true, defaults also 429 via Allow(); else Wait()
+	enforceDefaults bool            // if true, defaults also 429 via Allow(); else Wait()
+	bypassIPs       map[string]bool // IPs that skip rate limiting entirely
 
 	// JSONL filter
 	logImportantOnly bool
@@ -161,6 +162,18 @@ func WithNow(f func() time.Time) Option {
 // WithDefaultActionDrop makes defaults enforce 429 instead of Wait().
 func WithDefaultActionDrop() Option {
 	return func(l *IPLimiter) { l.enforceDefaults = true }
+}
+
+// WithBypassIPs registers IPs that skip rate limiting entirely (e.g. trusted crawlers).
+func WithBypassIPs(ips []string) Option {
+	return func(l *IPLimiter) {
+		l.bypassIPs = make(map[string]bool, len(ips))
+		for _, ip := range ips {
+			if net.ParseIP(strings.TrimSpace(ip)) != nil {
+				l.bypassIPs[strings.TrimSpace(ip)] = true
+			}
+		}
+	}
 }
 
 // WithAllowLogEvery enables sampled "allow" logging (e.g., 5*time.Second). 0 disables.
@@ -267,6 +280,13 @@ func (l *IPLimiter) Middleware(next http.Handler) http.Handler {
 		applog.SetResponseRequestID(w, requestID)
 
 		ip := l.clientIP(r)
+
+		// Bypass list: skip rate limiting entirely for trusted IPs.
+		if l.bypassIPs[ip] {
+			r = r.WithContext(context.WithValue(r.Context(), ctxStatusKey, "bypass"))
+			next.ServeHTTP(w, r)
+			return
+		}
 
 		// expire any auto override
 		l.autoMaybeExpire(ip, r)
