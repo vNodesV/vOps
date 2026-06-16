@@ -354,13 +354,17 @@ _config-modules:
 ## Build vOps binary (default build target)
 build: build-vops
 
-## Build vProx binary to .build/vProx (with version ldflags, service sync + restart).
-## ⚠ NEVER touches any config TOML files — existing configs are always preserved.
+## Compile vProx binary only — no service management. Safe to run anywhere (dev box, CI).
+## Output: .build/vProx  — scp to target host, then restart service there.
 build-vprox:
-	@echo "Building $(APP_NAME) (service keeps running during compile)..."
+	@echo "Building $(APP_NAME)..."
 	mkdir -p "$(BUILD_DIR)"
 	GOROOT="$(EFFECTIVE_GOROOT)" go build -ldflags "$(VPROX_LDFLAGS)" -o "$(BUILD_OUT)" "$(BUILD_SRC)"
-	@echo "✓ Build complete — Binary: $(BUILD_OUT)"
+	@echo "✓ $(BUILD_OUT) ready — scp to target host and restart service."
+
+## Full install on the target host (stop service → swap binary → restart).
+## Run this ON vn-www after git pull, not on the dev box.
+install-vprox: build-vprox
 	@echo "Stopping $(APP_NAME) service for swap..."
 	@sudo systemctl stop "$(APP_NAME)" 2>/dev/null && echo "  ✓ $(APP_NAME) stopped" || echo "  ○ $(APP_NAME) was not running"
 	@cp "$(BUILD_OUT)" "$(GOPATH_BIN)/$(APP_NAME)"
