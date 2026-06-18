@@ -868,21 +868,55 @@ func (s *Server) rewriteLinks(html, routePrefix, internalIP, baseHost, absoluteH
 		switch routePrefix {
 		case rpcPrefix:
 			if rpcVHost {
-				html = strings.ReplaceAll(html, `href="/`, `href="https://`+absoluteHost+`/`)
-				html = strings.ReplaceAll(html, `src="/`, `src="https://`+absoluteHost+`/`)
+				html = rewriteAttrToAbsolute(html, "href", absoluteHost, "/")
+				html = rewriteAttrToAbsolute(html, "src", absoluteHost, "/")
 			} else {
-				html = strings.ReplaceAll(html, `href="/rpc`, `href="https://`+absoluteHost+`/rpc`)
-				html = strings.ReplaceAll(html, `src="/rpc`, `src="https://`+absoluteHost+`/rpc`)
+				html = rewriteAttrToAbsolute(html, "href", absoluteHost, "/rpc")
+				html = rewriteAttrToAbsolute(html, "src", absoluteHost, "/rpc")
 			}
 		case restPrefix:
-			html = strings.ReplaceAll(html, `href="/rest`, `href="https://`+absoluteHost+`/rest`)
-			html = strings.ReplaceAll(html, `src="/rest`, `src="https://`+absoluteHost+`/rest`)
+			html = rewriteAttrToAbsolute(html, "href", absoluteHost, "/rest")
+			html = rewriteAttrToAbsolute(html, "src", absoluteHost, "/rest")
 		case apiPrefix:
-			html = strings.ReplaceAll(html, `href="/api`, `href="https://`+absoluteHost+`/api`)
-			html = strings.ReplaceAll(html, `src="/api`, `src="https://`+absoluteHost+`/api`)
+			html = rewriteAttrToAbsolute(html, "href", absoluteHost, "/api")
+			html = rewriteAttrToAbsolute(html, "src", absoluteHost, "/api")
 		}
 	}
 	return html
+}
+
+// rewriteAttrToAbsolute rewrites `<attr>="<path>...` occurrences in html to
+// `<attr>="https://<absoluteHost><path>...`, but only when the value starts
+// with requiredPrefix AND is a plain root-relative path — not a
+// protocol-relative ("//host/...") or scheme-qualified ("http(s)://...")
+// URL, both of which are already absolute and must be left untouched.
+// (Earlier code used strings.ReplaceAll(html, `href="/`, ...) unconditionally,
+// which matched the leading "/" of an already protocol-relative "//host/..."
+// value — e.g. one just produced by the mask_rpc rewrite above — and produced
+// a doubled host like "https://host//host/path".)
+func rewriteAttrToAbsolute(html, attr, absoluteHost, requiredPrefix string) string {
+	marker := attr + `="`
+	var b strings.Builder
+	rest := html
+	for {
+		idx := strings.Index(rest, marker)
+		if idx == -1 {
+			b.WriteString(rest)
+			break
+		}
+		b.WriteString(rest[:idx])
+		b.WriteString(marker)
+		rest = rest[idx+len(marker):]
+		switch {
+		case strings.HasPrefix(rest, "//"),
+			strings.HasPrefix(rest, "http://"),
+			strings.HasPrefix(rest, "https://"):
+			// already absolute — leave untouched
+		case strings.HasPrefix(rest, requiredPrefix):
+			b.WriteString("https://" + absoluteHost)
+		}
+	}
+	return b.String()
 }
 
 func injectBannerFromString(html, banner string) string {
