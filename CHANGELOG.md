@@ -20,10 +20,13 @@ Versions follow [Semantic Versioning](https://semver.org/).
 - **Dashboard**: IMPORT button label and vProx binary lookup casing fixed — `d730833`, `6d0e894`
 - **Makefile**: `install` now runs the full setup (dirs, geo, env, config, samples) — `cb1195b`, `86f74fc`
 - **Build**: corrected `GEO_DB_SRC` path typo (`assets/_geo` → `assets/geo`) — `cb3193e`
+- **vProx**: fixed a doubled-host bug in HTML link rewriting — when `rpc_address_masking`/`mask_rpc` rewrote an upstream protocol-relative self-link and `absolute_links` then fired on top of it, the result was `https://host//host/path` instead of `https://host/path` — `17ad751`
 
 ### Changed
 - **GeoIP database**: refreshed bundled GeoLite2-Country DB — `7fbf679`
 - **Public release prep**: removed compiled binaries from version control, removed internal session-checkpoint docs and one-off personal migration scripts from the repo, genericized example IPs/hostnames/usernames across docs and config samples, rebranded README to vOps
+- **Makefile**: consolidated the public target surface to `install` / `build-vops` / `build-vprox` / `upgrade`. `build-vops`/`build-vprox` are now pure compile steps with no service/sudo side effects; `upgrade` is the new automated stop→copy→restart for both binaries; sudoers, systemd unit rendering, stale-service cleanup, and the dedicated service user are now internal steps folded into `install` — `7b602b8`
+- **Docs**: updated INSTALLATION.md/MODULES.md/README.md/CLI_FLAGS_GUIDE.md to match the consolidated Makefile, and fixed long-stale `~/.vProx` path references (actual default since v1.4.0 is `~/.vOps`) — `997bfb6`
 
 ### Build
 - Frontend dist rebuilt for the IMPORT button fix and an `npm audit` dependency bump (3 packages) — `62b3477`, `25e632e`
