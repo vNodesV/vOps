@@ -8,7 +8,7 @@ Authoritative guide for all vProx commands and command-line flags.
 Start the proxy server in the foreground. Logs to stdout and `main.log`.
 
 ### `vProx start -d` / `vProx start --daemon`
-Start via systemd service (`sudo service vProx start`). Requires sudoers rule (created by `make systemd`).
+Start via systemd service (`sudo service vProx start`). Requires the sudoers rule and unit file created by `make install`.
 
 ### `vProx start --with-vops`
 Start the proxy server and vOps log analyzer in integrated mode (same process, coordinated shutdown). vOps listens on the port configured in `config/vops/vops.toml`.

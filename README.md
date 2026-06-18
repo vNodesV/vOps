@@ -33,13 +33,11 @@ make install
 
 ### GeoIP database
 
-The geo database is installed automatically by `make install`. To install or update it separately:
+The geo database is installed automatically by `make install` (skipped if already present). To force a re-extract:
 
 ```bash
-make geo
+gunzip -c assets/geo/ip2location.mmdb.gz > ~/.vOps/data/geolocation/ip2location.mmdb
 ```
-
-This extracts `assets/geo/ip2location.mmdb.gz` to `~/.vOps/data/geolocation/ip2location.mmdb`. No sudo required.
 
 ### Configure a chain
 
@@ -67,7 +65,8 @@ A **React 18 + TypeScript SPA** for log analysis, threat intel, and fleet operat
 ### Run
 
 ```bash
-make install-vops        # build + install vOps binary + config
+make install              # first-time setup: builds + installs vOps + vProx, config, services
+make upgrade              # later: rebuild + redeploy both binaries after a code change
 vprox vops start         # foreground server (default: :8889)
 vprox vops start -d      # start as background service
 vprox vops stop          # stop vOps service

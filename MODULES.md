@@ -316,14 +316,14 @@ See [`INSTALLATION.md`](./INSTALLATION.md) for the full install guide.
 **Quick reference:**
 
 ```bash
-make install    # Full install (validate, dirs, geo, config, env, binary, systemd)
-make build      # Build binary only → .build/vProx
-make dirs       # Create runtime directories
-make geo        # Decompress MMDB (ip2l/ip2location.mmdb.gz → $HOME/.vOps/data/geolocation/)
-make config     # Install sample configs
-make systemd    # Render (and optionally install) systemd unit file + sudoers rule
-make clean      # Remove .build/
+make install      # Fresh install: dirs, geo, config, sudoers, systemd, both binaries
+make build-vops    # Compile vOps only → .build/vOps (no service restart, no sudo)
+make build-vprox   # Compile vProx only → .build/vProx (no service restart, no sudo)
+make upgrade       # Rebuild + redeploy BOTH binaries (stop → copy → restart)
+make clean         # Remove .build/
 ```
+
+`build-vops`/`build-vprox` only compile — deploy manually afterward (`sudo systemctl stop vOps && cp .build/vOps $(go env GOPATH)/bin/vOps && sudo systemctl start vOps`, same pattern for vProx), or just run `make upgrade` to do that for both binaries in one step. Directory setup, the GeoIP DB, sudoers, and systemd units are all installed by `make install` and are not separately callable targets.
 
 ---
 
@@ -331,7 +331,7 @@ make clean      # Remove .build/
 
 - **Unknown host / 404 on all requests**: the `host` field in chain config must match the incoming `Host` header exactly. Test with `curl -H "Host: <chain-host>" http://localhost:3000/rpc/status`.
 - **No configs found**: confirm `$HOME/.vOps/config/chains/*.toml` exists and `ports.toml` is present.
-- **Geo not loading**: verify `IP2LOCATION_MMDB` path and run `make geo` to re-decompress.
+- **Geo not loading**: verify `IP2LOCATION_MMDB` path; re-decompress with `gunzip -c assets/geo/ip2location.mmdb.gz > $HOME/.vOps/data/geolocation/ip2location.mmdb`.
 - **Rate limit too strict**: increase `VPROX_RPS` and `VPROX_BURST` in `.env`, restart.
 - **WebSocket drops immediately**: check `[ws] idle_timeout_sec` in chain config; default is 3600.
 - **Binary not found after install**: add `$(go env GOPATH)/bin` to `PATH`.

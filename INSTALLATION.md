@@ -56,17 +56,17 @@ cd vOps
 make install
 ```
 
-`make install` does everything: validates Go, creates runtime directories, decompresses the geo database, sets up the default `.env`, and installs the binary to `$GOPATH/bin/vProx` with an optional symlink to `/usr/local/bin/vProx`.
+`make install` does everything for a fresh box: validates Go, creates runtime directories, decompresses the geo database, sets up the default `.env`, writes sample configs, builds **both** `vOps` and `vProx`, and installs them to `$GOPATH/bin/`. It then prompts (y/n) once for copying both binaries to `/usr/local/bin/` and once per binary for installing the systemd unit.
 
 ---
 
 ## Build from Source
 
-To build the binary only (no install):
+To build a binary only (no install, no service/sudo side effects):
 
 ```bash
-make build
-# Output: .build/vProx
+make build-vops    # → .build/vOps
+make build-vprox   # → .build/vProx
 ```
 
 Or with raw Go tooling (keeps build artifacts outside the repo root):
@@ -89,37 +89,45 @@ go run ./cmd/vprox
 make install
 ```
 
-This runs the following steps in order:
+This runs the following steps in order (all internal — not separately callable as their own `make` targets):
 
 1. **validate-go** — Confirms `GOROOT` and `GOPATH` are set and prints the Go version.
-2. **dirs** — Creates the runtime directory tree under `$HOME/.vProx/` (idempotent).
-3. **geo** — Decompresses `assets/geo/ip2location.mmdb.gz` → `$HOME/.vProx/data/geolocation/ip2location.mmdb`.
-4. **config** — Copies `config/chains/chain.sample.toml` and creates `config/ports.toml` if missing; installs `backup.sample.toml`.
-5. **env** — Creates `$HOME/.vProx/.env` with default values if missing.
-6. **binary** — Builds and installs to `$GOPATH/bin/vProx`. Prompts (y/n) to create a symlink at `/usr/local/bin/vProx`.
-7. **systemd** — Renders `vProx.service` from `vprox.service.template` to `$HOME/.vProx/service/vProx.service`. Optionally installs to `/etc/systemd/system/` and creates `/etc/sudoers.d/vprox` for passwordless service management.
-
-> **Note**: If you do not want a symlink, answer `n` at the prompt. You can then run `vProx` via `$GOPATH/bin/vProx` or add `$GOPATH/bin` to `PATH`.
+2. **reset-stale-services** — Stops/disables/removes any leftover `vProx`/`vLog`/lowercase `vops` service units from an older layout.
+3. **sudoers** — Writes `/etc/sudoers.d/$USER` with passwordless `systemctl`/`ufw`/`conntrack`/`apt` rules (needed later for `make upgrade` to stop/start services without a password prompt).
+4. **dirs** — Creates the runtime directory tree under `$HOME/.vOps/` (idempotent).
+5. **geo** — Decompresses `assets/geo/ip2location.mmdb.gz` → `$HOME/.vOps/data/geolocation/ip2location.mmdb` (skipped if already present).
+6. **env / config / config-vops / config-vprox / samples** — Writes `.env` and sample/default TOML config files, but only if they don't already exist — `make install` never overwrites live config.
+7. **system-user-vops** — Idempotently ensures a dedicated `vops` nologin system account exists (only used if you explicitly set `VOPS_USER=vops`; otherwise the service runs as your own user).
+8. **build-vops / build-vprox** — Compiles both binaries to `.build/`.
+9. **install binaries** — Copies both binaries into `$GOPATH/bin/`, then prompts (y/n) to also copy them to `/usr/local/bin/`.
+10. **systemd** — Renders `vOps.service` and `vProx.service` from their templates, then prompts (y/n) for each to install it to `/etc/systemd/system/` and enable it.
 
 Other targets:
 
 ```bash
-make build      # Build binary only → .build/vProx
-make dirs       # Create runtime directories only
-make geo        # Decompress MMDB only
-make config     # Install sample config files only
-make systemd    # Render (and optionally install) the systemd unit file
-make clean      # Remove .build/ directory
+make build-vops    # Compile vOps only → .build/vOps (no service restart, no sudo)
+make build-vprox   # Compile vProx only → .build/vProx (no service restart, no sudo)
+make upgrade       # Rebuild + redeploy BOTH binaries: stop services → copy → restart
+make clean         # Remove .build/ directory
 ```
+
+`build-vops`/`build-vprox` are pure compile steps — they never touch a running service or call `sudo`. After either one, deploy manually:
+
+```bash
+sudo systemctl stop vOps  && cp .build/vOps  $(go env GOPATH)/bin/vOps  && sudo systemctl start vOps
+sudo systemctl stop vProx && cp .build/vProx $(go env GOPATH)/bin/vProx && sudo systemctl start vProx
+```
+
+Or skip the manual dance and run `make upgrade`, which does exactly that for both binaries (and re-syncs the systemd unit files if the templates changed). `make upgrade` requires the sudoers rule from `make install` to already be in place.
 
 ---
 
 ## Runtime Directory Layout
 
-After `make install`, vProx uses the following layout under `$HOME/.vProx/`:
+After `make install`, vProx uses the following layout under `$HOME/.vOps/`:
 
 ```
-$HOME/.vProx/
+$HOME/.vOps/
 ├── .env                         # Environment variables (rate limits, geo paths)
 ├── config/
 │   ├── ports.toml               # Default service ports for all chains
@@ -130,7 +138,7 @@ $HOME/.vProx/
 │       └── backup.toml          # Backup automation config
 ├── data/
 │   ├── geolocation/
-│   │   └── ip2location.mmdb     # IP geo database (decompressed by make geo)
+│   │   └── ip2location.mmdb     # IP geo database (decompressed by make install)
 │   ├── access-counts.json       # Persisted source access counters
 │   └── logs/
 │       ├── main.log             # Structured proxy log
@@ -163,7 +171,7 @@ Key variables:
 
 ```ini
 # Geo database paths (auto-set by make install)
-IP2LOCATION_MMDB=$HOME/.vProx/data/geolocation/ip2location.mmdb
+IP2LOCATION_MMDB=$HOME/.vOps/data/geolocation/ip2location.mmdb
 GEOLITE2_COUNTRY_DB=
 GEOLITE2_ASN_DB=
 
@@ -185,7 +193,7 @@ VPROX_AUTO_TTL_SEC=900
 
 ### Default Ports (ports.toml)
 
-`$HOME/.vProx/config/ports.toml` defines default service ports applied to all chains unless overridden per-chain:
+`$HOME/.vOps/config/ports.toml` defines default service ports applied to all chains unless overridden per-chain:
 
 ```toml
 rpc      = 26657
@@ -197,9 +205,9 @@ api      = 1317
 
 ### Per-Chain Config
 
-Create one `.toml` file per chain in `$HOME/.vProx/config/chains/`. A fully commented template is at [`config/chains/chain.sample.toml`](./config/chains/chain.sample.toml).
+Create one `.toml` file per chain in `$HOME/.vOps/config/chains/`. A fully commented template is at [`config/chains/chain.sample.toml`](./config/chains/chain.sample.toml).
 
-Minimal example (`$HOME/.vProx/config/chains/my-chain.toml`):
+Minimal example (`$HOME/.vOps/config/chains/my-chain.toml`):
 
 ```toml
 chain_name    = "my-chain"
@@ -232,13 +240,13 @@ vhost = false   # Enable rpc.<host>, api.<host> subdomains
 The IP2Location MMDB provides country and ASN enrichment for log lines. It is bundled in the repo as a compressed archive (`assets/geo/ip2location.mmdb.gz`, 6.8 MB) and decompressed during `make install` to:
 
 ```
-$HOME/.vProx/data/geolocation/ip2location.mmdb
+$HOME/.vOps/data/geolocation/ip2location.mmdb
 ```
 
-To install or update the database separately (no sudo required):
+`make install` skips re-extracting it if the file already exists. To force a fresh extract (no sudo required):
 
 ```bash
-make geo
+gunzip -c assets/geo/ip2location.mmdb.gz > $HOME/.vOps/data/geolocation/ip2location.mmdb
 ```
 
 If the database is missing at runtime, geo enrichment is silently disabled — all other proxy functionality continues normally.
@@ -260,22 +268,21 @@ The lookup cache refreshes every 10 minutes.
 
 ## Systemd Service
 
-`make install` (or `make systemd` standalone) renders a systemd unit file from `vprox.service.template`:
+`make install` renders systemd unit files for both binaries from their templates:
 
 ```
-$HOME/.vProx/service/vProx.service
+$HOME/.vOps/service/vProx.service
+$HOME/.vOps/service/vOps.service
 ```
 
-To install it on a systemd host:
+and prompts (y/n), once per binary, to install and enable them. To install manually instead:
 
 ```bash
-sudo cp $HOME/.vProx/service/vProx.service /etc/systemd/system/vProx.service
+sudo cp $HOME/.vOps/service/vProx.service /etc/systemd/system/vProx.service
 sudo systemctl daemon-reload
 sudo systemctl enable vProx.service
 sudo systemctl start vProx.service
 ```
-
-Or let `make systemd` prompt you to do it automatically.
 
 Check service status:
 
@@ -393,26 +400,21 @@ go tool pprof http://localhost:6060/debug/pprof/heap
 
 ## Upgrading
 
-1. Pull the latest code:
+For a routine code update (no directory/config/systemd changes needed), pull and run `make upgrade` — it rebuilds both binaries, stops both services, copies the binaries into place, and restarts both services automatically:
 
-   ```bash
-   cd vProx
-   git pull origin main
-   ```
+```bash
+cd vOps
+git pull origin main
+make upgrade
+```
 
-2. Re-run the install:
+`make upgrade` requires the sudoers rule set up by `make install` to already be in place (true for any host that's been through `make install` once).
 
-   ```bash
-   make install
-   ```
+If you need to pick up new directories, sample configs, or systemd unit changes too (e.g. after a release that adds new config files), re-run the full install instead — it's idempotent and never overwrites existing config:
 
-   `make install` is idempotent — it skips steps that are already complete (existing `.env`, existing dirs, etc.) and updates what has changed.
-
-3. Restart the service if running:
-
-   ```bash
-   sudo systemctl restart vProx.service
-   ```
+```bash
+make install
+```
 
 For migration guidance when upgrading between major versions, see [`docs/UPGRADE.md`](./docs/UPGRADE.md).
 
@@ -434,14 +436,21 @@ make install
 `make install` builds **both** `vProx` and `vOps` and installs them to `$GOPATH/bin/`. The vOps binary
 embeds the pre-built React SPA from `internal/vops/web/dist/` — no Node.js required for a standard install.
 
-To build vOps alone (e.g. after a frontend change):
+To rebuild vOps alone (e.g. after a frontend change):
 
 ```bash
-make build-vops    # builds frontend + Go binary → .build/vOps + $GOPATH/bin/vops
+make build-vops    # rebuilds the frontend (if Node is present) + Go binary → .build/vOps
 ```
 
-`make build-vops` runs `make frontend` first (requires Node.js 18+) to rebuild the React SPA, then
-compiles the Go binary embedding the fresh `dist/`.
+This only compiles — it doesn't touch a running service or call `sudo`. Deploy it manually:
+
+```bash
+sudo systemctl stop vOps && cp .build/vOps $(go env GOPATH)/bin/vOps && sudo systemctl start vOps
+```
+
+Or run `make upgrade` instead, which does that automatically for both `vOps` and `vProx` in one step.
+
+`build-vops` always tries to rebuild the React SPA first — no separate frontend-only target exists. If Node.js isn't found, it skips that step and falls back to whatever's already committed in `internal/vops/web/dist/`, so a standard build still works without Node.
 
 #### Frontend-only rebuild
 
@@ -454,11 +463,9 @@ brew install node          # macOS
 
 # Install npm dependencies (first time only)
 cd internal/vops/web/frontend && npm install
+cd ../../../../..
 
-# Rebuild the SPA → internal/vops/web/dist/
-make frontend
-
-# Then rebuild the Go binary to embed the new dist/
+# Rebuild the SPA + Go binary together
 make build-vops
 ```
 
@@ -467,11 +474,11 @@ make build-vops
 Copy the sample config and edit:
 
 ```bash
-# Done automatically by make install / make config-vops
-cp .samples/vops/vops.sample $HOME/.vProx/config/vops/vops.toml
+# Done automatically by make install if vops.toml doesn't already exist
+cp .samples/vops/vops.sample $HOME/.vOps/config/vops/vops.toml
 ```
 
-Edit `$HOME/.vProx/config/vops/vops.toml`:
+Edit `$HOME/.vOps/config/vops/vops.toml`:
 
 ```toml
 [vops]
@@ -479,7 +486,7 @@ port         = 8889
 bind_address = "127.0.0.1"   # keep loopback when behind Apache
 base_path    = ""             # set to "/vops" if proxied at a sub-path
 api_key      = ""             # generate: openssl rand -hex 32
-db_path      = ""             # default: $VPROX_HOME/data/vlog.db
+db_path      = ""             # default: $HOME/.vOps/data/vops.db
 
 [intel]
 abuseipdb_key  = "your-key"
@@ -542,15 +549,7 @@ IP block/unblock controls are on the Accounts page. They require only an active 
 
 ### Systemd service
 
-```bash
-make service-vops    # render vOps.service; optionally install to /etc/systemd/system/
-```
-
-Or install the full service in one step:
-
-```bash
-make install        # includes service-vops prompt at the end
-```
+`make install` renders `vOps.service` and prompts (y/n) to install it to `/etc/systemd/system/` — see [Systemd Service](#systemd-service) above. There's no separate standalone target for this; re-run `make install` if you skipped the prompt and want to install the unit later.
 
 ### Run
 
@@ -595,7 +594,7 @@ ProxyTimeout     60
 
 ### vProx integration
 
-To enable automatic archive ingest after each vProx backup, add to `$HOME/.vProx/config/ports.toml`:
+To enable automatic archive ingest after each vProx backup, add to `$HOME/.vOps/config/ports.toml`:
 
 ```toml
 vlog_url = "http://localhost:8889"
@@ -612,13 +611,13 @@ When `vlog_url` is set, vProx POSTs to `/api/v1/ingest` with the `X-API-Key` hea
 Ensure at least one chain config exists:
 
 ```bash
-ls $HOME/.vProx/config/chains/*.toml
+ls $HOME/.vOps/config/chains/*.toml
 ```
 
 Ports config must also be present:
 
 ```bash
-cat $HOME/.vProx/config/ports.toml
+cat $HOME/.vOps/config/ports.toml
 ```
 
 ### Unknown host / 404 on all requests
@@ -637,11 +636,11 @@ Test with: `curl -H "Host: my-chain.example.com" http://localhost:3000/rpc/statu
 Check the MMDB path in `.env` and confirm the file exists:
 
 ```bash
-ls -lh $HOME/.vProx/data/geolocation/ip2location.mmdb
+ls -lh $HOME/.vOps/data/geolocation/ip2location.mmdb
 echo $IP2LOCATION_MMDB
 ```
 
-Re-run `make geo` to decompress from the bundled archive.
+Decompress it manually from the bundled archive: `gunzip -c assets/geo/ip2location.mmdb.gz > $HOME/.vOps/data/geolocation/ip2location.mmdb`.
 
 ### Rate limit too aggressive
 
