@@ -27,7 +27,7 @@ const (
 //
 // r.Host is used as the primary check: when deployed behind a reverse proxy
 // with ProxyPreserveHost On, r.Host equals the browser's origin host
-// ("vnodesv.net"), not the backend bind address ("127.0.0.1:8889").
+// ("example.com"), not the backend bind address ("127.0.0.1:8889").
 // For direct connections r.Host also equals the browser's URL host, so the
 // check is correct in both cases. h.allowedOrigin is only used as a fallback
 // when r.Host is empty (non-standard; should never occur in practice).

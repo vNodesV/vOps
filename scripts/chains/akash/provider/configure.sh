@@ -21,7 +21,7 @@ PROVIDER_KEY_NAME="${PROVIDER_KEY_NAME:-provider}"
 PROVIDER_KEYRING="${PROVIDER_KEYRING:-os}"
 PROVIDER_HOME="${PROVIDER_HOME:-${HOME}/.akash-provider}"
 
-[[ -z "$PROVIDER_DOMAIN" ]] && die "PROVIDER_DOMAIN is required (e.g. provider.vnodesv.net)"
+[[ -z "$PROVIDER_DOMAIN" ]] && die "PROVIDER_DOMAIN is required (e.g. provider.example.com)"
 
 PROVIDER_ADDRESS="${PROVIDER_ADDRESS:-}"  # populated below if empty
 

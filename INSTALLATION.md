@@ -51,8 +51,8 @@ make --version
 ## Quick Install
 
 ```bash
-git clone https://github.com/vNodesV/vProx.git
-cd vProx
+git clone https://github.com/vNodesV/vOps.git
+cd vOps
 make install
 ```
 

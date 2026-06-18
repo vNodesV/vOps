@@ -1,11 +1,11 @@
-# vProx
+# vOps
 
-[![CI](https://github.com/vNodesV/vProx/actions/workflows/ci.yml/badge.svg)](https://github.com/vNodesV/vProx/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/vNodesV/vProx/actions/workflows/codeql.yml/badge.svg)](https://github.com/vNodesV/vProx/actions/workflows/codeql.yml)
-![Go Version](https://img.shields.io/github/go-mod/go-version/vNodesV/vProx)
+[![CI](https://github.com/vNodesV/vOps/actions/workflows/ci.yml/badge.svg)](https://github.com/vNodesV/vOps/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/vNodesV/vOps/actions/workflows/codeql.yml/badge.svg)](https://github.com/vNodesV/vOps/actions/workflows/codeql.yml)
+![Go Version](https://img.shields.io/github/go-mod/go-version/vNodesV/vOps)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 
-Production-grade reverse proxy for Cosmos SDK blockchain nodes. vProx routes RPC, REST, gRPC, gRPC-Web, and WebSocket traffic to backend nodes with per-chain configuration, IP-based rate limiting, geo enrichment, Prometheus metrics, and structured logging. Includes **vOps**, a standalone log analysis dashboard with threat intelligence and OSINT capabilities (formerly vLog, renamed in v1.4.0).
+Cosmos validator operations platform. vOps bundles **vProx**, a production-grade reverse proxy that routes RPC, REST, gRPC, gRPC-Web, and WebSocket traffic to backend nodes with per-chain configuration, IP-based rate limiting, geo enrichment, Prometheus metrics, and structured logging — and **vOps**, a dashboard for log analysis, threat intelligence, OSINT, and fleet management (formerly vLog, renamed in v1.4.0).
 
 ## Features
 
@@ -62,12 +62,12 @@ Production-grade reverse proxy for Cosmos SDK blockchain nodes. vProx routes RPC
 ### Install
 
 ```bash
-git clone https://github.com/vNodesV/vProx.git
-cd vProx
+git clone https://github.com/vNodesV/vOps.git
+cd vOps
 make install
 ```
 
-`make install` validates Go, creates `~/.vProx/` directories, decompresses the GeoIP database, installs sample configs, creates `.env`, and builds the binary to `$GOPATH/bin/vProx`.
+`make install` validates Go, creates `~/.vOps/` directories, decompresses the GeoIP database, installs sample configs, creates `.env`, and builds both binaries to `$GOPATH/bin/`.
 
 ### GeoIP database
 
@@ -77,13 +77,13 @@ The geo database is installed automatically by `make install`. To install or upd
 make geo
 ```
 
-This extracts `assets/geo/ip2location.mmdb.gz` to `~/.vProx/data/geolocation/ip2location.mmdb`. No sudo required.
+This extracts `assets/geo/ip2location.mmdb.gz` to `~/.vOps/data/geolocation/ip2location.mmdb`. No sudo required.
 
 ### Configure a chain
 
 ```bash
-cp ~/.vProx/config/chains/chain.sample.toml ~/.vProx/config/chains/my-chain.toml
-$EDITOR ~/.vProx/config/chains/my-chain.toml
+cp ~/.vOps/config/chains/chain.sample.toml ~/.vOps/config/chains/my-chain.toml
+$EDITOR ~/.vOps/config/chains/my-chain.toml
 ```
 
 ### Run
@@ -155,7 +155,7 @@ For full setup including authentication, API key configuration, and block/unbloc
 
 ## Configuration
 
-vProx uses TOML configuration files stored under `~/.vProx/`:
+vProx and vOps use TOML configuration files stored under `~/.vOps/`:
 
 | File | Purpose |
 |------|---------|
@@ -169,9 +169,9 @@ vProx uses TOML configuration files stored under `~/.vProx/`:
 Override the config base path:
 
 ```bash
-export VPROX_HOME=/opt/vprox
+export VOPS_HOME=/opt/vops
 # or
-vProx --home /opt/vprox
+vProx --home /opt/vops
 ```
 
 For the complete CLI flag reference, see [`CLI_FLAGS_GUIDE.md`](./CLI_FLAGS_GUIDE.md).

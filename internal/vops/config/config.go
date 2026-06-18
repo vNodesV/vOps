@@ -27,7 +27,7 @@ type Config struct {
 type VproxSection struct {
 	// ConfigPath is the path to the vProx HOME directory.
 	// Required for both embedded and external modes.
-	// Example: config_path = "/home/vnodesv/.vOps"
+	// Example: config_path = "/home/deploy/.vOps"
 	ConfigPath string `toml:"config_path"`
 
 	// External, when true, disables the embedded vProx goroutine.

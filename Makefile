@@ -9,6 +9,10 @@ VOPS_NAME  := vOps
 VOPS_SRC   := ./cmd/vops
 VOPS_BUILD := $(BUILD_DIR)/$(VOPS_NAME)
 
+# OS user the sudoers rules below grant passwordless access to.
+# Override on the command line: make install-sudoers SUDOERS_USER=myuser
+SUDOERS_USER ?= $(shell whoami)
+
 # vOps semantic version — source of truth is cmd/vops/VERSION.
 # Use `make bump-patch|bump-minor|bump-major` to increment before each push.
 # Override on the command line: make build-vops VOPS_VERSION=1.2.3
@@ -102,11 +106,11 @@ help:
 	@echo "  make service-vprox    Render + optionally install vProx.service from template"
 	@echo "  make reset-services   Stop + remove stale service units (vProx, vLog) before fresh install"
 	@echo "  make clean            Remove local build artifacts"
-	@echo "  make ufw              Consolidated sudoers for vnodesv (UFW + apt + systemctl)"
+	@echo "  make ufw              Consolidated sudoers for \$$SUDOERS_USER (UFW + apt + systemctl)"
 	@echo ""
 	@echo "  Local install (run ON the server after git pull):"
 	@echo "    make install          sudoers + fix-bins + build vOps + vProx"
-	@echo "    make install-sudoers  Write /etc/sudoers.d/vnodesv locally (requires sudo)"
+	@echo "    make install-sudoers  Write /etc/sudoers.d/\$$SUDOERS_USER locally (requires sudo)"
 	@echo "    make install-fix-bins Ensure /usr/local/bin/{vOps,vProx} symlinks point to GOPATH_BIN"
 	@echo ""
 	@echo "  Version management (vOps):"
@@ -430,7 +434,7 @@ build-vops: _frontend
 	mkdir -p "$(BUILD_DIR)"
 	GOROOT="$(EFFECTIVE_GOROOT)" go build -ldflags "$(VOPS_LDFLAGS)" -o "$(VOPS_BUILD)" "$(VOPS_SRC)"
 	@echo "✓ Build complete — Binary: $(VOPS_BUILD)"
-	@if ! ([[ -f "/etc/sudoers.d/vnodesv" ]] && sudo grep -qF "/usr/bin/systemctl stop $(VOPS_NAME)" /etc/sudoers.d/vnodesv); then \
+	@if ! ([[ -f "/etc/sudoers.d/$(SUDOERS_USER)" ]] && sudo grep -qF "/usr/bin/systemctl stop $(VOPS_NAME)" /etc/sudoers.d/$(SUDOERS_USER)); then \
 		echo "  ⚠ Passwordless systemctl not configured — run 'make ufw' to configure sudoers."; \
 	fi
 	@echo "Stopping $(VOPS_NAME) service for swap..."
@@ -652,12 +656,12 @@ system-user-vops:
 	fi
 	@echo "  Tip: run 'make ufw' to grant vops the required sudoers entries."
 
-## Write ALL passwordless sudoers rules for vnodesv into /etc/sudoers.d/vnodesv.
+## Write ALL passwordless sudoers rules for $(SUDOERS_USER) into /etc/sudoers.d/$(SUDOERS_USER).
 ## Covers: UFW block/unblock, conntrack, apt, systemctl for vOps + vProx.
 ## Removes legacy /etc/sudoers.d/vops and /etc/sudoers.d/vprox if present.
 ufw:
-	@SUDOERS_FILE="/etc/sudoers.d/vnodesv"; \
-	SUDOERS_LINE="vnodesv ALL=(ALL) NOPASSWD: /usr/sbin/ufw deny from *, /usr/sbin/ufw delete deny from *, /usr/sbin/ufw insert 1 deny from * to any, /usr/sbin/conntrack -L -s *, /usr/sbin/conntrack -D -s *, /usr/bin/apt update, /usr/bin/apt upgrade -y, /usr/bin/systemctl stop vOps, /usr/bin/systemctl start vOps, /usr/bin/systemctl restart vOps, /usr/bin/systemctl stop vProx, /usr/bin/systemctl start vProx, /usr/bin/systemctl restart vProx"; \
+	@SUDOERS_FILE="/etc/sudoers.d/$(SUDOERS_USER)"; \
+	SUDOERS_LINE="$(SUDOERS_USER) ALL=(ALL) NOPASSWD: /usr/sbin/ufw deny from *, /usr/sbin/ufw delete deny from *, /usr/sbin/ufw insert 1 deny from * to any, /usr/sbin/conntrack -L -s *, /usr/sbin/conntrack -D -s *, /usr/bin/apt update, /usr/bin/apt upgrade -y, /usr/bin/systemctl stop vOps, /usr/bin/systemctl start vOps, /usr/bin/systemctl restart vOps, /usr/bin/systemctl stop vProx, /usr/bin/systemctl start vProx, /usr/bin/systemctl restart vProx"; \
 	if [[ -f "$$SUDOERS_FILE" ]]; then \
 		if sudo grep -qF "$$SUDOERS_LINE" "$$SUDOERS_FILE"; then \
 			echo "✓ Sudoers already configured ($$SUDOERS_FILE)"; \
@@ -675,7 +679,7 @@ ufw:
 			fi; \
 		fi; \
 	else \
-		echo "Setting up passwordless sudoers for vnodesv (UFW, conntrack, apt, systemctl)..."; \
+		echo "Setting up passwordless sudoers for $(SUDOERS_USER) (UFW, conntrack, apt, systemctl)..."; \
 		read -p "Create sudoers rule? (y/n) " -n 1 -r; echo ""; \
 		if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
 			echo "$$SUDOERS_LINE" | sudo tee "$$SUDOERS_FILE" > /dev/null; \
@@ -757,14 +761,14 @@ install: install-sudoers install-fix-bins _dirs _geo _env _config _config-vops _
 	@for S in vOps vProx; do printf "  %-8s %s\n" "$$S:" "$$(systemctl is-active $$S 2>/dev/null || echo inactive)"; done
 	@echo "[ ok ]  install complete"
 
-## Write /etc/sudoers.d/vnodesv locally. Requires sudo. Removes legacy vops/vprox files.
+## Write /etc/sudoers.d/$(SUDOERS_USER) locally. Requires sudo. Removes legacy vops/vprox files.
 install-sudoers:
-	@echo "[info]  writing /etc/sudoers.d/vnodesv"
-	@echo 'vnodesv ALL=(ALL) NOPASSWD: /usr/sbin/ufw deny from *, /usr/sbin/ufw delete deny from *, /usr/sbin/ufw insert 1 deny from * to any, /usr/sbin/conntrack -L -s *, /usr/sbin/conntrack -D -s *, /usr/bin/apt update, /usr/bin/apt upgrade -y, /usr/bin/systemctl stop vOps, /usr/bin/systemctl start vOps, /usr/bin/systemctl restart vOps, /usr/bin/systemctl stop vProx, /usr/bin/systemctl start vProx, /usr/bin/systemctl restart vProx' \
-		| sudo tee /etc/sudoers.d/vnodesv > /dev/null
-	@sudo chmod 0440 /etc/sudoers.d/vnodesv
+	@echo "[info]  writing /etc/sudoers.d/$(SUDOERS_USER)"
+	@echo '$(SUDOERS_USER) ALL=(ALL) NOPASSWD: /usr/sbin/ufw deny from *, /usr/sbin/ufw delete deny from *, /usr/sbin/ufw insert 1 deny from * to any, /usr/sbin/conntrack -L -s *, /usr/sbin/conntrack -D -s *, /usr/bin/apt update, /usr/bin/apt upgrade -y, /usr/bin/systemctl stop vOps, /usr/bin/systemctl start vOps, /usr/bin/systemctl restart vOps, /usr/bin/systemctl stop vProx, /usr/bin/systemctl start vProx, /usr/bin/systemctl restart vProx' \
+		| sudo tee /etc/sudoers.d/$(SUDOERS_USER) > /dev/null
+	@sudo chmod 0440 /etc/sudoers.d/$(SUDOERS_USER)
 	@sudo rm -f /etc/sudoers.d/vops /etc/sudoers.d/vprox
-	@echo "[ ok ]  /etc/sudoers.d/vnodesv"
+	@echo "[ ok ]  /etc/sudoers.d/$(SUDOERS_USER)"
 
 ## Ensure /usr/local/bin/{vOps,vProx} are symlinks pointing to GOPATH_BIN.
 install-fix-bins:

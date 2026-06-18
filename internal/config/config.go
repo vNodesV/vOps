@@ -101,7 +101,7 @@ type ValidatorConfig struct {
 
 // SPNetwork holds service-provider configuration for one network tier.
 type SPNetwork struct {
-	Hostname string   `toml:"hostname"` // public service hostname, e.g. "cheqd.srvs.vnodesv.net"
+	Hostname string   `toml:"hostname"` // public service hostname, e.g. "mychain.srvs.example.com"
 	Prefixes []string `toml:"prefixes"` // subdomain prefixes offered, e.g. ["api","rest","rpc"]
 	Suffixes []string `toml:"suffixes"` // path suffixes offered (same keys as prefixes)
 	LanIP    string   `toml:"lan_ip"`   // LAN IP for internal probing via http://lan_ip:26657|1317

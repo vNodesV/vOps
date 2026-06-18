@@ -48,7 +48,7 @@ Use long flags with a double dash:
 ## Configuration paths
 
 ### `--home string`
-Override runtime home (`VPROX_HOME`), defaulting to `~/.vProx` if unset.
+Override runtime home (`VPROX_HOME`), defaulting to `~/.vOps` if unset.
 
 Use when:
 - running isolated instances
@@ -308,7 +308,7 @@ vOps is the companion log-analyzer (renamed from vLog in v1.4.0). It is integrat
 
 | Flag | Default | Description |
 |---|---|---|
-| `--home PATH` | `$VPROX_HOME` or `~/.vProx` | Override vProx home directory |
+| `--home PATH` | `$VPROX_HOME` or `~/.vOps` | Override vProx home directory |
 | `--port PORT` | from `vops.toml` | Override web server listen port |
 | `--quiet` | false | Suppress non-essential output |
 | `--version` | — | Print version and exit |

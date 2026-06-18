@@ -1,9 +1,32 @@
 # Changelog
 
-All notable changes to vProx are documented here.
+All notable changes to vOps (the suite, including vProx) are documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/).
+
+---
+
+## [v1.5.5] — 2026-06-18
+
+### Added
+- **vProx boot banner**: prints version, configured chains, and whitelisted IPs on startup — `3201298`
+- **Rate-limit bypass list**: `bypass_ips` config exempts trusted IPs from rate limiting; `X-Request-ID` stripped from proxied responses — `b663df7`
+- **Settings**: all config save handlers implemented; `/api/v1/settings/current` returns a full snapshot — `574a61f`
+
+### Fixed
+- **Makefile**: `build-vprox` split into compile-only (dev) and `install-vprox` (target host) — `756cd48`
+- **vOps**: theme write, backup rotation, and Makefile cleanup correctness fixes — `4fe582b`
+- **Dashboard**: IMPORT button label and vProx binary lookup casing fixed — `d730833`, `6d0e894`
+- **Makefile**: `install` now runs the full setup (dirs, geo, env, config, samples) — `cb1195b`, `86f74fc`
+- **Build**: corrected `GEO_DB_SRC` path typo (`assets/_geo` → `assets/geo`) — `cb3193e`
+
+### Changed
+- **GeoIP database**: refreshed bundled GeoLite2-Country DB — `7fbf679`
+- **Public release prep**: removed compiled binaries from version control, removed internal session-checkpoint docs and one-off personal migration scripts from the repo, genericized example IPs/hostnames/usernames across docs and config samples, rebranded README to vOps
+
+### Build
+- Frontend dist rebuilt for the IMPORT button fix and an `npm audit` dependency bump (3 packages) — `62b3477`, `25e632e`
 
 ---
 

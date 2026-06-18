@@ -159,7 +159,7 @@ func (s *Server) HandleVMShell(w http.ResponseWriter, r *http.Request) {
 // Using r.Host (rather than the configured bind address) ensures correctness
 // under reverse-proxy deployments where Apache/nginx forwards the original
 // Host header via ProxyPreserveHost — r.Host equals the browser's origin host
-// ("vnodesv.net"), not the backend's bind address ("127.0.0.1:8889").
+// ("example.com"), not the backend's bind address ("127.0.0.1:8889").
 func (s *Server) vmWSUpgrader() *websocket.Upgrader {
 	return &websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {

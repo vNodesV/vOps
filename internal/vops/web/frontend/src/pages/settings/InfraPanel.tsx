@@ -541,7 +541,7 @@ export function DatacenterCard({ entry, onSaved }: { entry: InfraEntry; onSaved:
           <span className="ml-1 font-normal">— Physical server running the VMs. Leave blank if using standalone VPS.</span>
         </p>
         <div className="grid grid-cols-2 gap-2">
-          <LabeledInput label="Hostname / FQDN" value={host.name} onChange={setHostField('name')} placeholder="qc.vnodesv.net" />
+          <LabeledInput label="Hostname / FQDN" value={host.name} onChange={setHostField('name')} placeholder="node1.example.com" />
           <LabeledInput label="LAN IP" value={host.lan_ip} onChange={setHostField('lan_ip')} placeholder="10.0.0.1" />
           <LabeledInput label="Public IP" value={host.public_ip} onChange={setHostField('public_ip')} placeholder="203.0.113.10" />
           <LabeledInput label="vRack IP (cross-DC private, optional)" value={host.vrack_ip} onChange={setHostField('vrack_ip')} placeholder="10.1.0.1" />
@@ -558,8 +558,8 @@ export function DatacenterCard({ entry, onSaved }: { entry: InfraEntry; onSaved:
           <span className="ml-1 font-normal">— Default SSH user and key used to connect to VMs (separate from hypervisor).</span>
         </p>
         <div className="grid grid-cols-2 gap-2">
-          <LabeledInput label="VM SSH User" value={vprox.user} onChange={setVproxField('user')} placeholder="vnodesv" />
-          <LabeledInput label="VM SSH Key Path" value={vprox.ssh_key_path} onChange={setVproxField('ssh_key_path')} placeholder="/home/vnodesv/.vOps/secret/vops_ssh_key" wide />
+          <LabeledInput label="VM SSH User" value={vprox.user} onChange={setVproxField('user')} placeholder="deploy" />
+          <LabeledInput label="VM SSH Key Path" value={vprox.ssh_key_path} onChange={setVproxField('ssh_key_path')} placeholder="/home/deploy/.vOps/secret/vops_ssh_key" wide />
         </div>
       </div>
 
@@ -724,7 +724,7 @@ export function NewDatacenterForm({ onSaved }: { onSaved: () => void }) {
       <LabeledInput label="Datacenter Name (slug, e.g. hetzner-fsn1)" value={dc} onChange={setDC} placeholder="hetzner-fsn1" />
       <p className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>Host / Hypervisor (optional — leave blank for standalone VPS)</p>
       <div className="grid grid-cols-2 gap-2">
-        <LabeledInput label="Hostname / FQDN" value={host.name} onChange={setHostField('name')} placeholder="qc.vnodesv.net" />
+        <LabeledInput label="Hostname / FQDN" value={host.name} onChange={setHostField('name')} placeholder="node1.example.com" />
         <LabeledInput label="LAN IP" value={host.lan_ip} onChange={setHostField('lan_ip')} placeholder="10.0.0.1" />
         <LabeledInput label="Public IP" value={host.public_ip} onChange={setHostField('public_ip')} placeholder="203.0.113.10" />
         <LabeledInput label="vRack IP (cross-DC private, optional)" value={host.vrack_ip} onChange={setHostField('vrack_ip')} placeholder="10.1.0.1" />
@@ -734,8 +734,8 @@ export function NewDatacenterForm({ onSaved }: { onSaved: () => void }) {
       </div>
       <p className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>vOps → VM Credentials (default SSH creds for VM connections)</p>
       <div className="grid grid-cols-2 gap-2">
-        <LabeledInput label="VM SSH User" value={vprox.user} onChange={setVproxField('user')} placeholder="vnodesv" />
-        <LabeledInput label="VM SSH Key Path" value={vprox.ssh_key_path} onChange={setVproxField('ssh_key_path')} placeholder="/home/vnodesv/.vOps/secret/vops_ssh_key" wide />
+        <LabeledInput label="VM SSH User" value={vprox.user} onChange={setVproxField('user')} placeholder="deploy" />
+        <LabeledInput label="VM SSH Key Path" value={vprox.ssh_key_path} onChange={setVproxField('ssh_key_path')} placeholder="/home/deploy/.vOps/secret/vops_ssh_key" wide />
       </div>
       <SaveBar
         onSave={() => saveMut.mutate()}

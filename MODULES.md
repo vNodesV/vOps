@@ -13,9 +13,9 @@ For CLI flags, see [`CLI_FLAGS_GUIDE.md`](./CLI_FLAGS_GUIDE.md).
 
 By default, vProx runs out of:
 
-- `$HOME/.vProx/config` — chain configs and `ports.toml`
-- `$HOME/.vProx/data/logs` — `main.log`, `rate-limit.jsonl`, `archives/` backups
-- `$HOME/.vProx/data` — backup state, geo DBs, `access-counts.json`
+- `$HOME/.vOps/config` — chain configs and `ports.toml`
+- `$HOME/.vOps/data/logs` — `main.log`, `rate-limit.jsonl`, `archives/` backups
+- `$HOME/.vOps/data` — backup state, geo DBs, `access-counts.json`
 
 Override base path with:
 
@@ -24,7 +24,7 @@ Override base path with:
 
 ### Chain configs
 
-Chain configs live in `$HOME/.vProx/config/chains/*.toml`. For backward compatibility, configs in `$HOME/.vProx/chains/*.toml` and `$HOME/.vProx/config/*.toml` are also scanned.
+Chain configs live in `$HOME/.vOps/config/chains/*.toml`. For backward compatibility, configs in `$HOME/.vOps/chains/*.toml` and `$HOME/.vOps/config/*.toml` are also scanned.
 
 **v1.4.0 config layout additions:**
 - `config/chains/*.sample` — identity-only sample files (`chain_id`, `network_type`, `tree_name`, `dashboard_name`); no proxy/service fields; used as chain identity templates
@@ -67,7 +67,7 @@ A fully annotated example is at [`config/chains/chain.sample.toml`](./config/cha
 
 ### Default ports
 
-`$HOME/.vProx/config/ports.toml` defines the default port for each service. Created by `make install`:
+`$HOME/.vOps/config/ports.toml` defines the default port for each service. Created by `make install`:
 
 ```toml
 rpc      = 26657
@@ -120,7 +120,7 @@ VPROX_AUTO_TTL_SEC=900        # Quarantine duration (seconds, 0 = permanent)
 
 ### Log format
 
-JSONL events are written to `$HOME/.vProx/data/logs/rate-limit.jsonl`. Only significant events are logged (429 responses, auto-quarantine add/expire, canceled waits).
+JSONL events are written to `$HOME/.vOps/data/logs/rate-limit.jsonl`. Only significant events are logged (429 responses, auto-quarantine add/expire, canceled waits).
 
 **Fields:**
 
@@ -179,7 +179,7 @@ vProx probes the following paths in order and uses the first valid database foun
 **IP2Location (preferred):**
 
 1. `$IP2LOCATION_MMDB` (explicit env var)
-2. `$HOME/.vProx/data/geolocation/ip2location.mmdb` (installed by `make install`)
+2. `$HOME/.vOps/data/geolocation/ip2location.mmdb` (installed by `make install`)
 3. `/usr/local/share/IP2Proxy/ip2location.mmdb`
 4. `/usr/local/share/IP2Location/ip2location.mmdb`
 5. `/usr/share/IP2Proxy/ip2location.mmdb`
@@ -217,7 +217,7 @@ vProx --backup-status             # Show scheduler status
 
 ### Automated backups
 
-Configure via `$HOME/.vProx/config/backup/backup.toml` (see [`config/backup/backup.sample.toml`](./config/backup/backup.sample.toml)):
+Configure via `$HOME/.vOps/config/backup/backup.toml` (see [`config/backup/backup.sample.toml`](./config/backup/backup.sample.toml)):
 
 ```toml
 [backup]
@@ -240,7 +240,7 @@ Trigger logic: backup fires when **either** `interval_days` or `max_size_mb` thr
 Backups are written to:
 
 ```
-$HOME/.vProx/data/logs/archives/backup.YYYYMMDD_HHMMSS.tar.gz
+$HOME/.vOps/data/logs/archives/backup.YYYYMMDD_HHMMSS.tar.gz
 ```
 
 ### Backup lifecycle
@@ -267,7 +267,7 @@ $HOME/.vProx/data/logs/archives/backup.YYYYMMDD_HHMMSS.tar.gz
 
 ### Access counter persistence
 
-Source access counters (`src_count`) are persisted at `$HOME/.vProx/data/access-counts.json`. They survive restarts and backup cycles. Reset only when explicitly requested:
+Source access counters (`src_count`) are persisted at `$HOME/.vOps/data/access-counts.json`. They survive restarts and backup cycles. Reset only when explicitly requested:
 
 ```bash
 vProx backup --reset_count    # or --reset-count
@@ -319,7 +319,7 @@ See [`INSTALLATION.md`](./INSTALLATION.md) for the full install guide.
 make install    # Full install (validate, dirs, geo, config, env, binary, systemd)
 make build      # Build binary only → .build/vProx
 make dirs       # Create runtime directories
-make geo        # Decompress MMDB (ip2l/ip2location.mmdb.gz → $HOME/.vProx/data/geolocation/)
+make geo        # Decompress MMDB (ip2l/ip2location.mmdb.gz → $HOME/.vOps/data/geolocation/)
 make config     # Install sample configs
 make systemd    # Render (and optionally install) systemd unit file + sudoers rule
 make clean      # Remove .build/
@@ -330,7 +330,7 @@ make clean      # Remove .build/
 ## 8) Troubleshooting
 
 - **Unknown host / 404 on all requests**: the `host` field in chain config must match the incoming `Host` header exactly. Test with `curl -H "Host: <chain-host>" http://localhost:3000/rpc/status`.
-- **No configs found**: confirm `$HOME/.vProx/config/chains/*.toml` exists and `ports.toml` is present.
+- **No configs found**: confirm `$HOME/.vOps/config/chains/*.toml` exists and `ports.toml` is present.
 - **Geo not loading**: verify `IP2LOCATION_MMDB` path and run `make geo` to re-decompress.
 - **Rate limit too strict**: increase `VPROX_RPS` and `VPROX_BURST` in `.env`, restart.
 - **WebSocket drops immediately**: check `[ws] idle_timeout_sec` in chain config; default is 3600.
@@ -355,7 +355,7 @@ vProx --validate                      # Validate config and exit
 vProx --info --verbose                # Print resolved runtime/config summary
 vProx --dry-run                       # Load everything, don't start server
 vProx --addr :4000                    # Override listen address (default :3000)
-vProx --home /custom/path             # Override runtime home (default $HOME/.vProx)
+vProx --home /custom/path             # Override runtime home (default $HOME/.vOps)
 vProx --config /path/to/config        # Override config dir
 vProx --chains /path/to/chains        # Override chains dir
 vProx --log-file /path/to/main.log    # Override log file path

@@ -81,8 +81,8 @@ When changing logging or middleware behavior:
 
 ## Deployment workflow
 **Always push after major upgrades or any change that requires testing.**
-The production test environment is `www-qc` (www-qc.vnodesv.net / 10.0.0.65).
-After each meaningful commit, push so the operator can install/reinstall vOps on `www-qc` for live testing.
+The production test environment is a dedicated host (set its hostname/IP in your own infra config).
+After each meaningful commit, push so the operator can install/reinstall vOps on that host for live testing.
 
 ```
 # Standard post-implementation sequence
@@ -90,11 +90,11 @@ go build ./... && go vet ./... && go test ./...           # verify
 cd internal/vops/web/frontend && npm run build            # rebuild SPA if frontend changed
 make bump-patch                                           # increment version (on vOps_v1.0.0+ branches)
 git add cmd/vops/VERSION && git commit -m "chore: bump vOps to $(cat cmd/vops/VERSION)"
-cd /path/to/vProx && git push origin <branch>            # push for www-qc deployment
+cd /path/to/vProx && git push origin <branch>            # push for remote test-host deployment
 ```
 
 - Push on the **working branch** (e.g., `vOps_v1.0.0`), not directly to `main`.
-- Do not squash or rebase mid-branch; `www-qc` pulls the branch tip for reinstall.
+- Do not squash or rebase mid-branch; the test host pulls the branch tip for reinstall.
 - If a push would break the running service, note it explicitly before pushing.
 
 ## vOps versioning

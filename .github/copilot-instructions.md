@@ -189,7 +189,7 @@ G304 (file inclusion via variable) is intentionally suppressed in `internal/geo/
 ## Branching & Deployment
 
 - Work on feature branches (e.g. `vOps_v1.0.0`), not directly on `main`.
-- Push after each meaningful commit; the `www-qc` environment (`10.0.0.65`) pulls the branch tip for live testing.
+- Push after each meaningful commit; your test environment pulls the branch tip for live testing.
 - Do not squash or rebase mid-branch.
 
 Standard post-implementation sequence:
