@@ -10,7 +10,7 @@ VOPS_SRC   := ./cmd/vops
 VOPS_BUILD := $(BUILD_DIR)/$(VOPS_NAME)
 
 # OS user the sudoers rules below grant passwordless access to.
-# Override on the command line: make install-sudoers SUDOERS_USER=myuser
+# Override on the command line: make install SUDOERS_USER=myuser
 SUDOERS_USER ?= $(shell whoami)
 
 # vOps semantic version — source of truth is cmd/vops/VERSION.
@@ -24,8 +24,8 @@ VOPS_LDFLAGS  := -X main.version=$(VOPS_VERSION) -X main.commit=$(VOPS_COMMIT) -
 VPROX_VERSION := $(shell cat cmd/vprox/VERSION 2>/dev/null || echo "dev")
 VPROX_LDFLAGS := -X main.version=$(VPROX_VERSION) -X main.commit=$(VOPS_COMMIT) -X main.buildDate=$(VOPS_BUILT)
 # Service user: defaults to the installing user.
-# Override for a dedicated service account: make service-vops VOPS_USER=vops
-# (run `make system-user-vops` first to create the vops system user).
+# Override for a dedicated service account: make install VOPS_USER=vops
+# (a dedicated nologin 'vops' system user is created automatically by `make install`).
 VOPS_USER  ?= $(USER)
 
 VOPS_HOME  := $(HOME)/.vOps
@@ -83,12 +83,12 @@ _GO_VERSION       := $(shell go version | awk '{print $$3}')
 _TOOLCHAIN_GOROOT := $(shell find $(GOPATH)/pkg/mod/golang.org -maxdepth 1 -name "toolchain@v0.0.1-$(_GO_VERSION).*" 2>/dev/null | head -1)
 EFFECTIVE_GOROOT  := $(if $(_TOOLCHAIN_GOROOT),$(_TOOLCHAIN_GOROOT),$(GOROOT))
 
-# Public targets only — internal helpers (_dirs, _geo, config-*, _env, _frontend, …) are intentionally
-# excluded from .PHONY so they don't pollute tab-completion.
-.PHONY: all help install install-sudoers install-fix-bins build build-vops build-vops-reset \
-        clean ufw reset-services service-vops service-vprox system-user-vops \
+# Public targets only — internal helpers (_dirs, _geo, _config-*, _env, _frontend, _sudoers,
+# _service-*, _system-user-vops, _reset-stale-services, …) are intentionally excluded from
+# .PHONY so they don't pollute tab-completion. Run `make help` for the supported surface.
+.PHONY: all help install build build-vops build-vprox upgrade clean \
         bump-patch bump-minor bump-major \
-        _config-reset
+        bump-patch-vprox bump-minor-vprox bump-major-vprox
 
 all: help
 
@@ -98,20 +98,16 @@ help:
 	@echo ""
 	@echo "  vOps — build and install targets"
 	@echo ""
-	@echo "  make install          Build + install vOps: binary, config, service"
-	@echo "  make build            Build vOps binary → .build/vOps"
-	@echo "  make build-vops       Build vOps binary + sync service files (⚠ never touches config files)"
-	@echo "  make build-vops-reset Build vOps binary + reset config files from samples (backs up first)"
-	@echo "  make service-vops     Render + optionally install vOps.service from template"
-	@echo "  make service-vprox    Render + optionally install vProx.service from template"
-	@echo "  make reset-services   Stop + remove stale service units (vProx, vLog) before fresh install"
+	@echo "  make install          Fresh install: dirs, config, sudoers, services, both binaries"
+	@echo "  make build-vops       Compile vOps only → .build/vOps (no service restart, no sudo)"
+	@echo "  make build-vprox      Compile vProx only → .build/vProx (no service restart, no sudo)"
+	@echo "  make upgrade          Rebuild + redeploy BOTH binaries (stop → copy → restart)"
 	@echo "  make clean            Remove local build artifacts"
-	@echo "  make ufw              Consolidated sudoers for \$$SUDOERS_USER (UFW + apt + systemctl)"
 	@echo ""
-	@echo "  Local install (run ON the server after git pull):"
-	@echo "    make install          sudoers + fix-bins + build vOps + vProx"
-	@echo "    make install-sudoers  Write /etc/sudoers.d/\$$SUDOERS_USER locally (requires sudo)"
-	@echo "    make install-fix-bins Ensure /usr/local/bin/{vOps,vProx} symlinks point to GOPATH_BIN"
+	@echo "  After build-vops/build-vprox, deploy manually:"
+	@echo "    sudo systemctl stop vOps   && cp $(VOPS_BUILD) $(GOPATH_BIN)/$(VOPS_NAME)   && sudo systemctl start vOps"
+	@echo "    sudo systemctl stop vProx  && cp $(BUILD_OUT)  $(GOPATH_BIN)/$(APP_NAME)    && sudo systemctl start vProx"
+	@echo "  (or just run 'make upgrade' to automate that for both)"
 	@echo ""
 	@echo "  Version management (vOps):"
 	@echo "    make bump-patch       0.0.1 → 0.0.2  (bug fixes / small improvements)"
@@ -119,60 +115,19 @@ help:
 	@echo "    make bump-major       0.x.y → 1.0.0  (breaking changes / major milestones)"
 	@echo "    Current version: $$(cat cmd/vops/VERSION 2>/dev/null || echo 'unknown')"
 	@echo ""
+	@echo "  Version management (vProx):"
+	@echo "    make bump-patch-vprox / bump-minor-vprox / bump-major-vprox"
+	@echo "    Current version: $$(cat cmd/vprox/VERSION 2>/dev/null || echo 'unknown')"
 	@echo ""
 	@echo "  Paths (install):"
 	@echo "    Binary:    $(GOPATH_BIN)/$(VOPS_NAME)"
 	@echo "    Config:    $(VOPS_HOME)/config/"
 	@echo "    Data:      $(DATA_DIR)/"
 	@echo "    Samples:   $(VOPS_HOME)/.samples/"
-	@echo "  SSH control plane (fleet) is installed automatically."
 	@echo "  Add VMs to:    $(VOPS_HOME)/config/infra/{datacenter}.toml"
 	@echo "  Add chains to: $(CFG_DIR)/vprox/{chain}.toml  (vProx chain configs)"
 	@echo "                 $(CFG_DIR)/chains/{chain}.toml  (vOps chain profiles)"
 	@echo ""
-
-## Full interactive install — build + config + service for vOps (first-time setup wizard).
-## Phases: validate-go → dirs → geo → config → env → samples → frontend → build → symlinks → service
-## Each optional step (symlinks, service registration, sudoers) prompts for confirmation.
-
-install-wizard: _validate-go _dirs _geo _config _config-vops _config-vprox _config-modules _env _samples-fleet _frontend
-	@echo ""
-	@echo "── Building vOps ────────────────────────────────────────────────────────"
-	GOROOT="$(EFFECTIVE_GOROOT)" go build -ldflags "$(VOPS_LDFLAGS)" -o "$(GOPATH_BIN)/$(VOPS_NAME)" "$(VOPS_SRC)"
-	@echo "✓ $(VOPS_NAME) → $(GOPATH_BIN)/$(VOPS_NAME)"
-	@echo ""
-	@echo "── Lowercase aliases in GOPATH/bin ──────────────────────────────────────"
-	@ln -sf "$(GOPATH_BIN)/$(VOPS_NAME)" "$(GOPATH_BIN)/vops"
-	@echo "✓ vops  → $(VOPS_NAME)  (lowercase alias)"
-	@echo ""
-	@echo "── /usr/local/bin copies (optional, requires sudo) ──────────────────────"
-	@read -p "Copy to /usr/local/bin/{$(VOPS_NAME),vops}? (y/n) " -n 1 -r; echo ""; \
-	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-		sudo cp "$(GOPATH_BIN)/$(VOPS_NAME)" "/usr/local/bin/$(VOPS_NAME)"; \
-		sudo cp "$(GOPATH_BIN)/$(VOPS_NAME)" "/usr/local/bin/vops"; \
-		echo "✓ /usr/local/bin/{$(VOPS_NAME),vops} installed (direct copy, no symlink)"; \
-	else \
-		echo "✓ Skipped — run from $(GOPATH_BIN)/ or add it to PATH."; \
-	fi
-	@echo ""
-	@echo "── Systemd services ─────────────────────────────────────────────────────"
-	@$(MAKE) --no-print-directory service-vops
-	@$(MAKE) --no-print-directory service-vprox
-	@echo ""
-	@echo "════════════════════════════════════════════════════════"
-	@echo "  ✓ Installation complete"
-	@echo "────────────────────────────────────────────────────────"
-	@echo "  Binary:    $(GOPATH_BIN)/$(VOPS_NAME)"
-	@echo "  Config:    $(VOPS_HOME)/config/"
-	@echo "  Data:      $(DATA_DIR)/"
-	@echo "  Samples:   $(VOPS_HOME)/.samples/"
-	@echo "────────────────────────────────────────────────────────"
-	@echo "  Next steps:"
-	@echo "    1. Edit $(VOPS_HOME)/config/vops/vops.toml  — set api_key"
-	@echo "    2. Edit $(VOPS_HOME)/config/infra/*.toml    — add VMs (fleet)"
-	@echo "    3. vOps start                               — start vOps"
-	@echo "    4. make ufw                                 — UFW block/unblock (optional)"
-	@echo "════════════════════════════════════════════════════════"
 
 ## Validate Go environment
 
@@ -205,7 +160,6 @@ _dirs:
 			echo "✓ $$dir already exists"; \
 		fi; \
 	done
-	
 
 ## Install GEO DB — decompress from bundled .gz
 
@@ -358,58 +312,15 @@ _config-modules:
 ## Build vOps binary (default build target)
 build: build-vops
 
-## Compile vProx binary only — no service management. Safe to run anywhere (dev box, CI).
-## Output: .build/vProx  — scp to target host, then restart service there.
-build-vprox:
-	@echo "Building $(APP_NAME)..."
-	mkdir -p "$(BUILD_DIR)"
-	GOROOT="$(EFFECTIVE_GOROOT)" go build -ldflags "$(VPROX_LDFLAGS)" -o "$(BUILD_OUT)" "$(BUILD_SRC)"
-	@echo "✓ $(BUILD_OUT) ready — scp to target host and restart service."
-
-## Full install on the target host (stop service → swap binary → restart).
-## Run this ON vn-www after git pull, not on the dev box.
-install-vprox: build-vprox
-	@echo "Stopping $(APP_NAME) service for swap..."
-	@sudo systemctl stop "$(APP_NAME)" 2>/dev/null && echo "  ✓ $(APP_NAME) stopped" || echo "  ○ $(APP_NAME) was not running"
-	@cp "$(BUILD_OUT)" "$(GOPATH_BIN)/$(APP_NAME)"
-	@if [ -e "/usr/local/bin/$(APP_NAME)" ]; then \
-		sudo cp "$(BUILD_OUT)" "/usr/local/bin/$(APP_NAME)"; \
-		echo "  ✓ Updated → /usr/local/bin/$(APP_NAME)"; \
-	fi
-	@echo "  Copied → $(GOPATH_BIN)/$(APP_NAME)"
-	@echo "── Syncing vProx service file ───────────────────────────────────────────"
-	@sys="/etc/systemd/system/vProx.service"; \
-	if [[ -f "$$sys" ]]; then \
-		rnd=$$(mktemp); \
-		sed "s|__HOME__|$(HOME)|g; s|__USER__|$(USER)|g; s|__VOPS_USER__|$(VOPS_USER)|g" vprox.service.template > "$$rnd"; \
-		if ! cmp -s "$$rnd" "$$sys"; then \
-			sudo cp "$$sys" "$${sys}.bak.$$(date +%s)"; \
-			sudo cp "$$rnd" "$$sys"; \
-			echo "  ✓ vProx.service updated (drifted from template; prior backed up)"; \
-			sudo systemctl daemon-reload && echo "  ✓ daemon-reload"; \
-		else \
-			echo "  ✓ vProx.service up to date"; \
-		fi; \
-		rm -f "$$rnd"; \
-	fi
-	@echo "Restarting $(APP_NAME) service..."
-	@sudo systemctl start "$(APP_NAME)" 2>/dev/null && echo "  ✓ $(APP_NAME) started" || echo "  ○ Could not start $(APP_NAME) — start manually: sudo service $(APP_NAME) start"
-
-## LEGACY: use build-vprox instead.
-_build-vprox:
-	@echo "⚠ _build-vprox is deprecated — use 'make build-vprox' instead."
-	@$(MAKE) build-vprox
-
-## Clean local build artifacts (never touches installed binary)
-
-clean:
-	@echo "Cleaning build artifacts..."
-	rm -rf "$(BUILD_DIR)" "./$(APP_NAME)"
-	@echo "✓ Clean"
-
-## ─── vOps targets ────────────────────────────────────────────────────────────
-
-## Build vOps binary to .build/vOps  (does NOT rebuild vProx)
+## ─── Compile-only targets ──────────────────────────────────────────────────
+## build-vops / build-vprox ONLY compile. They never stop a service, copy a
+## binary into place, or touch sudo. Deploy manually after either one:
+##
+##   sudo systemctl stop vOps  && cp .build/vOps  $$(go env GOPATH)/bin/vOps  && sudo systemctl start vOps
+##   sudo systemctl stop vProx && cp .build/vProx $$(go env GOPATH)/bin/vProx && sudo systemctl start vProx
+##
+## Or skip the manual dance entirely with `make upgrade`, which does exactly
+## that for both binaries in one step.
 
 ## Build the React + Vite _frontend SPA (output goes to internal/vops/web/dist/)
 _frontend:
@@ -426,26 +337,47 @@ _frontend:
 		echo "✓ Frontend built → internal/vops/web/dist/"; \
 	fi
 
-## Build vOps binary (frontend + Go compile, service sync).
-## ⚠ NEVER touches any config TOML files — existing configs are always preserved.
-## Use make build-vops-reset to also reset configs to sample defaults.
+## Compile vOps binary only (frontend + Go) — no service management, no sudo.
+## Output: .build/vOps
 build-vops: _frontend
-	@echo "Building $(VOPS_NAME) (service keeps running during compile)..."
+	@echo "Building $(VOPS_NAME)..."
 	mkdir -p "$(BUILD_DIR)"
 	GOROOT="$(EFFECTIVE_GOROOT)" go build -ldflags "$(VOPS_LDFLAGS)" -o "$(VOPS_BUILD)" "$(VOPS_SRC)"
 	@echo "✓ Build complete — Binary: $(VOPS_BUILD)"
-	@if ! ([[ -f "/etc/sudoers.d/$(SUDOERS_USER)" ]] && sudo grep -qF "/usr/bin/systemctl stop $(VOPS_NAME)" /etc/sudoers.d/$(SUDOERS_USER)); then \
-		echo "  ⚠ Passwordless systemctl not configured — run 'make ufw' to configure sudoers."; \
-	fi
-	@echo "Stopping $(VOPS_NAME) service for swap..."
-	@sudo systemctl stop "$(VOPS_NAME)" 2>/dev/null && echo "  ✓ $(VOPS_NAME) stopped" || echo "  ○ $(VOPS_NAME) was not running"
-	@cp "$(VOPS_BUILD)" "$(GOPATH_BIN)/$(VOPS_NAME)"
+	@echo "  Deploy: sudo systemctl stop vOps && cp $(VOPS_BUILD) $(GOPATH_BIN)/$(VOPS_NAME) && sudo systemctl start vOps"
+	@echo "  Or:     make upgrade   (rebuilds + redeploys vOps AND vProx automatically)"
+
+## Compile vProx binary only — no service management, no sudo.
+## Output: .build/vProx
+build-vprox:
+	@echo "Building $(APP_NAME)..."
+	mkdir -p "$(BUILD_DIR)"
+	GOROOT="$(EFFECTIVE_GOROOT)" go build -ldflags "$(VPROX_LDFLAGS)" -o "$(BUILD_OUT)" "$(BUILD_SRC)"
+	@echo "✓ Build complete — Binary: $(BUILD_OUT)"
+	@echo "  Deploy: sudo systemctl stop vProx && cp $(BUILD_OUT) $(GOPATH_BIN)/$(APP_NAME) && sudo systemctl start vProx"
+	@echo "  Or:     make upgrade   (rebuilds + redeploys vOps AND vProx automatically)"
+
+## ─── Upgrade: the automated version of build-vops + build-vprox ─────────────
+## Rebuilds BOTH binaries, stops both services, copies binaries into place
+## (GOPATH/bin, and /usr/local/bin if already populated there), syncs service
+## unit files if the templates drifted, then restarts both services.
+## Requires passwordless sudo for systemctl — set up once via `make install`.
+
+upgrade: build-vops build-vprox
+	@echo "── Upgrading vOps + vProx ───────────────────────────────────────────────"
+	@sudo systemctl stop vOps 2>/dev/null && echo "  ✓ vOps stopped" || echo "  ○ vOps was not running"
+	@sudo systemctl stop vProx 2>/dev/null && echo "  ✓ vProx stopped" || echo "  ○ vProx was not running"
+	@cp "$(VOPS_BUILD)" "$(GOPATH_BIN)/$(VOPS_NAME)" && echo "  ✓ Copied → $(GOPATH_BIN)/$(VOPS_NAME)"
+	@cp "$(BUILD_OUT)" "$(GOPATH_BIN)/$(APP_NAME)" && echo "  ✓ Copied → $(GOPATH_BIN)/$(APP_NAME)"
 	@if [ -e "/usr/local/bin/$(VOPS_NAME)" ]; then \
 		sudo cp "$(VOPS_BUILD)" "/usr/local/bin/$(VOPS_NAME)"; \
 		echo "  ✓ Updated → /usr/local/bin/$(VOPS_NAME)"; \
 	fi
-	@echo "  Copied → $(GOPATH_BIN)/$(VOPS_NAME)"
-	@echo "── Syncing service files ────────────────────────────────────────────────"
+	@if [ -e "/usr/local/bin/$(APP_NAME)" ]; then \
+		sudo cp "$(BUILD_OUT)" "/usr/local/bin/$(APP_NAME)"; \
+		echo "  ✓ Updated → /usr/local/bin/$(APP_NAME)"; \
+	fi
+	@echo "── Syncing service files (in case templates changed) ───────────────────"
 	@reload=0; \
 	for entry in "vops.service.template:vOps.service" "vprox.service.template:vProx.service"; do \
 		tpl="$${entry%%:*}"; svc="$${entry##*:}"; sys="/etc/systemd/system/$$svc"; \
@@ -463,46 +395,23 @@ build-vops: _frontend
 	done; \
 	if [[ "$$reload" = "1" ]]; then \
 		sudo systemctl daemon-reload && echo "  ✓ daemon-reload"; \
-		if sudo systemctl is-active --quiet vProx 2>/dev/null; then \
-			sudo systemctl restart vProx 2>/dev/null && echo "  ✓ vProx restarted (service config changed)"; \
-		fi; \
 	fi
-	@echo "Restarting $(VOPS_NAME) service..."
-	@sudo systemctl start "$(VOPS_NAME)" 2>/dev/null && echo "  ✓ $(VOPS_NAME) started" || echo "  ○ Could not start $(VOPS_NAME) — start manually: sudo service $(VOPS_NAME) start"
+	@echo "Restarting services..."
+	@sudo systemctl start vOps 2>/dev/null && echo "  ✓ vOps started" || echo "  ○ Could not start vOps — start manually: sudo service vOps start"
+	@sudo systemctl start vProx 2>/dev/null && echo "  ✓ vProx started" || echo "  ○ Could not start vProx — start manually: sudo service vProx start"
 
-## Reset all config TOML files from samples — backs up existing files first.
-## ⚠ DESTRUCTIVE: overwrites live config values. Use to restore defaults.
-## Called automatically by build-vops-reset.
-_config-reset: _dirs
-	@echo "── Resetting config from samples ────────────────────────────────────────"
-	@_ts="$$(date +%s)"; \
-	_reset() { \
-		local src="$$1" dst="$$2"; \
-		if [[ -f "$$dst" ]]; then \
-			cp "$$dst" "$${dst%.toml}.bak.$$_ts"; \
-			echo "  ↳ backed up → $${dst%.toml}.bak.$$_ts"; \
-		fi; \
-		if [[ -f "$$src" ]]; then \
-			sed "s/{{SAMPLE_REV}}/$(SAMPLE_REV)/" "$$src" > "$$dst"; \
-			echo "  ✓ reset → $$dst"; \
-		else \
-			echo "  ⚠ sample not found: $$src — skipped"; \
-		fi; \
-	}; \
-	_reset ".samples/vops/vops.sample"         "$(CFG_DIR)/vops/vops.toml"; \
-	_reset ".samples/vprox/settings.sample"    "$(CFG_DIR)/vprox/settings.toml"; \
-	_reset ".samples/backup/backup.sample"     "$(CFG_DIR)/backup/backup.toml"; \
-	_reset ".samples/chains/services.sample"   "$(CFG_DIR)/chains/services.toml"
-	@echo "✓ Config reset complete — edit restored files to reconfigure"
+## Clean local build artifacts (never touches installed binary)
 
-## Build vOps binary AND reset all config files from samples (⚠ overwrites live config).
-## Backs up each existing TOML before overwriting. Use when intentionally starting fresh.
-build-vops-reset: _config-reset build-vops
+clean:
+	@echo "Cleaning build artifacts..."
+	rm -rf "$(BUILD_DIR)" "./$(APP_NAME)"
+	@echo "✓ Clean"
 
-## Stop, disable, and remove stale vProx/vLog service units before fresh vOps deploy.
-## vOps.service is only stopped+disabled — the unit file is NOT removed (reinstall with make service-vops).
+## ─── Internal install helpers (not directly callable — run via `make install`) ──
 
-reset-services:
+## Stop, disable, and remove stale vProx/vLog service units before a fresh vOps deploy.
+## vOps.service is only stopped+disabled — the unit file is NOT removed (reinstalled by _service-vops).
+_reset-stale-services:
 	@echo "── Resetting stale service units ────────────────────────────────────────"
 	@for svc in vProx.service vprox.service vLog.service vlog.service vops.service; do \
 		sudo systemctl stop "$$svc" 2>/dev/null || true; \
@@ -512,9 +421,7 @@ reset-services:
 	done
 	@sudo systemctl stop vOps.service 2>/dev/null || true
 	@sudo systemctl disable vOps.service 2>/dev/null || true
-	@echo "  ✓ vOps.service stopped + disabled (unit preserved for reinstall)"
 	@sudo systemctl daemon-reload
-	@echo "✓ daemon-reload complete — run 'make service-vops' to reinstall vOps.service"
 
 ## Install .samples/vops/vops.sample → $(VOPS_HOME)/config/vops/vops.toml (only if absent)
 ## Migrates automatically from the legacy $(VPROX_HOME)/config/vops/vops.toml path.
@@ -567,9 +474,9 @@ _config-vops: _dirs
 		echo "WARNING: .samples/vops/vops.sample not found in repo"; \
 	fi
 
-## Create and optionally install vOps systemd service
+## Render vOps systemd service file, prompt to install it to /etc/systemd/system.
 
-service-vops:
+_service-vops:
 	@echo "Rendering vOps systemd service file..."
 	@mkdir -p "$(SERVICE_DIR)"
 	@TMP_RENDERED="$$(mktemp)"; \
@@ -604,12 +511,9 @@ service-vops:
 		echo "  sudo systemctl daemon-reload && sudo systemctl enable vOps.service"; \
 	fi
 
-## ─── UFW passwordless setup for vOps ─────────────────────────────────────────
+## Render vProx systemd service file, prompt to install it to /etc/systemd/system.
 
-## Create and optionally install vProx systemd service.
-## Renders vprox.service.template → $(VPROX_SERVICE), then prompts to install to /etc/systemd/system/.
-
-service-vprox:
+_service-vprox:
 	@echo "Rendering vProx systemd service file..."
 	@mkdir -p "$(SERVICE_DIR)"
 	@TMP_RENDERED="$$(mktemp)"; \
@@ -645,8 +549,9 @@ service-vprox:
 	fi
 
 ## Create dedicated vops system user (nologin) for running the vOps service.
-## Run once on the server before enabling the systemd service with User=vops.
-system-user-vops:
+## Idempotent — only the 'vops' account is created; VOPS_USER must still be set
+## explicitly (e.g. `make install VOPS_USER=vops`) to actually use it in the unit.
+_system-user-vops:
 	@if id vops &>/dev/null; then \
 		echo "✓ System user 'vops' already exists"; \
 	else \
@@ -654,48 +559,17 @@ system-user-vops:
 		sudo useradd -r -s /usr/sbin/nologin -d /nonexistent -c "vOps service account" vops; \
 		echo "✓ User 'vops' created"; \
 	fi
-	@echo "  Tip: run 'make ufw' to grant vops the required sudoers entries."
 
 ## Write ALL passwordless sudoers rules for $(SUDOERS_USER) into /etc/sudoers.d/$(SUDOERS_USER).
 ## Covers: UFW block/unblock, conntrack, apt, systemctl for vOps + vProx.
 ## Removes legacy /etc/sudoers.d/vops and /etc/sudoers.d/vprox if present.
-ufw:
-	@SUDOERS_FILE="/etc/sudoers.d/$(SUDOERS_USER)"; \
-	SUDOERS_LINE="$(SUDOERS_USER) ALL=(ALL) NOPASSWD: /usr/sbin/ufw deny from *, /usr/sbin/ufw delete deny from *, /usr/sbin/ufw insert 1 deny from * to any, /usr/sbin/conntrack -L -s *, /usr/sbin/conntrack -D -s *, /usr/bin/apt update, /usr/bin/apt upgrade -y, /usr/bin/systemctl stop vOps, /usr/bin/systemctl start vOps, /usr/bin/systemctl restart vOps, /usr/bin/systemctl stop vProx, /usr/bin/systemctl start vProx, /usr/bin/systemctl restart vProx"; \
-	if [[ -f "$$SUDOERS_FILE" ]]; then \
-		if sudo grep -qF "$$SUDOERS_LINE" "$$SUDOERS_FILE"; then \
-			echo "✓ Sudoers already configured ($$SUDOERS_FILE)"; \
-		else \
-			echo "⚠ $$SUDOERS_FILE exists but differs. Current content:"; \
-			sudo cat "$$SUDOERS_FILE"; \
-			echo ""; \
-			read -p "Overwrite with updated rule? (y/n) " -n 1 -r; echo ""; \
-			if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-				echo "$$SUDOERS_LINE" | sudo tee "$$SUDOERS_FILE" > /dev/null; \
-				sudo chmod 0440 "$$SUDOERS_FILE"; \
-				echo "✓ Updated $$SUDOERS_FILE"; \
-			else \
-				echo "✓ Skipped sudoers update"; \
-			fi; \
-		fi; \
-	else \
-		echo "Setting up passwordless sudoers for $(SUDOERS_USER) (UFW, conntrack, apt, systemctl)..."; \
-		read -p "Create sudoers rule? (y/n) " -n 1 -r; echo ""; \
-		if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-			echo "$$SUDOERS_LINE" | sudo tee "$$SUDOERS_FILE" > /dev/null; \
-			sudo chmod 0440 "$$SUDOERS_FILE"; \
-			echo "✓ Created $$SUDOERS_FILE"; \
-		else \
-			echo "✓ Skipped. Create manually:"; \
-			echo "  echo '$$SUDOERS_LINE' | sudo tee $$SUDOERS_FILE && sudo chmod 0440 $$SUDOERS_FILE"; \
-		fi; \
-	fi; \
-	for OLD in /etc/sudoers.d/vops /etc/sudoers.d/vprox; do \
-		if [[ -f "$$OLD" ]]; then \
-			echo "  Removing legacy $$OLD..."; \
-			sudo rm -f "$$OLD" && echo "  ✓ Removed $$OLD"; \
-		fi; \
-	done
+_sudoers:
+	@echo "[info]  writing /etc/sudoers.d/$(SUDOERS_USER)"
+	@echo '$(SUDOERS_USER) ALL=(ALL) NOPASSWD: /usr/sbin/ufw deny from *, /usr/sbin/ufw delete deny from *, /usr/sbin/ufw insert 1 deny from * to any, /usr/sbin/conntrack -L -s *, /usr/sbin/conntrack -D -s *, /usr/bin/apt update, /usr/bin/apt upgrade -y, /usr/bin/systemctl stop vOps, /usr/bin/systemctl start vOps, /usr/bin/systemctl restart vOps, /usr/bin/systemctl stop vProx, /usr/bin/systemctl start vProx, /usr/bin/systemctl restart vProx' \
+		| sudo tee /etc/sudoers.d/$(SUDOERS_USER) > /dev/null
+	@sudo chmod 0440 /etc/sudoers.d/$(SUDOERS_USER)
+	@sudo rm -f /etc/sudoers.d/vops /etc/sudoers.d/vprox
+	@echo "[ ok ]  /etc/sudoers.d/$(SUDOERS_USER)"
 
 ## ─── vOps version management ────────────────────────────────────────────────
 ## Source of truth: cmd/vops/VERSION  (format: MAJOR.MINOR.PATCH)
@@ -752,29 +626,45 @@ bump-major-vprox:
 	printf "$$new\n" > cmd/vprox/VERSION; \
 	echo "✓ vProx version: $$ver → $$new  (cmd/vprox/VERSION updated)"
 
-## ─── Local install (run ON the server after git pull) ────────────────────────
+## ─── Fresh install (run ON the server after git pull) ────────────────────────
+## Phases: reset stale units → sudoers → dirs → geo → env → config → samples →
+##         dedicated service user → build both binaries → copy into place →
+##         (prompt) /usr/local/bin → (prompt) systemd services.
+## Never touches existing config TOML files (only writes if absent).
 
-## Full local install: sudoers → fix-bins → build both binaries.
-## Run this directly on the server: make install
-install: install-sudoers install-fix-bins _dirs _geo _env _config _config-vops _config-vprox _samples-fleet build-vops build-vprox
+install: _validate-go _reset-stale-services _sudoers _dirs _geo _env _config _config-vops _config-vprox _samples-fleet _system-user-vops build-vops build-vprox
+	@echo ""
+	@echo "── Installing binaries ──────────────────────────────────────────────────"
+	@cp "$(VOPS_BUILD)" "$(GOPATH_BIN)/$(VOPS_NAME)" && echo "  ✓ $(GOPATH_BIN)/$(VOPS_NAME)"
+	@cp "$(BUILD_OUT)" "$(GOPATH_BIN)/$(APP_NAME)" && echo "  ✓ $(GOPATH_BIN)/$(APP_NAME)"
+	@echo ""
+	@read -p "Copy binaries to /usr/local/bin too? (y/n) " -n 1 -r; echo ""; \
+	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+		sudo cp "$(GOPATH_BIN)/$(VOPS_NAME)" "/usr/local/bin/$(VOPS_NAME)"; \
+		sudo cp "$(GOPATH_BIN)/$(APP_NAME)" "/usr/local/bin/$(APP_NAME)"; \
+		echo "  ✓ /usr/local/bin/{$(VOPS_NAME),$(APP_NAME)} installed"; \
+	else \
+		echo "  ✓ Skipped — binaries available at $(GOPATH_BIN)/"; \
+	fi
+	@echo ""
+	@echo "── Systemd services ─────────────────────────────────────────────────────"
+	@$(MAKE) --no-print-directory _service-vops
+	@$(MAKE) --no-print-directory _service-vprox
+	@echo ""
 	@echo "── Service status ───────────────────────────────────────────────────────"
 	@for S in vOps vProx; do printf "  %-8s %s\n" "$$S:" "$$(systemctl is-active $$S 2>/dev/null || echo inactive)"; done
-	@echo "[ ok ]  install complete"
-
-## Write /etc/sudoers.d/$(SUDOERS_USER) locally. Requires sudo. Removes legacy vops/vprox files.
-install-sudoers:
-	@echo "[info]  writing /etc/sudoers.d/$(SUDOERS_USER)"
-	@echo '$(SUDOERS_USER) ALL=(ALL) NOPASSWD: /usr/sbin/ufw deny from *, /usr/sbin/ufw delete deny from *, /usr/sbin/ufw insert 1 deny from * to any, /usr/sbin/conntrack -L -s *, /usr/sbin/conntrack -D -s *, /usr/bin/apt update, /usr/bin/apt upgrade -y, /usr/bin/systemctl stop vOps, /usr/bin/systemctl start vOps, /usr/bin/systemctl restart vOps, /usr/bin/systemctl stop vProx, /usr/bin/systemctl start vProx, /usr/bin/systemctl restart vProx' \
-		| sudo tee /etc/sudoers.d/$(SUDOERS_USER) > /dev/null
-	@sudo chmod 0440 /etc/sudoers.d/$(SUDOERS_USER)
-	@sudo rm -f /etc/sudoers.d/vops /etc/sudoers.d/vprox
-	@echo "[ ok ]  /etc/sudoers.d/$(SUDOERS_USER)"
-
-## Ensure /usr/local/bin/{vOps,vProx} are symlinks pointing to GOPATH_BIN.
-install-fix-bins:
-	@echo "[info]  fix-bins → /usr/local/bin"
-	@for BIN in vOps vProx; do \
-		sudo ln -sf "$(GOPATH_BIN)/$$BIN" "/usr/local/bin/$$BIN" \
-		&& echo "  [ ok ]  /usr/local/bin/$$BIN → $(GOPATH_BIN)/$$BIN"; \
-	done
-
+	@echo ""
+	@echo "════════════════════════════════════════════════════════"
+	@echo "  ✓ Installation complete"
+	@echo "────────────────────────────────────────────────────────"
+	@echo "  Binary:    $(GOPATH_BIN)/$(VOPS_NAME), $(GOPATH_BIN)/$(APP_NAME)"
+	@echo "  Config:    $(VOPS_HOME)/config/"
+	@echo "  Data:      $(DATA_DIR)/"
+	@echo "  Samples:   $(VOPS_HOME)/.samples/"
+	@echo "────────────────────────────────────────────────────────"
+	@echo "  Next steps:"
+	@echo "    1. Edit $(VOPS_HOME)/config/vops/vops.toml  — set api_key"
+	@echo "    2. Edit $(VOPS_HOME)/config/infra/*.toml    — add VMs (fleet)"
+	@echo "    3. sudo service vOps start && sudo service vProx start"
+	@echo "    4. make upgrade                             — rebuild + redeploy later"
+	@echo "════════════════════════════════════════════════════════"
