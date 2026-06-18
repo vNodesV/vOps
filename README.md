@@ -5,48 +5,10 @@
 ![Go Version](https://img.shields.io/github/go-mod/go-version/vNodesV/vOps)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 
-Cosmos validator operations platform. vOps bundles **vProx**, a production-grade reverse proxy that routes RPC, REST, gRPC, gRPC-Web, and WebSocket traffic to backend nodes with per-chain configuration, IP-based rate limiting, geo enrichment, Prometheus metrics, and structured logging — and **vOps**, a dashboard for log analysis, threat intelligence, OSINT, and fleet management (formerly vLog, renamed in v1.4.0).
+vOps is a Cosmos validator operations platform. It ships two binaries:
 
-## Features
-
-**Proxy & Routing**
-
-- Per-chain TOML configuration with host-header matching
-- Path-based routing (`/rpc`, `/rest`, `/grpc`, `/grpc-web`, `/api`) and subdomain routing (`rpc.<host>`, `api.<host>`)
-- WebSocket proxying with configurable idle timeout and max lifetime
-- HTML banner injection and RPC address masking
-
-**Security & Rate Limiting**
-
-- Per-IP token bucket rate limiting with auto-quarantine
-- Trusted proxy CIDR configuration (XFF header trust scoping)
-- WebSocket origin allowlist (same-origin by default)
-- JSONL rate-limit audit log
-
-**Observability**
-
-- Prometheus metrics endpoint (`/metrics`) — 8 metrics covering requests, connections, latency, errors, rate limits, geo cache, and backups
-- Health check endpoint (`/healthz`) — JSON status with uptime; returns 503 on subsystem failure
-- pprof debug server on separate port (`VPROX_DEBUG=1` only)
-- Structured dual-sink logging (stdout + file) with typed request IDs (`RPC{hex}`, `API{hex}`)
-
-**Geo Enrichment**
-
-- IP2Location MMDB lookup for country and ASN per request
-- Bundled database (`assets/geo/ip2location.mmdb.gz`) — no external download required
-- In-memory cache with periodic refresh
-
-**Backup & Operations**
-
-- Automated log backup with TOML-configured scheduling and multi-file archive support
-- Service management: `start -d`, `stop`, `restart` with systemd integration
-- Passwordless sudoers rule for daemon control
-
-**CI/CD**
-
-- golangci-lint with 14 linters enforced on every PR
-- Test coverage gate (≥60%)
-- Automated release workflow: cross-compilation for linux/darwin × amd64/arm64
+- **vOps** — dashboard for log analysis, threat intelligence, OSINT, and fleet management (formerly vLog, renamed in v1.4.0).
+- **vProx** — production-grade reverse proxy that routes RPC, REST, gRPC, gRPC-Web, and WebSocket traffic to backend nodes, with per-chain configuration, IP-based rate limiting, geo enrichment, Prometheus metrics, and structured logging.
 
 ## Quick Start
 
@@ -86,6 +48,74 @@ cp ~/.vOps/config/chains/chain.sample.toml ~/.vOps/config/chains/my-chain.toml
 $EDITOR ~/.vOps/config/chains/my-chain.toml
 ```
 
+## vOps Dashboard
+
+A **React 18 + TypeScript SPA** for log analysis, threat intel, and fleet operations:
+
+- **IP Account CRM**: per-IP profiles with request history, block/unblock, notes, and threat badges
+- **Threat Intelligence**: AbuseIPDB v2 + VirusTotal v3 + Shodan — composite score 0–100 (parallel, ~10 s)
+- **OSINT engine**: concurrent DNS, port scan, org/geo, protocol probe, Cosmos RPC (~5 s)
+- **InvestigateModal**: two-phase SSE investigation with animated progress bars; Org / Requests / Rate Limits / Score in the modal header; table order preserved after scan
+- **Scan badge**: `IntelUpdatedAt` timestamp displayed per-row — see at a glance which IPs have been investigated
+- **UFW Sync**: syncs blocked IPs to UFW rules; optional sudo password popup
+- **Dashboard Servers panel** *(v1.4.5)*: live VM metric cards (OS, CPU / Memory / Disk, Load, pending updates, per-VM upgrade SSE stream)
+- **Fleet page** *(v1.4.5)*: live server metrics section + registered chains + deployment history
+- **Multi-location endpoint probing**: local + 🇨🇦 Canada + 🌍 worldwide via check-host.net
+- **Dashboard authentication**: bcrypt password hashing, HMAC-SHA256 session tokens (24 h TTL)
+- **Config Wizard**: 7-step browser wizard (`vops config --web`) for full vOps + vProx setup
+
+### Run
+
+```bash
+make install-vops        # build + install vOps binary + config
+vprox vops start         # foreground server (default: :8889)
+vprox vops start -d      # start as background service
+vprox vops stop          # stop vOps service
+vprox vops restart       # restart vOps service
+vprox vops status        # show status and database stats
+vprox vops ingest        # one-shot archive ingest
+vprox vops accounts      # list IP accounts as JSON
+vprox vops threats       # list flagged IPs (score ≥ 50)
+vprox vops cache         # manage intel cache
+```
+
+For full setup including authentication, API key configuration, and block/unblock, see the [Installing vOps](./INSTALLATION.md#installing-vops) section in `INSTALLATION.md`.
+
+## vProx Reverse Proxy
+
+**Proxy & Routing**
+
+- Per-chain TOML configuration with host-header matching
+- Path-based routing (`/rpc`, `/rest`, `/grpc`, `/grpc-web`, `/api`) and subdomain routing (`rpc.<host>`, `api.<host>`)
+- WebSocket proxying with configurable idle timeout and max lifetime
+- HTML banner injection and RPC address masking
+
+**Security & Rate Limiting**
+
+- Per-IP token bucket rate limiting with auto-quarantine
+- Trusted proxy CIDR configuration (XFF header trust scoping)
+- WebSocket origin allowlist (same-origin by default)
+- JSONL rate-limit audit log
+
+**Observability**
+
+- Prometheus metrics endpoint (`/metrics`) — 8 metrics covering requests, connections, latency, errors, rate limits, geo cache, and backups
+- Health check endpoint (`/healthz`) — JSON status with uptime; returns 503 on subsystem failure
+- pprof debug server on separate port (`VPROX_DEBUG=1` only)
+- Structured dual-sink logging (stdout + file) with typed request IDs (`RPC{hex}`, `API{hex}`)
+
+**Geo Enrichment**
+
+- IP2Location MMDB lookup for country and ASN per request
+- Bundled database (`assets/geo/ip2location.mmdb.gz`) — no external download required
+- In-memory cache with periodic refresh
+
+**Backup & Operations**
+
+- Automated log backup with TOML-configured scheduling and multi-file archive support
+- Service management: `start -d`, `stop`, `restart` with systemd integration
+- Passwordless sudoers rule for daemon control
+
 ### Run
 
 ```bash
@@ -100,7 +130,7 @@ vProx completion zsh    # generate zsh shell completion script
 vProx completion fish   # generate fish shell completion script
 ```
 
-## Architecture
+### Architecture
 
 vProx follows a modular internal architecture with clearly separated concerns:
 
@@ -120,38 +150,11 @@ vProx follows a modular internal architecture with clearly separated concerns:
 
 For the full module-by-module reference, see [`MODULES.md`](./MODULES.md).
 
-## vOps
+## CI/CD
 
-vOps is a standalone companion binary for analyzing vProx log archives (renamed from vLog in v1.4.0). It provides a **React 18 + TypeScript SPA** dashboard with:
-
-- **IP Account CRM**: per-IP profiles with request history, block/unblock, notes, and threat badges
-- **Threat Intelligence**: AbuseIPDB v2 + VirusTotal v3 + Shodan — composite score 0–100 (parallel, ~10 s)
-- **OSINT engine**: concurrent DNS, port scan, org/geo, protocol probe, Cosmos RPC (~5 s)
-- **InvestigateModal**: two-phase SSE investigation with animated progress bars; Org / Requests / Rate Limits / Score in the modal header; table order preserved after scan
-- **Scan badge**: `IntelUpdatedAt` timestamp displayed per-row — see at a glance which IPs have been investigated
-- **UFW Sync**: syncs blocked IPs to UFW rules; optional sudo password popup
-- **Dashboard Servers panel** *(v1.4.5)*: live VM metric cards (OS, CPU / Memory / Disk, Load, pending updates, per-VM upgrade SSE stream)
-- **Fleet page** *(v1.4.5)*: live server metrics section + registered chains + deployment history
-- **Multi-location endpoint probing**: local + 🇨🇦 Canada + 🌍 worldwide via check-host.net
-- **Dashboard authentication**: bcrypt password hashing, HMAC-SHA256 session tokens (24 h TTL)
-- **Config Wizard**: 7-step browser wizard (`vops config --web`) for full vOps + vProx setup
-
-### Install and run
-
-```bash
-make install-vops        # build + install vOps binary + config
-vprox vops start         # foreground server (default: :8889)
-vprox vops start -d      # start as background service
-vprox vops stop          # stop vOps service
-vprox vops restart       # restart vOps service
-vprox vops status        # show status and database stats
-vprox vops ingest        # one-shot archive ingest
-vprox vops accounts      # list IP accounts as JSON
-vprox vops threats       # list flagged IPs (score ≥ 50)
-vprox vops cache         # manage intel cache
-```
-
-For full setup including authentication, API key configuration, and block/unblock, see the [Installing vOps](./INSTALLATION.md#installing-vops) section in `INSTALLATION.md`.
+- golangci-lint with 14 linters enforced on every PR
+- Test coverage gate (≥60%)
+- Automated release workflow: cross-compilation for linux/darwin × amd64/arm64
 
 ## Configuration
 
