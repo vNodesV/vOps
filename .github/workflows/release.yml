@@ -34,25 +34,32 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Build vprox
+      - name: Set build metadata
+        id: meta
+        run: |
+          echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          echo "commit=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "build_date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Build vProx
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: "0"
         run: |
-          go build -ldflags="-s -w -X main.Version=${{ github.ref_name }}" \
+          go build -ldflags="-s -w -X main.version=${{ steps.meta.outputs.version }} -X main.commit=${{ steps.meta.outputs.commit }} -X main.buildDate=${{ steps.meta.outputs.build_date }}" \
             -o vprox-${{ matrix.goos }}-${{ matrix.goarch }} \
             ./cmd/vprox
 
-      - name: Build vlog
+      - name: Build vOps
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: "0"
         run: |
-          go build -ldflags="-s -w -X main.Version=${{ github.ref_name }}" \
-            -o vlog-${{ matrix.goos }}-${{ matrix.goarch }} \
-            ./cmd/vlog
+          go build -ldflags="-s -w -X main.version=${{ steps.meta.outputs.version }} -X main.commit=${{ steps.meta.outputs.commit }} -X main.buildDate=${{ steps.meta.outputs.build_date }}" \
+            -o vops-${{ matrix.goos }}-${{ matrix.goarch }} \
+            ./cmd/vops
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -60,7 +67,7 @@ jobs:
           name: binaries-${{ matrix.goos }}-${{ matrix.goarch }}
           path: |
             vprox-${{ matrix.goos }}-${{ matrix.goarch }}
-            vlog-${{ matrix.goos }}-${{ matrix.goarch }}
+            vops-${{ matrix.goos }}-${{ matrix.goarch }}
           retention-days: 7
 
   release:
