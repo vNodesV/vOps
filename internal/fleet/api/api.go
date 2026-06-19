@@ -525,7 +525,8 @@ func (h *Handlers) HandleRegisterDiscoveredVM(w http.ResponseWriter, r *http.Req
 	// Find the infra file that owns this datacenter.
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "cannot read infra dir: " + err.Error()})
+		logging.Print("ERR", "fleet/api", "read infra dir", logging.F("err", err))
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
 
@@ -547,15 +548,23 @@ func (h *Handlers) HandleRegisterDiscoveredVM(w http.ResponseWriter, r *http.Req
 	}
 
 	// If no matching file found, create one named after the datacenter.
+	// filepath.Base strips any path separators or ".." traversal components
+	// so the resulting file cannot escape dir, regardless of req.Datacenter.
 	if targetFile == "" {
 		safeName := strings.NewReplacer(" ", "_", "/", "_", "\\", "_").Replace(req.Datacenter)
+		safeName = filepath.Base(safeName)
+		if safeName == "" || safeName == "." || safeName == string(filepath.Separator) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid datacenter name"})
+			return
+		}
 		targetFile = filepath.Join(dir, safeName+".toml")
 	}
 
 	// Read existing content to check for duplicates.
 	existing, err := os.ReadFile(targetFile)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		logging.Print("ERR", "fleet/api", "read target infra file", logging.F("err", err))
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
 	if strings.Contains(string(existing), `name = "`+req.Name+`"`) ||
@@ -571,12 +580,14 @@ func (h *Handlers) HandleRegisterDiscoveredVM(w http.ResponseWriter, r *http.Req
 	)
 	f, err := os.OpenFile(targetFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "cannot open infra file: " + err.Error()})
+		logging.Print("ERR", "fleet/api", "open infra file", logging.F("err", err))
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
 	defer f.Close()
 	if _, err := f.WriteString(stanza); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "write failed: " + err.Error()})
+		logging.Print("ERR", "fleet/api", "write infra file", logging.F("err", err))
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
 

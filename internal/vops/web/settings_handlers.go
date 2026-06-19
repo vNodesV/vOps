@@ -251,6 +251,16 @@ func patchTOMLTheme(path, theme string) error {
 	return os.WriteFile(path, []byte(out), 0o600)
 }
 
+// sanitizeConfigName validates a user-supplied identifier (datacenter or chain
+// name) destined for use as a filename component, rejecting path separators
+// and traversal sequences so it cannot escape its config directory.
+func sanitizeConfigName(name string) (string, error) {
+	if name == "" || name != filepath.Base(name) || strings.Contains(name, "..") {
+		return "", fmt.Errorf("invalid name %q", name)
+	}
+	return name, nil
+}
+
 // writeConfig atomically writes data to path, creating parent dirs as needed.
 func writeConfig(path string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -946,6 +956,10 @@ func (s *Server) saveInfraSection(raw any) error {
 	if datacenter == "" {
 		return fmt.Errorf("datacenter name is required")
 	}
+	datacenter, err := sanitizeConfigName(datacenter)
+	if err != nil {
+		return fmt.Errorf("invalid datacenter name")
+	}
 	infraDir := s.cfg.VOps.Push.InfraDir
 	if infraDir == "" {
 		infraDir = filepath.Join(s.home, "config", "infra")
@@ -1037,6 +1051,10 @@ func (s *Server) saveChainSection(raw any) error {
 	chainName, _ := mapStr(p, "chain_name")
 	if chainName == "" {
 		return fmt.Errorf("chain_name is required")
+	}
+	chainName, err := sanitizeConfigName(chainName)
+	if err != nil {
+		return fmt.Errorf("invalid chain_name")
 	}
 	chainsDir := s.cfg.VOps.Push.ChainsDir
 	if chainsDir == "" {
