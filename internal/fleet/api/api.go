@@ -40,7 +40,7 @@ type Handlers struct {
 	svc      *fleet.Service
 	db       *sql.DB // may be nil when metrics storage is not wired
 	debug    DebugEmitter
-	infraDir string        // path to config/infra/ directory for VM registration
+	infraDir string          // path to config/infra/ directory for VM registration
 	vmCache  *status.VMCache // nil until SetVMCache is called
 }
 

@@ -387,10 +387,10 @@ func (s *Server) readProxySettingsTOML() string {
 
 // infraEntry mirrors the InfraEntry shape the UI expects.
 type infraEntry struct {
-	File       string         `json:"file"`
-	Datacenter string         `json:"datacenter"`
-	Host       map[string]any `json:"host"`
-	Vprox      map[string]any `json:"vprox"`
+	File       string           `json:"file"`
+	Datacenter string           `json:"datacenter"`
+	Host       map[string]any   `json:"host"`
+	Vprox      map[string]any   `json:"vprox"`
 	VMs        []map[string]any `json:"vms"`
 }
 
@@ -445,19 +445,19 @@ func (s *Server) readInfraEntries() []infraEntry {
 		}
 		for _, vm := range schema.VMs {
 			entry.VMs = append(entry.VMs, map[string]any{
-				"name":          vm.Name,
-				"host":          vm.Host,
-				"host_ref":      vm.HostRef,
-				"lan_ip":        vm.LanIP,
-				"public_ip":     vm.PublicIP,
-				"port":          vm.Port,
-				"user":          vm.User,
-				"key_path":      vm.KeyPath,
-				"datacenter":    vm.Datacenter,
-				"type":          vm.Type,
-				"chain_name":    vm.ChainName,
-				"ping_country":  vm.Ping.Country,
-				"ping_provider": vm.Ping.Provider,
+				"name":            vm.Name,
+				"host":            vm.Host,
+				"host_ref":        vm.HostRef,
+				"lan_ip":          vm.LanIP,
+				"public_ip":       vm.PublicIP,
+				"port":            vm.Port,
+				"user":            vm.User,
+				"key_path":        vm.KeyPath,
+				"datacenter":      vm.Datacenter,
+				"type":            vm.Type,
+				"chain_name":      vm.ChainName,
+				"ping_country":    vm.Ping.Country,
+				"ping_provider":   vm.Ping.Provider,
 				"proxy_jump_host": vm.ProxyJumpHost,
 			})
 		}

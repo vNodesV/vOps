@@ -107,13 +107,13 @@ type Server struct {
 	defaultPorts config.Ports
 
 	// Directory paths (derived from home or cfg overrides).
-	configDir       string
-	chainsDir       string
-	dataDir         string
-	logsDir         string
-	archiveDir      string
-	chainsConfigDir string
-	backupConfigDir string
+	configDir        string
+	chainsDir        string
+	dataDir          string
+	logsDir          string
+	archiveDir       string
+	chainsConfigDir  string
+	backupConfigDir  string
 	accessCountsPath string
 
 	// Rewrite regex cache.
@@ -144,10 +144,10 @@ func New(cfg Config) *Server {
 		cfg.Home = resolveVProxHome()
 	}
 	return &Server{
-		cfg:          cfg,
-		chains:       make(map[string]*config.ChainConfig),
-		rewriteCache: make(map[string]*rewriteRegexes),
-		chainLoggers: make(map[string]*log.Logger),
+		cfg:           cfg,
+		chains:        make(map[string]*config.ChainConfig),
+		rewriteCache:  make(map[string]*rewriteRegexes),
+		chainLoggers:  make(map[string]*log.Logger),
 		chainLogFiles: make(map[string]*os.File),
 	}
 }

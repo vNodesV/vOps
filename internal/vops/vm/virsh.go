@@ -18,7 +18,7 @@ import (
 // Domain represents a libvirt domain (virtual machine) on a hypervisor.
 type Domain struct {
 	Name       string `json:"name"`
-	State      string `json:"state"`       // running | shut off | paused | crashed
+	State      string `json:"state"` // running | shut off | paused | crashed
 	CPUs       int    `json:"cpus"`
 	MaxMemKiB  int64  `json:"max_mem_kib"`
 	UsedMemKiB int64  `json:"used_mem_kib"`
@@ -295,7 +295,7 @@ func parseKiB(s string) int64 {
 // Network represents a libvirt virtual network on a hypervisor.
 type Network struct {
 	Name       string `json:"name"`
-	State      string `json:"state"`      // active | inactive
+	State      string `json:"state"` // active | inactive
 	Autostart  bool   `json:"autostart"`
 	Persistent bool   `json:"persistent"`
 }
@@ -732,13 +732,13 @@ func writeViaBase64(client sshClient, content, remotePath string) error {
 // optionally overrides memory/vcpu in a virsh dumpxml output string.
 // Used as a fallback when virt-clone is unavailable.
 var (
-	reDomName  = regexp.MustCompile(`<name>[^<]*</name>`)
-	reDomUUID  = regexp.MustCompile(`<uuid>[0-9a-f\-]+</uuid>`)
-	reDomDisk  = regexp.MustCompile(`(<source file=')[^']*('/>)`)
-	reDomMAC   = regexp.MustCompile(`<mac address='[^']*'/>`)
-	reDomMem   = regexp.MustCompile(`<memory[^>]*>[^<]*</memory>`)
-	reDomCurM  = regexp.MustCompile(`<currentMemory[^>]*>[^<]*</currentMemory>`)
-	reDomVCPU  = regexp.MustCompile(`<vcpu[^>]*>[^<]*</vcpu>`)
+	reDomName = regexp.MustCompile(`<name>[^<]*</name>`)
+	reDomUUID = regexp.MustCompile(`<uuid>[0-9a-f\-]+</uuid>`)
+	reDomDisk = regexp.MustCompile(`(<source file=')[^']*('/>)`)
+	reDomMAC  = regexp.MustCompile(`<mac address='[^']*'/>`)
+	reDomMem  = regexp.MustCompile(`<memory[^>]*>[^<]*</memory>`)
+	reDomCurM = regexp.MustCompile(`<currentMemory[^>]*>[^<]*</currentMemory>`)
+	reDomVCPU = regexp.MustCompile(`<vcpu[^>]*>[^<]*</vcpu>`)
 )
 
 func rewriteDomainXML(src, newName, newDisk string, memMiB int64, vcpus int) string {

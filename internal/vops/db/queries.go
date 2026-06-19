@@ -1038,20 +1038,20 @@ FROM ingested_archives`)
 // ListIPAccountsExceedingRatelimit returns IP accounts with ratelimit_events >= threshold.
 // Only returns ip and ratelimit_events columns for efficiency.
 func (d *DB) ListIPAccountsExceedingRatelimit(threshold int64, limit int) ([]*IPAccount, error) {
-const q = `SELECT ip, ratelimit_events FROM ip_accounts
+	const q = `SELECT ip, ratelimit_events FROM ip_accounts
            WHERE ratelimit_events >= ? ORDER BY ratelimit_events DESC LIMIT ?`
-rows, err := d.Query(q, threshold, limit)
-if err != nil {
-return nil, fmt.Errorf("list exceeding ratelimit: %w", err)
-}
-defer rows.Close()
-var out []*IPAccount
-for rows.Next() {
-a := &IPAccount{}
-if err := rows.Scan(&a.IP, &a.RatelimitEvents); err != nil {
-return nil, err
-}
-out = append(out, a)
-}
-return out, rows.Err()
+	rows, err := d.Query(q, threshold, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list exceeding ratelimit: %w", err)
+	}
+	defer rows.Close()
+	var out []*IPAccount
+	for rows.Next() {
+		a := &IPAccount{}
+		if err := rows.Scan(&a.IP, &a.RatelimitEvents); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
 }

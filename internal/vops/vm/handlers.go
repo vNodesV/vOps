@@ -395,8 +395,8 @@ func (h *Handlers) HandleDeleteDomain(w http.ResponseWriter, r *http.Request) {
 
 type resizeDomainRequest struct {
 	MemoryMiB int64 `json:"memory_mib"` // 0 = no change
-	VCPUs     int   `json:"vcpus"`       // 0 = no change
-	Live      bool  `json:"live"`        // apply immediately when running
+	VCPUs     int   `json:"vcpus"`      // 0 = no change
+	Live      bool  `json:"live"`       // apply immediately when running
 }
 
 // HandleResizeDomain changes vCPU count and/or memory for a domain.

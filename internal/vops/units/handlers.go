@@ -42,26 +42,26 @@ func NewHandlers(db *sql.DB) *Handlers {
 
 // Unit mirrors the units table.
 type Unit struct {
-	ID               int64  `json:"id"`
-	Name             string `json:"name"`
-	ChainName        string `json:"chain_name"`
-	ChainID          string `json:"chain_id"`
-	NetworkType      string `json:"network_type"`
-	NodeType         string `json:"node_type"`
-	VMName           string `json:"vm_name"`
-	Datacenter       string `json:"datacenter"`
-	ServiceName      string `json:"service_name"`
-	BinaryPath       string `json:"binary_path"`
-	CosmovisorPath   string `json:"cosmovisor_path"`
-	CosmovisorEnabled bool  `json:"cosmovisor_enabled"`
-	ConfigDir        string `json:"config_dir"`
-	RPCPort          int    `json:"rpc_port"`
-	APIPort          int    `json:"api_port"`
-	P2PPort          int    `json:"p2p_port"`
-	Valoper          string `json:"valoper"`
-	State            string `json:"state"`
-	DeployedAt       string `json:"deployed_at"`
-	Notes            string `json:"notes"`
+	ID                int64  `json:"id"`
+	Name              string `json:"name"`
+	ChainName         string `json:"chain_name"`
+	ChainID           string `json:"chain_id"`
+	NetworkType       string `json:"network_type"`
+	NodeType          string `json:"node_type"`
+	VMName            string `json:"vm_name"`
+	Datacenter        string `json:"datacenter"`
+	ServiceName       string `json:"service_name"`
+	BinaryPath        string `json:"binary_path"`
+	CosmovisorPath    string `json:"cosmovisor_path"`
+	CosmovisorEnabled bool   `json:"cosmovisor_enabled"`
+	ConfigDir         string `json:"config_dir"`
+	RPCPort           int    `json:"rpc_port"`
+	APIPort           int    `json:"api_port"`
+	P2PPort           int    `json:"p2p_port"`
+	Valoper           string `json:"valoper"`
+	State             string `json:"state"`
+	DeployedAt        string `json:"deployed_at"`
+	Notes             string `json:"notes"`
 }
 
 // UnitStatus mirrors the unit_status table (single poll row).

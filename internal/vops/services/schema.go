@@ -9,7 +9,7 @@ import (
 type FieldDef struct {
 	Key         string   `json:"key"`
 	Label       string   `json:"label"`
-	Type        string   `json:"type"`              // "text" | "select" | "bool"
+	Type        string   `json:"type"` // "text" | "select" | "bool"
 	Required    bool     `json:"required,omitempty"`
 	Placeholder string   `json:"placeholder,omitempty"`
 	Options     []string `json:"options,omitempty"` // for "select" type

@@ -62,21 +62,21 @@ type Host struct {
 // RPCURL and RESTURL are optional; when empty they are derived from Host
 // using standard Cosmos SDK ports (26657 / 1317).
 type VM struct {
-	Name       string `toml:"name"`
-	HostRef    string `toml:"host_ref"`  // optional: links to [[host]].name for grouped display
-	Host       string `toml:"host"`      // SSH target IP or hostname (used for dial + RPC/REST defaults)
-	LanIP      string `toml:"lan_ip"`    // VM's LAN IP shown in Server Status block (defaults to host)
-	PublicIP   string `toml:"public_ip"` // VM's public IP, shown in Server Status expanded view
-	Port       int    `toml:"port"`
-	User       string `toml:"user"`
-	KeyPath    string `toml:"key_path"`
+	Name     string `toml:"name"`
+	HostRef  string `toml:"host_ref"`  // optional: links to [[host]].name for grouped display
+	Host     string `toml:"host"`      // SSH target IP or hostname (used for dial + RPC/REST defaults)
+	LanIP    string `toml:"lan_ip"`    // VM's LAN IP shown in Server Status block (defaults to host)
+	PublicIP string `toml:"public_ip"` // VM's public IP, shown in Server Status expanded view
+	Port     int    `toml:"port"`
+	User     string `toml:"user"`
+	KeyPath  string `toml:"key_path"`
 	// KnownHostsPath is the SSH known_hosts file for host-key verification on this VM.
 	// Populated from FleetDefaults.KnownHostsPath when not set per-VM.
 	KnownHostsPath string `toml:"-"` // runtime-only; sourced from push.defaults.known_hosts_path
-	Datacenter string `toml:"datacenter"`
-	Type       string `toml:"type"`     // validator | sp | rpc | relayer | node (comma-separated)
-	RPCURL     string `toml:"rpc_url"`  // optional override
-	RESTURL    string `toml:"rest_url"` // optional override
+	Datacenter     string `toml:"datacenter"`
+	Type           string `toml:"type"`     // validator | sp | rpc | relayer | node (comma-separated)
+	RPCURL         string `toml:"rpc_url"`  // optional override
+	RESTURL        string `toml:"rest_url"` // optional override
 
 	// Chain identity and explorer (from chain.toml top-level or vms.toml)
 	ChainID       string `toml:"chain_id"`       // official chain-id, e.g. "cheqd-mainnet-1"

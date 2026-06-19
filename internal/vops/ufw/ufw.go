@@ -144,4 +144,3 @@ func parseUFWDenyIPs(output string) []string {
 	}
 	return ips
 }
-

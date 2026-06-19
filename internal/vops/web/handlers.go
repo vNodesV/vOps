@@ -958,6 +958,7 @@ func (s *Server) handleAPISever(w http.ResponseWriter, r *http.Request) {
 		Result:     "ok",
 	})
 }
+
 // into the blocked_ips table. Already-blocked IPs are skipped (idempotent).
 // POST /api/v1/ufw/sync
 // Accepts optional JSON body: {"sudo_password": "..."} for servers without NOPASSWD.
