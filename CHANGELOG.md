@@ -7,6 +7,25 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [v1.5.6] — 2026-06-19
+
+### Security
+- **Path injection**: `datacenter`/`chain_name` settings-API fields and the fleet VM-registration endpoint validated user-supplied identifiers before joining them into config file paths (CodeQL `go/path-injection`, 9 findings) — `5184ca0`, `2c6201a`, `9a180ff`, `b09d5d4`
+- **Dependencies**: frontend npm deps bumped to patched versions — `react-router-dom` (CSRF, RCE via turbo-stream deserialization, open redirect, manifest-endpoint DoS), `vite`/`launch-editor` (NTLM hash disclosure, `server.fs.deny` bypass), transitive `js-yaml`/`@babel/core` — 9 Dependabot advisories — `5184ca0`
+- **Error responses**: `fleet/api` VM-registration handler no longer echoes raw `err.Error()` into HTTP error responses — `5184ca0`
+- Reviewed and dismissed 5 additional CodeQL findings as false positive/by-design (generic SSH command runner, loopback-only host-key check, intentional rate-limit audit logging, SSRF already gated by an existing host allowlist) — documented per-alert on GitHub
+
+### Fixed
+- **CI**: `release.yml` was building the nonexistent `cmd/vlog` with the wrong ldflags symbol; now builds `cmd/vops` with correct `main.version`/`main.commit`/`main.buildDate` — `b996306`
+- **CI**: migrated `.golangci.yml` to the v2 schema and bumped `golangci-lint-action` to v7/v2.12.2 — v1 lint tooling didn't support the Go 1.25 toolchain — `2735ded`
+- **CI**: lowered the coverage gate from an unenforced 60% to a 15% floor reflecting actual measured coverage, to ratchet up over time — `f9a1eb7`
+- gofmt drift across 12 files (mechanical, no logic changes) — `2219be5`
+
+### Docs
+- `README.md`/`MODULES.md`/`CLI_FLAGS_GUIDE.md`: restructured CLI reference around `vops vprox <subcommand>` as the primary invocation style, with the standalone `cmd/vprox` binary documented as an advanced/diagnostic path — `e46f1b1`
+
+---
+
 ## [v1.5.5] — 2026-06-18
 
 ### Added
