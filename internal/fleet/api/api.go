@@ -552,8 +552,7 @@ func (h *Handlers) HandleRegisterDiscoveredVM(w http.ResponseWriter, r *http.Req
 	// so the resulting file cannot escape dir, regardless of req.Datacenter.
 	if targetFile == "" {
 		safeName := strings.NewReplacer(" ", "_", "/", "_", "\\", "_").Replace(req.Datacenter)
-		safeName = filepath.Base(safeName)
-		if safeName == "" || safeName == "." || safeName == string(filepath.Separator) {
+		if safeName == "" || safeName != filepath.Base(safeName) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid datacenter name"})
 			return
 		}
