@@ -113,12 +113,16 @@ func safeVMName(s string) string {
 	return "'" + reSafeVMName.ReplaceAllString(s, "") + "'"
 }
 
+// reSafeDatacenterName allowlists characters permitted in a datacenter name
+// used as a filename component — no path separators or "." sequences that
+// could escape its parent directory once joined into a path.
+var reSafeDatacenterName = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+
 // sanitizeDatacenterName validates a user-supplied datacenter name destined
-// for use as a filename component, rejecting anything that could escape its
-// parent directory once joined into a path.
+// for use as a filename component.
 func sanitizeDatacenterName(name string) (string, error) {
-	safe := strings.NewReplacer(" ", "_", "/", "_", "\\", "_").Replace(name)
-	if safe == "" || safe != filepath.Base(safe) {
+	safe := strings.ReplaceAll(name, " ", "_")
+	if !reSafeDatacenterName.MatchString(safe) {
 		return "", fmt.Errorf("invalid datacenter name %q", name)
 	}
 	return safe, nil
