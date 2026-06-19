@@ -156,7 +156,7 @@ Override the base path:
 export VPROX_HOME=/opt/vprox
 
 # CLI flag (overrides env var):
-vProx --home /opt/vprox
+vops vprox --home /opt/vprox
 ```
 
 ---
@@ -296,12 +296,12 @@ Follow live logs in CosmosSDK-style line format:
 journalctl -u vProx.service -f --output=cat
 ```
 
-Start / stop / restart (via vProx CLI — passwordless with sudoers rule):
+Start / stop / restart (via the `vops vprox` CLI — passwordless with sudoers rule):
 
 ```bash
-vProx start -d     # start as daemon
-vProx stop         # stop the service
-vProx restart      # restart the service
+vops vprox start -d     # start as daemon
+vops vprox stop         # stop the service
+vops vprox restart      # restart the service
 ```
 
 Or directly with systemctl:
@@ -324,13 +324,20 @@ go run ./cmd/vprox --info      # Print resolved config summary
 go run ./cmd/vprox --dry-run   # Load config without starting server
 ```
 
-**After install:**
+**After install (recommended — via `vops`):**
 
 ```bash
-vProx start                    # Start server foreground (default :3000)
-vProx start -d                 # Start as daemon (systemd service)
-vProx stop                     # Stop the service
-vProx restart                  # Restart the service
+vops vprox start                # Start server foreground (default :3000)
+vops vprox start -d             # Start as daemon (systemd service)
+vops vprox stop                 # Stop the service
+vops vprox restart              # Restart the service
+vops vprox status               # Show service state and basic stats
+vops vprox view                 # Tail vProx service logs
+```
+
+**Advanced flags (standalone `vProx` binary only — `.build/vProx` or `go run ./cmd/vprox`):**
+
+```bash
 vProx --addr :4000             # Override listen address
 vProx --validate               # Validate config files
 vProx --info --verbose         # Full runtime/config summary

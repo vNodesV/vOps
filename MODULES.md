@@ -20,7 +20,7 @@ By default, vProx runs out of:
 Override base path with:
 
 - `VPROX_HOME=/custom/path`
-- CLI: `vProx --home /custom/path`
+- CLI: `vops vprox --home /custom/path` (or `./.build/vProx --home /custom/path` standalone)
 
 ### Chain configs
 
@@ -79,18 +79,18 @@ api      = 1317
 
 ### Run
 
-- `vProx start` — start server foreground (default `:3000`)
-- `vProx start -d` — start as daemon (systemd service)
-- `vProx stop` — stop the service
-- `vProx restart` — restart the service
-- `vProx --addr :4000` — override listen address
+- `vops vprox start` — start server foreground (default `:3000`)
+- `vops vprox start -d` — start as daemon (systemd service)
+- `vops vprox stop` — stop the service
+- `vops vprox restart` — restart the service
+- `./.build/vProx --addr :4000` — override listen address (standalone binary; see [Advanced standalone vProx binary](#advanced-standalone-vprox-binary))
 
 ### Manual backup
 
-- `vProx --new-backup`
-- `vProx --new-backup --reset_count` (also accepts `--reset-count`)
-- `vProx --list-backup` — list existing archives
-- `vProx --backup-status` — show scheduler status
+- `./.build/vProx --new-backup`
+- `./.build/vProx --new-backup --reset_count` (also accepts `--reset-count`)
+- `./.build/vProx --list-backup` — list existing archives
+- `./.build/vProx --backup-status` — show scheduler status
 
 ---
 
@@ -208,11 +208,13 @@ If no database is found, geo enrichment is silently disabled. All proxy function
 
 ### Manual backup
 
+Manual backup flags are exposed by the standalone `vProx` binary (see [Advanced standalone vProx binary](./CLI_FLAGS_GUIDE.md#advanced-standalone-vprox-binary-devdiagnostics-only)), not the `vops vprox` wrapper:
+
 ```bash
-vProx --new-backup                # Run one backup cycle
-vProx --new-backup --reset_count  # Backup + reset access counters
-vProx --list-backup               # List existing archives
-vProx --backup-status             # Show scheduler status
+./.build/vProx --new-backup                # Run one backup cycle
+./.build/vProx --new-backup --reset_count  # Backup + reset access counters
+./.build/vProx --list-backup               # List existing archives
+./.build/vProx --backup-status             # Show scheduler status
 ```
 
 ### Automated backups
@@ -270,7 +272,7 @@ $HOME/.vOps/data/logs/archives/backup.YYYYMMDD_HHMMSS.tar.gz
 Source access counters (`src_count`) are persisted at `$HOME/.vOps/data/access-counts.json`. They survive restarts and backup cycles. Reset only when explicitly requested:
 
 ```bash
-vProx backup --reset_count    # or --reset-count
+./.build/vProx --new-backup --reset_count    # or --reset-count
 ```
 
 ---
@@ -342,15 +344,22 @@ make clean         # Remove .build/
 
 For the full flag reference with examples, see [`CLI_FLAGS_GUIDE.md`](./CLI_FLAGS_GUIDE.md).
 
-**Most common flags:**
+**Service control via `vops` (recommended for normal operation):**
+
+```bash
+vops vprox start                      # Start server foreground (default :3000)
+vops vprox start -d                   # Start as daemon (systemd service)
+vops vprox stop                       # Stop the service
+vops vprox restart                    # Restart the service
+vops vprox status                     # Show service state and basic stats
+vops vprox view                       # Tail vProx service logs
+```
+
+**Advanced standalone vProx binary (`./.build/vProx`, `go run ./cmd/vprox`) — dev/diagnostics only:**
 
 ```bash
 vProx --help                          # Built-in help
 vProx --version                       # Print version
-vProx start                           # Start server foreground (default :3000)
-vProx start -d                        # Start as daemon (systemd service)
-vProx stop                            # Stop the service
-vProx restart                         # Restart the service
 vProx --validate                      # Validate config and exit
 vProx --info --verbose                # Print resolved runtime/config summary
 vProx --dry-run                       # Load everything, don't start server
@@ -366,7 +375,7 @@ vProx --list-backup                   # List backup archives
 vProx --backup-status                 # Show scheduler status
 ```
 
-**Rate limit overrides (CLI, override .env):**
+**Rate limit overrides (standalone binary CLI, override .env):**
 
 ```bash
 vProx --rps 50              # Requests per second
@@ -420,7 +429,7 @@ absolute_links      = "auto" # auto | always | never
 - `cmd/vops/` — binary entry point
 - `internal/vops/` — packages (config, db, ingest, intel, web)
 
-**Binary**: `vops` (integrated via `vprox vops`) — standalone, mirrors vProx architecture (single binary, embedded HTTP server, Apache-proxied).
+**Binary**: `vops` — the primary CLI entry point (single binary, embedded HTTP server, Apache-proxied); `vprox` is its embedded subcommand (`vops vprox <start|stop|restart|status|view>`).
 
 **Database**: SQLite at `$VPROX_HOME/data/vops.db` via `modernc.org/sqlite` (pure Go, no CGO required).
 
@@ -430,15 +439,15 @@ absolute_links      = "auto" # auto | always | never
 
 | Command | Action |
 |---|---|
-| `vprox vops start` | Start vOps server (foreground) |
-| `vprox vops start -d` | Start as background daemon (`sudo service vOps start`) |
-| `vprox vops stop` | Stop vOps service (`sudo service vOps stop`) |
-| `vprox vops restart` | Restart vOps service (`sudo service vOps restart`) |
-| `vprox vops ingest` | One-shot archive ingest and exit |
-| `vprox vops status` | Show database stats and exit |
-| `vprox vops accounts` | List IP accounts as JSON |
-| `vprox vops threats` | List flagged IPs (score ≥ 50) |
-| `vprox vops cache` | Manage intel cache |
+| `vops start` | Start vOps server (foreground) |
+| `vops start -d` | Start as background daemon (`sudo service vOps start`) |
+| `vops stop` | Stop vOps service (`sudo service vOps stop`) |
+| `vops restart` | Restart vOps service (`sudo service vOps restart`) |
+| `vops ingest` | One-shot archive ingest and exit |
+| `vops status` | Show database stats and exit |
+| `vops -a` | List IP accounts as JSON |
+| `vops -t` | List flagged IPs (score ≥ 50) |
+| `vops -x <ip\|all>` | Manage intel cache (purge by IP or all) |
 
 **Runtime flags (start):** `--home`, `--port`, `--quiet`, `--no-watch`, `--no-enrich`, `--watch-interval`
 **One-shot flags:** `--list-archives`, `--list-accounts`, `--list-threats`, `--enrich <ip>`, `--purge-cache <ip|all>`, `--validate`, `--info`, `--dry-run`
@@ -640,13 +649,15 @@ exposed_services = true      # true = probe via chain.host; false = probe via la
 
 ### CLI Commands
 
+Fleet management is exposed by the standalone `vProx` binary's own `fleet` subcommand (`cmd/vprox`), not `vops vprox`:
+
 ```bash
-vprox fleet hosts          # List physical hosts from config/infra/
-vprox fleet vms            # List all registered VMs
-vprox fleet chains         # List chains registered in fleet SQLite state
-vprox fleet unregister <chain>   # Remove chain from fleet state (by chain_name)
-vprox fleet deploy --chain <name> --script <path>   # Dispatch script to VM via SSH
-vprox fleet update [--host <name>]   # Run apt upgrade on VM(s) via SSH
+./.build/vProx fleet hosts          # List physical hosts from config/infra/
+./.build/vProx fleet vms            # List all registered VMs
+./.build/vProx fleet chains         # List chains registered in fleet SQLite state
+./.build/vProx fleet unregister <chain>   # Remove chain from fleet state (by chain_name)
+./.build/vProx fleet deploy --chain <name> --script <path>   # Dispatch script to VM via SSH
+./.build/vProx fleet update [--host <name>]   # Run apt upgrade on VM(s) via SSH
 ```
 
 ### API Routes
