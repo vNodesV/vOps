@@ -113,6 +113,17 @@ func safeVMName(s string) string {
 	return "'" + reSafeVMName.ReplaceAllString(s, "") + "'"
 }
 
+// sanitizeDatacenterName validates a user-supplied datacenter name destined
+// for use as a filename component, rejecting anything that could escape its
+// parent directory once joined into a path.
+func sanitizeDatacenterName(name string) (string, error) {
+	safe := strings.NewReplacer(" ", "_", "/", "_", "\\", "_").Replace(name)
+	if safe == "" || safe != filepath.Base(safe) {
+		return "", fmt.Errorf("invalid datacenter name %q", name)
+	}
+	return safe, nil
+}
+
 // probeVMIP tries three virsh domifaddr sources in order (agent → arp → lease)
 // and returns the first IPv4 address found.  agent is tried first because
 // qemu-guest-agent is now installed on all VMs; arp covers bridged VMs without
@@ -548,11 +559,9 @@ func (h *Handlers) HandleRegisterDiscoveredVM(w http.ResponseWriter, r *http.Req
 	}
 
 	// If no matching file found, create one named after the datacenter.
-	// filepath.Base strips any path separators or ".." traversal components
-	// so the resulting file cannot escape dir, regardless of req.Datacenter.
 	if targetFile == "" {
-		safeName := strings.NewReplacer(" ", "_", "/", "_", "\\", "_").Replace(req.Datacenter)
-		if safeName == "" || safeName != filepath.Base(safeName) {
+		safeName, err := sanitizeDatacenterName(req.Datacenter)
+		if err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid datacenter name"})
 			return
 		}
