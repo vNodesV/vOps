@@ -67,15 +67,15 @@ A **React 18 + TypeScript SPA** for log analysis, threat intel, and fleet operat
 ```bash
 make install              # first-time setup: builds + installs vOps + vProx, config, services
 make upgrade              # later: rebuild + redeploy both binaries after a code change
-vprox vops start         # foreground server (default: :8889)
-vprox vops start -d      # start as background service
-vprox vops stop          # stop vOps service
-vprox vops restart       # restart vOps service
-vprox vops status        # show status and database stats
-vprox vops ingest        # one-shot archive ingest
-vprox vops accounts      # list IP accounts as JSON
-vprox vops threats       # list flagged IPs (score ≥ 50)
-vprox vops cache         # manage intel cache
+vops start                # foreground server (default: :8889)
+vops start -d             # start as background service
+vops stop                 # stop vOps service
+vops restart              # restart vOps service
+vops status               # show status and database stats
+vops ingest                # one-shot archive ingest
+vops -a                   # list IP accounts as JSON
+vops -t                   # list flagged IPs (score ≥ 50)
+vops vprox start          # start the embedded vProx proxy
 ```
 
 For full setup including authentication, API key configuration, and block/unblock, see the [Installing vOps](./INSTALLATION.md#installing-vops) section in `INSTALLATION.md`.
@@ -118,16 +118,15 @@ For full setup including authentication, API key configuration, and block/unbloc
 ### Run
 
 ```bash
-vProx start             # foreground, listens on :3000 by default
-vProx start -d          # start as systemd service (daemon)
-vProx start --with-vops # start proxy + vOps in integrated mode
-vProx stop              # stop the service
-vProx restart           # restart the service
-vProx --validate        # validate config and exit
-vProx completion bash   # generate bash shell completion script
-vProx completion zsh    # generate zsh shell completion script
-vProx completion fish   # generate fish shell completion script
+vops vprox start         # foreground, listens on :3000 by default
+vops vprox start -d      # start as systemd service (daemon)
+vops vprox stop          # stop the service
+vops vprox restart       # restart the service
+vops vprox status        # show service state and basic stats
+vops vprox view          # tail vProx service logs
 ```
+
+The proxy is also buildable as its own binary (`make build-vprox`, `go run ./cmd/vprox`) for local development and diagnostics — see the [advanced standalone reference](./CLI_FLAGS_GUIDE.md#advanced-standalone-vprox-binary-devdiagnostics-only) in `CLI_FLAGS_GUIDE.md` for its full flag set (`--validate`, `--with-vops`, `completion`, etc.).
 
 ### Architecture
 
@@ -173,7 +172,7 @@ Override the config base path:
 ```bash
 export VOPS_HOME=/opt/vops
 # or
-vProx --home /opt/vops
+vops --home /opt/vops
 ```
 
 For the complete CLI flag reference, see [`CLI_FLAGS_GUIDE.md`](./CLI_FLAGS_GUIDE.md).

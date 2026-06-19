@@ -86,7 +86,7 @@ $HOME/.vProx/
 ### 0. **Access counter persistence + backup reset flag**
 - **New state file**: `$HOME/.vProx/data/access-counts.json`
 - **Behavior**: source access counters now persist across restart and backup by default
-- **Manual reset**: `vProx backup --reset_count` (alias: `--reset-count`)
+- **Manual reset**: `./.build/vProx --new-backup --reset_count` (alias: `--reset-count`)
 - **Benefit**: stable long-term `src_count` values unless explicitly reset
 
 ### 1. **Geolocation Database**
