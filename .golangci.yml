@@ -1,88 +1,92 @@
-# .golangci.yml — vProx linter configuration
-# Phase 5 CI/CD Maturity: pragmatic set, no false-positive noise
-
+# .golangci.yml — vOps/vProx linter configuration (v2 config schema)
+# Migrated from v1 via `golangci-lint migrate`; pragmatic set, no false-positive noise
+version: "2"
 run:
-  timeout: 5m
+  go: ""
   modules-download-mode: readonly
-  go: ""  # read from go.mod
-
 linters:
   enable:
-    # Default-equivalent
-    - govet
-    - staticcheck
-    - errcheck
-    - gosimple
-    - ineffassign
-    - unused
-    # Security
-    - gosec
-    # Formatting
-    - gofmt
-    - goimports
-    # Code quality
-    - misspell
     - bodyclose
-    - noctx
     - exhaustive
-
-linters-settings:
-  gosec:
-    severity: medium
-    confidence: medium
-    excludes: []
-  exhaustive:
-    default-signifies-exhaustive: true
-  errcheck:
-    check-type-assertions: false
-    check-blank: false
-  govet:
-    enable-all: false
-  misspell:
-    locale: US
-  goimports:
-    local-prefixes: github.com/vNodesV/vProx
-
+    - gosec
+    - misspell
+    - noctx
+  settings:
+    errcheck:
+      check-type-assertions: false
+      check-blank: false
+    exhaustive:
+      default-signifies-exhaustive: true
+    gosec:
+      severity: medium
+      confidence: medium
+    govet:
+      enable-all: false
+    misspell:
+      locale: US
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - gosec
+        path: internal/geo/geo\.go
+        text: G304
+      - linters:
+          - gosec
+        path: internal/backup/backup\.go
+        text: G304
+      - linters:
+          - gosec
+        path: internal/config/
+        text: G304
+      - linters:
+          - gosec
+        path: internal/config/
+        text: G306
+      - linters:
+          - gosec
+        path: internal/vops/config/
+        text: G304
+      - linters:
+          - errcheck
+        path: _test\.go
+      - linters:
+          - gosec
+        path: _test\.go
+        text: G306
+      - linters:
+          - noctx
+        path: _test\.go
+      - linters:
+          - bodyclose
+        path: _test\.go
+      - linters:
+          - ALL
+        path: vendor/
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
 issues:
   max-issues-per-linter: 50
   max-same-issues: 10
-  new-from-rev: ""  # lint all code locally; CI overrides via action config
-
-  exclude-rules:
-    # G304: file inclusion via variable — intentional in geo loader and backup
-    - path: internal/geo/geo\.go
-      linters: [gosec]
-      text: "G304"
-    - path: internal/backup/backup\.go
-      linters: [gosec]
-      text: "G304"
-
-    # G304 + G306: config loaders read user-specified paths by design
-    - path: internal/config/
-      linters: [gosec]
-      text: "G304"
-    - path: internal/config/
-      linters: [gosec]
-      text: "G306"
-
-    # G304: vlog config loader
-    - path: internal/vlog/config/
-      linters: [gosec]
-      text: "G304"
-
-    # Don't enforce errcheck on test files (test helpers, deferred closes)
-    - path: _test\.go
-      linters: [errcheck]
-
-    # Test files: relax gosec G306 (file perms), noctx, and bodyclose
-    - path: _test\.go
-      linters: [gosec]
-      text: "G306"
-    - path: _test\.go
-      linters: [noctx]
-    - path: _test\.go
-      linters: [bodyclose]
-
-    # Exclude vendor directory
-    - path: vendor/
-      linters: [ALL]
+  new-from-rev: ""
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/vNodesV/vOps
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
