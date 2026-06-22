@@ -18,40 +18,43 @@ import type { ProxyStatus } from '../../api/types';
 import SettingsDrawer, { GearButton, ConfigPanel } from '../../components/SettingsDrawer';
 import { PortsPanel, ProxyControlsPanel } from '../settings/ProxyPanel';
 
-// Format log line into two-line layout with 8-space indent on line 2
+// Format log line into two-line layout with 8-space indent on line 2.
+// Raw format: "<ts> <LIFECYCLE> key=value key=value ... module=vProx"
+// e.g. "10:37AM NEW ID=API7582... status=COMPLETED method=GET statusCode=200
+//       from=142.93.224.60 count=4412 to=CHEQD-SRVS.VNODESV.NET
+//       chainId=cheqd-srvs.vnodesv.net endpoint=/api/... latency=19ms
+//       userAgent="" country=NL module=vProx"
 function formatLogLine(line: string): string {
-  // Extract fields: key=value pattern (handles quoted values)
+  const tokens = line.trim().split(/\s+/);
+  if (tokens.length < 2) return line;
+
+  const ts = tokens[0];
+  const lifecycle = tokens[1];
+  const rest = line.slice(line.indexOf(lifecycle) + lifecycle.length).trim();
+
+  // Extract key=value fields from the remainder (handles quoted values).
   const fieldRegex = /(\w+)=("[^"]*"|[^\s]+)/g;
   const fields: Record<string, string> = {};
   let match;
-  while ((match = fieldRegex.exec(line)) !== null) {
+  while ((match = fieldRegex.exec(rest)) !== null) {
     let value = match[2];
     if (value.startsWith('"') && value.endsWith('"')) {
-      value = value.slice(1, -1);
+      value = `"${value.slice(1, -1)}"`;
     }
     fields[match[1]] = value;
   }
 
-  // Line 1: timestamp (from first field if NEW), ID, status, method, statusCode, from, count, to, chainId
-  const line1Parts = [];
-  if (fields.ts) line1Parts.push(fields.ts);
-  if (fields.NEW) line1Parts.push('NEW');
-  if (fields.ID) line1Parts.push(`ID=${fields.ID}`);
-  if (fields.status) line1Parts.push(`status=${fields.status}`);
-  if (fields.method) line1Parts.push(`method=${fields.method}`);
-  if (fields.statusCode) line1Parts.push(`statusCode=${fields.statusCode}`);
-  if (fields.from) line1Parts.push(`from=${fields.from}`);
-  if (fields.count) line1Parts.push(`count=${fields.count}`);
-  if (fields.to) line1Parts.push(`to=${fields.to}`);
-  if (fields.chainId) line1Parts.push(`chainId=${fields.chainId}`);
+  // Line 1: ts, lifecycle, ID, status, method, statusCode, from, count, to, chainId
+  const line1Parts = [ts, lifecycle];
+  for (const key of ['ID', 'status', 'method', 'statusCode', 'from', 'count', 'to', 'chainId']) {
+    if (fields[key] !== undefined) line1Parts.push(`${key}=${fields[key]}`);
+  }
 
   // Line 2: endpoint, latency, userAgent, country, module (indented with 8 spaces)
   const line2Parts = [];
-  if (fields.endpoint) line2Parts.push(`endpoint=${fields.endpoint}`);
-  if (fields.latency) line2Parts.push(`latency=${fields.latency}`);
-  if (fields.userAgent) line2Parts.push(`userAgent="${fields.userAgent}"`);
-  if (fields.country) line2Parts.push(`country=${fields.country}`);
-  if (fields.module) line2Parts.push(`module=${fields.module}`);
+  for (const key of ['endpoint', 'latency', 'userAgent', 'country', 'module']) {
+    if (fields[key] !== undefined) line2Parts.push(`${key}=${fields[key]}`);
+  }
 
   return `${line1Parts.join(' ')}\n        ${line2Parts.join(' ')}`;
 }
