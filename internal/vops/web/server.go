@@ -477,6 +477,8 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		s.requireSession(http.HandlerFunc(s.handleProxyConfig)))
 	mux.Handle("GET /api/v1/proxy/logs",
 		s.requireSession(http.HandlerFunc(s.handleProxyLogs)))
+	mux.Handle("GET /api/v1/proxy/logs/multi",
+		s.requireSession(http.HandlerFunc(s.handleMultiProxyLogs)))
 
 	readTimeout := time.Duration(cfg.VOps.Server.ReadTimeoutSec) * time.Second
 	writeTimeout := time.Duration(cfg.VOps.Server.WriteTimeoutSec) * time.Second

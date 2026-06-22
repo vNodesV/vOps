@@ -235,3 +235,83 @@ func (s *Server) handleProxyLogs(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 }
+
+// handleMultiProxyLogs streams logs from all registered vProx instances via Server-Sent Events.
+//
+//	GET /api/v1/proxy/logs/multi
+//
+// Concatenates logs from all remote vProx instances and streams them with
+// "vProx=<instance>" field prepended. Falls back gracefully if an instance
+// endpoint is unreachable.
+func (s *Server) handleMultiProxyLogs(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	if s.multiproxMgr == nil {
+		fmt.Fprintf(w, "event: live_not_available\ndata: multiprox not configured\n\n")
+		flusher.Flush()
+		return
+	}
+
+	// Fetch list of all registered vProx instances.
+	instances, err := s.multiproxMgr.ListInstances(r.Context())
+	if err != nil {
+		fmt.Fprintf(w, "event: live_not_available\ndata: failed to fetch instances: %s\n\n", err.Error())
+		flusher.Flush()
+		return
+	}
+
+	if len(instances) == 0 {
+		fmt.Fprintf(w, "event: live_not_available\ndata: no vProx instances registered\n\n")
+		flusher.Flush()
+		return
+	}
+
+	// Send initial message with instance count.
+	fmt.Fprintf(w, "data: Streaming logs from %d vProx instance(s)\n\n", len(instances))
+	flusher.Flush()
+
+	// Open EventSource streams to each remote instance and merge logs.
+	// TODO: implement proper log merging/ordering across instances.
+	// For now, stream from each in sequence (polling-based).
+	fmt.Fprintf(w, "event: end\ndata: \n\n")
+	flusher.Flush()
+
+	// Poll all instances every second.
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	offsets := make(map[string]int64) // instance name → file offset
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-ticker.C:
+			for _, inst := range instances {
+				logs := s.multiproxMgr.FetchInstanceLogs(r.Context(), inst.Name, offsets[inst.Name])
+				if logs == nil {
+					continue
+				}
+				for _, line := range logs.Lines {
+					// Prepend instance name to each line.
+					enriched := fmt.Sprintf("vProx=%s %s", inst.Name, line)
+					fmt.Fprintf(w, "data: %s\n\n", strings.ReplaceAll(enriched, "\n", " "))
+				}
+				if logs.NewOffset > offsets[inst.Name] {
+					offsets[inst.Name] = logs.NewOffset
+				}
+				if len(logs.Lines) > 0 {
+					flusher.Flush()
+				}
+			}
+		}
+	}
+}
