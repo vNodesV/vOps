@@ -18,6 +18,44 @@ import type { ProxyStatus } from '../../api/types';
 import SettingsDrawer, { GearButton, ConfigPanel } from '../../components/SettingsDrawer';
 import { PortsPanel, ProxyControlsPanel } from '../settings/ProxyPanel';
 
+// Format log line into two-line layout with 8-space indent on line 2
+function formatLogLine(line: string): string {
+  // Extract fields: key=value pattern (handles quoted values)
+  const fieldRegex = /(\w+)=("[^"]*"|[^\s]+)/g;
+  const fields: Record<string, string> = {};
+  let match;
+  while ((match = fieldRegex.exec(line)) !== null) {
+    let value = match[2];
+    if (value.startsWith('"') && value.endsWith('"')) {
+      value = value.slice(1, -1);
+    }
+    fields[match[1]] = value;
+  }
+
+  // Line 1: timestamp (from first field if NEW), ID, status, method, statusCode, from, count, to, chainId
+  const line1Parts = [];
+  if (fields.ts) line1Parts.push(fields.ts);
+  if (fields.NEW) line1Parts.push('NEW');
+  if (fields.ID) line1Parts.push(`ID=${fields.ID}`);
+  if (fields.status) line1Parts.push(`status=${fields.status}`);
+  if (fields.method) line1Parts.push(`method=${fields.method}`);
+  if (fields.statusCode) line1Parts.push(`statusCode=${fields.statusCode}`);
+  if (fields.from) line1Parts.push(`from=${fields.from}`);
+  if (fields.count) line1Parts.push(`count=${fields.count}`);
+  if (fields.to) line1Parts.push(`to=${fields.to}`);
+  if (fields.chainId) line1Parts.push(`chainId=${fields.chainId}`);
+
+  // Line 2: endpoint, latency, userAgent, country, module (indented with 8 spaces)
+  const line2Parts = [];
+  if (fields.endpoint) line2Parts.push(`endpoint=${fields.endpoint}`);
+  if (fields.latency) line2Parts.push(`latency=${fields.latency}`);
+  if (fields.userAgent) line2Parts.push(`userAgent="${fields.userAgent}"`);
+  if (fields.country) line2Parts.push(`country=${fields.country}`);
+  if (fields.module) line2Parts.push(`module=${fields.module}`);
+
+  return `${line1Parts.join(' ')}\n        ${line2Parts.join(' ')}`;
+}
+
 /* ── Status badge ────────────────────────────────────────────── */
 
 function StatusBadge({ status }: { status: ProxyStatus['status'] }) {
@@ -203,7 +241,7 @@ function OverviewTab({
                 style={{ backgroundColor: 'var(--vn-surface-2)', color: 'var(--vn-text)', border: '1px solid var(--vn-border)', maxHeight: 400, whiteSpace: 'pre-wrap', wordWrap: 'break-word' }}>
                 {lines.length === 0
                   ? <span style={{ color: 'var(--vn-text-muted)' }}>No log lines available.</span>
-                  : lines.join('\n')}
+                  : lines.map((line) => formatLogLine(line)).join('\n')}
                 <div ref={bottomRef} />
               </pre>
             </>
