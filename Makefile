@@ -99,15 +99,14 @@ help:
 	@echo "  vOps — build and install targets"
 	@echo ""
 	@echo "  make install          Fresh install: dirs, config, sudoers, services, both binaries"
-	@echo "  make build-vops       Compile vOps only → .build/vOps (no service restart, no sudo)"
-	@echo "  make build-vprox      Compile vProx only → .build/vProx (no service restart, no sudo)"
-	@echo "  make upgrade          Rebuild + redeploy BOTH binaries (stop → copy → restart)"
-	@echo "  make clean            Remove local build artifacts"
+	@echo "  make build-vops       Stop vOps  → build → install to \$$GOPATH/bin (+ /usr/local/bin) → start vOps"
+	@echo "  make build-vprox      Stop vProx → build → install to \$$GOPATH/bin (+ /usr/local/bin) → start vProx"
+	@echo "  make build / upgrade  Same cycle for BOTH binaries (vOps then vProx)"
+	@echo "  make clean            Remove stale .build/ artifacts from older versions of this Makefile"
 	@echo ""
-	@echo "  After build-vops/build-vprox, deploy manually:"
-	@echo "    sudo systemctl stop vOps   && cp $(VOPS_BUILD) $(GOPATH_BIN)/$(VOPS_NAME)   && sudo systemctl start vOps"
-	@echo "    sudo systemctl stop vProx  && cp $(BUILD_OUT)  $(GOPATH_BIN)/$(APP_NAME)    && sudo systemctl start vProx"
-	@echo "  (or just run 'make upgrade' to automate that for both)"
+	@echo "  Every build target stops its own service(s), builds, installs the binary"
+	@echo "  directly to \$$GOPATH/bin, symlinks into /usr/local/bin (created if missing),"
+	@echo "  then restarts the service(s). No manual deploy step needed."
 	@echo ""
 	@echo "  Version management (vOps):"
 	@echo "    make bump-patch       0.0.1 → 0.0.2  (bug fixes / small improvements)"
@@ -312,15 +311,12 @@ _config-modules:
 ## Build vOps binary (default build target)
 build: build-vops
 
-## ─── Compile-only targets ──────────────────────────────────────────────────
-## build-vops / build-vprox ONLY compile. They never stop a service, copy a
-## binary into place, or touch sudo. Deploy manually after either one:
-##
-##   sudo systemctl stop vOps  && cp .build/vOps  $$(go env GOPATH)/bin/vOps  && sudo systemctl start vOps
-##   sudo systemctl stop vProx && cp .build/vProx $$(go env GOPATH)/bin/vProx && sudo systemctl start vProx
-##
-## Or skip the manual dance entirely with `make upgrade`, which does exactly
-## that for both binaries in one step.
+## ─── Build targets ───────────────────────────────────────────────────────────
+## Each target stops its own service(s), builds straight to a temp file,
+## installs to $GOPATH/bin (atomic mv), symlinks into /usr/local/bin (created
+## it if absent), then restarts the service(s). No .build/ staging directory,
+## no separate manual deploy step. Requires passwordless sudo for systemctl
+## (set up once via `make install` / `make _sudoers`).
 
 ## Build the React + Vite _frontend SPA (output goes to internal/vops/web/dist/)
 _frontend:
@@ -337,46 +333,48 @@ _frontend:
 		echo "✓ Frontend built → internal/vops/web/dist/"; \
 	fi
 
-## Compile vOps binary only (frontend + Go) — no service management, no sudo.
-## Output: .build/vOps
+## Build, install, and restart vOps. Stops vOps → compiles → installs to
+## $GOPATH/bin → symlinks into /usr/local/bin (if missing) → restarts vOps.
 build-vops: _frontend
-	@echo "Building $(VOPS_NAME)..."
-	mkdir -p "$(BUILD_DIR)"
-	GOROOT="$(EFFECTIVE_GOROOT)" go build -ldflags "$(VOPS_LDFLAGS)" -o "$(VOPS_BUILD)" "$(VOPS_SRC)"
-	@echo "✓ Build complete — Binary: $(VOPS_BUILD)"
-	@echo "  Deploy: sudo systemctl stop vOps && cp $(VOPS_BUILD) $(GOPATH_BIN)/$(VOPS_NAME) && sudo systemctl start vOps"
-	@echo "  Or:     make upgrade   (rebuilds + redeploys vOps AND vProx automatically)"
+	@echo "── Building $(VOPS_NAME) ────────────────────────────────────────────────"
+	@sudo systemctl stop vOps 2>/dev/null && echo "  ✓ vOps stopped" || echo "  ○ vOps was not running"
+	@mkdir -p "$(GOPATH_BIN)"
+	@TMP="$$(mktemp)"; \
+	GOROOT="$(EFFECTIVE_GOROOT)" go build -ldflags "$(VOPS_LDFLAGS)" -o "$$TMP" "$(VOPS_SRC)" && \
+	mv "$$TMP" "$(GOPATH_BIN)/$(VOPS_NAME)" && chmod +x "$(GOPATH_BIN)/$(VOPS_NAME)"
+	@echo "  ✓ Installed → $(GOPATH_BIN)/$(VOPS_NAME)"
+	@if [ -e "/usr/local/bin/$(VOPS_NAME)" ]; then \
+		echo "  ✓ /usr/local/bin/$(VOPS_NAME) already linked"; \
+	else \
+		sudo ln -s "$(GOPATH_BIN)/$(VOPS_NAME)" "/usr/local/bin/$(VOPS_NAME)" && \
+			echo "  ✓ Linked → /usr/local/bin/$(VOPS_NAME)"; \
+	fi
+	@sudo systemctl start vOps 2>/dev/null && echo "  ✓ vOps started" || echo "  ○ Could not start vOps — start manually: sudo service vOps start"
 
-## Compile vProx binary only — no service management, no sudo.
-## Output: .build/vProx
+## Build, install, and restart vProx. Stops vProx → compiles → installs to
+## $GOPATH/bin → symlinks into /usr/local/bin (if missing) → restarts vProx.
 build-vprox:
-	@echo "Building $(APP_NAME)..."
-	mkdir -p "$(BUILD_DIR)"
-	GOROOT="$(EFFECTIVE_GOROOT)" go build -ldflags "$(VPROX_LDFLAGS)" -o "$(BUILD_OUT)" "$(BUILD_SRC)"
-	@echo "✓ Build complete — Binary: $(BUILD_OUT)"
-	@echo "  Deploy: sudo systemctl stop vProx && cp $(BUILD_OUT) $(GOPATH_BIN)/$(APP_NAME) && sudo systemctl start vProx"
-	@echo "  Or:     make upgrade   (rebuilds + redeploys vOps AND vProx automatically)"
+	@echo "── Building $(APP_NAME) ─────────────────────────────────────────────────"
+	@sudo systemctl stop vProx 2>/dev/null && echo "  ✓ vProx stopped" || echo "  ○ vProx was not running"
+	@mkdir -p "$(GOPATH_BIN)"
+	@TMP="$$(mktemp)"; \
+	GOROOT="$(EFFECTIVE_GOROOT)" go build -ldflags "$(VPROX_LDFLAGS)" -o "$$TMP" "$(BUILD_SRC)" && \
+	mv "$$TMP" "$(GOPATH_BIN)/$(APP_NAME)" && chmod +x "$(GOPATH_BIN)/$(APP_NAME)"
+	@echo "  ✓ Installed → $(GOPATH_BIN)/$(APP_NAME)"
+	@if [ -e "/usr/local/bin/$(APP_NAME)" ]; then \
+		echo "  ✓ /usr/local/bin/$(APP_NAME) already linked"; \
+	else \
+		sudo ln -s "$(GOPATH_BIN)/$(APP_NAME)" "/usr/local/bin/$(APP_NAME)" && \
+			echo "  ✓ Linked → /usr/local/bin/$(APP_NAME)"; \
+	fi
+	@sudo systemctl start vProx 2>/dev/null && echo "  ✓ vProx started" || echo "  ○ Could not start vProx — start manually: sudo service vProx start"
 
-## ─── Upgrade: the automated version of build-vops + build-vprox ─────────────
-## Rebuilds BOTH binaries, stops both services, copies binaries into place
-## (GOPATH/bin, and /usr/local/bin if already populated there), syncs service
-## unit files if the templates drifted, then restarts both services.
-## Requires passwordless sudo for systemctl — set up once via `make install`.
+## ─── Upgrade: build-vops + build-vprox, plus service-file drift sync ────────
+## Each sub-target already does its own full stop → build → install → start
+## cycle; upgrade just adds the one thing they don't cover — re-syncing the
+## systemd unit files in case the .service.template files changed.
 
 upgrade: build-vops build-vprox
-	@echo "── Upgrading vOps + vProx ───────────────────────────────────────────────"
-	@sudo systemctl stop vOps 2>/dev/null && echo "  ✓ vOps stopped" || echo "  ○ vOps was not running"
-	@sudo systemctl stop vProx 2>/dev/null && echo "  ✓ vProx stopped" || echo "  ○ vProx was not running"
-	@cp "$(VOPS_BUILD)" "$(GOPATH_BIN)/$(VOPS_NAME)" && echo "  ✓ Copied → $(GOPATH_BIN)/$(VOPS_NAME)"
-	@cp "$(BUILD_OUT)" "$(GOPATH_BIN)/$(APP_NAME)" && echo "  ✓ Copied → $(GOPATH_BIN)/$(APP_NAME)"
-	@if [ -e "/usr/local/bin/$(VOPS_NAME)" ]; then \
-		sudo cp "$(VOPS_BUILD)" "/usr/local/bin/$(VOPS_NAME)"; \
-		echo "  ✓ Updated → /usr/local/bin/$(VOPS_NAME)"; \
-	fi
-	@if [ -e "/usr/local/bin/$(APP_NAME)" ]; then \
-		sudo cp "$(BUILD_OUT)" "/usr/local/bin/$(APP_NAME)"; \
-		echo "  ✓ Updated → /usr/local/bin/$(APP_NAME)"; \
-	fi
 	@echo "── Syncing service files (in case templates changed) ───────────────────"
 	@reload=0; \
 	for entry in "vops.service.template:vOps.service" "vprox.service.template:vProx.service"; do \
@@ -396,14 +394,15 @@ upgrade: build-vops build-vprox
 	if [[ "$$reload" = "1" ]]; then \
 		sudo systemctl daemon-reload && echo "  ✓ daemon-reload"; \
 	fi
-	@echo "Restarting services..."
+	@echo "Re-asserting service state (in case unit files just changed above)..."
 	@sudo systemctl start vOps 2>/dev/null && echo "  ✓ vOps started" || echo "  ○ Could not start vOps — start manually: sudo service vOps start"
 	@sudo systemctl start vProx 2>/dev/null && echo "  ✓ vProx started" || echo "  ○ Could not start vProx — start manually: sudo service vProx start"
 
-## Clean local build artifacts (never touches installed binary)
+## Remove stale .build/ directory left over from older Makefile versions
+## (current build targets no longer write there — binaries go straight to $GOPATH/bin).
 
 clean:
-	@echo "Cleaning build artifacts..."
+	@echo "Cleaning stale build artifacts..."
 	rm -rf "$(BUILD_DIR)" "./$(APP_NAME)"
 	@echo "✓ Clean"
 
@@ -628,24 +627,15 @@ bump-major-vprox:
 
 ## ─── Fresh install (run ON the server after git pull) ────────────────────────
 ## Phases: reset stale units → sudoers → dirs → geo → env → config → samples →
-##         dedicated service user → build both binaries → copy into place →
-##         (prompt) /usr/local/bin → (prompt) systemd services.
+##         dedicated service user → build both binaries (each installs itself
+##         to $GOPATH/bin + symlinks into /usr/local/bin) → (prompt) systemd services.
 ## Never touches existing config TOML files (only writes if absent).
 
 install: _validate-go _reset-stale-services _sudoers _dirs _geo _env _config _config-vops _config-vprox _samples-fleet _system-user-vops build-vops build-vprox
 	@echo ""
-	@echo "── Installing binaries ──────────────────────────────────────────────────"
-	@cp "$(VOPS_BUILD)" "$(GOPATH_BIN)/$(VOPS_NAME)" && echo "  ✓ $(GOPATH_BIN)/$(VOPS_NAME)"
-	@cp "$(BUILD_OUT)" "$(GOPATH_BIN)/$(APP_NAME)" && echo "  ✓ $(GOPATH_BIN)/$(APP_NAME)"
-	@echo ""
-	@read -p "Copy binaries to /usr/local/bin too? (y/n) " -n 1 -r; echo ""; \
-	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-		sudo cp "$(GOPATH_BIN)/$(VOPS_NAME)" "/usr/local/bin/$(VOPS_NAME)"; \
-		sudo cp "$(GOPATH_BIN)/$(APP_NAME)" "/usr/local/bin/$(APP_NAME)"; \
-		echo "  ✓ /usr/local/bin/{$(VOPS_NAME),$(APP_NAME)} installed"; \
-	else \
-		echo "  ✓ Skipped — binaries available at $(GOPATH_BIN)/"; \
-	fi
+	@echo "── Binaries already installed by build-vops/build-vprox above ─────────────"
+	@echo "  ✓ $(GOPATH_BIN)/$(VOPS_NAME)  (symlinked from /usr/local/bin/$(VOPS_NAME))"
+	@echo "  ✓ $(GOPATH_BIN)/$(APP_NAME)   (symlinked from /usr/local/bin/$(APP_NAME))"
 	@echo ""
 	@echo "── Systemd services ─────────────────────────────────────────────────────"
 	@$(MAKE) --no-print-directory _service-vops
