@@ -4,7 +4,6 @@
 package multiprox
 
 import (
-	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -328,50 +327,4 @@ func (h *Handlers) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"ok": "updated"})
-}
-
-// ListInstances returns all registered vProx instances as a slice.
-// Used internally by log aggregation endpoints.
-func (h *Handlers) ListInstances(ctx context.Context) ([]Instance, error) {
-	rows, err := h.db.QueryContext(ctx,
-		`SELECT id, name, url, datacenter, status, last_seen, created_at FROM vprox_instances ORDER BY name`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	list := make([]Instance, 0)
-	for rows.Next() {
-		var inst Instance
-		if scanErr := rows.Scan(&inst.ID, &inst.Name, &inst.URL, &inst.Datacenter,
-			&inst.Status, &inst.LastSeen, &inst.CreatedAt); scanErr != nil {
-			continue
-		}
-		list = append(list, inst)
-	}
-	return list, rows.Err()
-}
-
-// LogSnapshot holds a batch of log lines and the new offset.
-type LogSnapshot struct {
-	Lines     []string
-	NewOffset int64
-}
-
-// FetchInstanceLogs retrieves new log lines from a remote vProx instance via HTTP.
-// Each vProx instance should expose GET /api/v1/proxy/logs as Server-Sent Events.
-// For now, returns empty to avoid breaking multi-mode.
-// TODO: Implement full SSE aggregation across all instances.
-func (h *Handlers) FetchInstanceLogs(ctx context.Context, instanceName string, offset int64) *LogSnapshot {
-	var url string
-	var apiKey string
-	row := h.db.QueryRowContext(ctx, `SELECT url, api_key FROM vprox_instances WHERE name = ?`, instanceName)
-	if err := row.Scan(&url, &apiKey); err != nil {
-		return nil
-	}
-
-	// Stub: each vProx instance would need to expose /api/v1/proxy/logs
-	// with optional offset query parameter. This is a v2 enhancement.
-	_ = url
-	_ = apiKey
-	return &LogSnapshot{Lines: []string{}, NewOffset: offset}
 }

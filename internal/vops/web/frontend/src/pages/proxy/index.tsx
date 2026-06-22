@@ -18,72 +18,6 @@ import type { ProxyStatus } from '../../api/types';
 import SettingsDrawer, { GearButton, ConfigPanel } from '../../components/SettingsDrawer';
 import { PortsPanel, ProxyControlsPanel } from '../settings/ProxyPanel';
 
-// Fetch list of registered vProx instances
-async function getMultiProxyInstances() {
-  const res = await fetch(BASE + '/api/v1/multiprox', { credentials: 'include' });
-  if (!res.ok) throw new Error(`Failed to fetch instances: ${res.statusText}`);
-  const data = await res.json();
-  return data.instances || [];
-}
-
-// Parse and format log line with multi-line layout and color-coded status
-function formatLogLine(line: string): React.ReactNode {
-  // Extract fields using regex: key=value with quoted values
-  const regex = /(\w+)=("[^"]*"|[^\s]+)/g;
-  const fields: Record<string, string> = {};
-  let match;
-  while ((match = regex.exec(line)) !== null) {
-    const key = match[1];
-    let value = match[2];
-    if (value.startsWith('"') && value.endsWith('"')) {
-      value = value.slice(1, -1);
-    }
-    fields[key] = value;
-  }
-
-  const statusCode = parseInt(fields.statusCode || '000', 10);
-
-  // Determine status color
-  let statusColor: 'success' | 'warning' | 'danger' | 'muted' = 'success';
-  if (statusCode >= 500) {
-    statusColor = 'danger'; // RED: 5xx errors
-  } else if ([403, 401, 400].includes(statusCode)) {
-    statusColor = 'danger'; // RED: critical client errors
-  } else if ([304, 307, 308, 429, 404].includes(statusCode)) {
-    statusColor = 'warning'; // YELLOW: informational/non-critical
-  } else if (statusCode >= 200 && statusCode < 300) {
-    statusColor = 'success'; // GREEN: 2xx success
-  }
-
-  const colorMap = {
-    success: 'var(--vn-success)',
-    warning: 'var(--vn-warning)',
-    danger: 'var(--vn-danger)',
-    muted: 'var(--vn-text-muted)',
-  };
-
-  return (
-    <div key={line} style={{ marginBottom: '1rem', fontSize: '0.75rem', fontFamily: 'monospace', lineHeight: 1.4 }}>
-      <div style={{ color: 'var(--vn-text-muted)' }}>
-        {fields.ts} <span style={{ fontWeight: 600 }}>[{fields.status || 'UNKNOWN'}]</span>{' '}
-        ID={fields.ID} latency={fields.latency} country={fields.country} module={fields.module}
-      </div>
-      <div style={{ color: 'var(--vn-text)' }}>
-        {fields.vProx && <span>{`vProx=${fields.vProx}`} </span>}
-        status={fields.status} method={fields.method}{' '}
-        <span style={{ color: colorMap[statusColor], fontWeight: 600 }}>statusCode={statusCode}</span>{' '}
-        from={fields.from} count={fields.count}
-      </div>
-      <div style={{ color: 'var(--vn-text-muted)' }}>
-        to={fields.to} chainId={fields.chainId}
-      </div>
-      <div style={{ color: 'var(--vn-text-muted)', wordBreak: 'break-all' }}>
-        endpoint={fields.endpoint}
-      </div>
-    </div>
-  );
-}
-
 /* ── Status badge ────────────────────────────────────────────── */
 
 function StatusBadge({ status }: { status: ProxyStatus['status'] }) {
@@ -159,22 +93,10 @@ function OverviewTab({
 }) {
   const qc = useQueryClient();
   const [logOpen, setLogOpen] = useState(false);
-  const [multiMode, setMultiMode] = useState(false);
   const [lines, setLines] = useState<string[]>([]);
   const [logMsg, setLogMsg] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
   const esRef = useRef<EventSource | null>(null);
-
-  const { data: instances = [] } = useQuery({
-    queryKey: ['multiprox-instances'],
-    queryFn: getMultiProxyInstances,
-    enabled: configured,
-    retry: false,
-    refetchInterval: 30_000,
-  });
-
-  const hasMultiProxy = instances.length > 0;
-  const canSwitchMulti = instances.length > 0;
 
   const invalidate = () => { qc.invalidateQueries({ queryKey: ['proxy-status'] }); onAction(); };
   const startMut   = useMutation({ mutationFn: proxyStart,   onSuccess: invalidate });
@@ -186,14 +108,13 @@ function OverviewTab({
   const isStopped = data?.status === 'stopped' || data?.status === 'error';
   const errMsg    = (startMut.error || stopMut.error || restartMut.error) as Error | null;
 
-  // Open/close the EventSource only when logOpen or multiMode changes.
+  // Open/close the EventSource only when logOpen changes.
   useEffect(() => {
     if (!logOpen || !configured) return;
 
     setLines([]);
     setLogMsg('');
-    const endpoint = multiMode ? '/api/v1/proxy/logs/multi' : '/api/v1/proxy/logs';
-    const es = new EventSource(BASE + endpoint, { withCredentials: true });
+    const es = new EventSource(BASE + '/api/v1/proxy/logs', { withCredentials: true });
     esRef.current = es;
 
     es.addEventListener('live_not_available', (e) => {
@@ -205,7 +126,7 @@ function OverviewTab({
     es.onerror   = () => es.close();
 
     return () => { es.close(); esRef.current = null; };
-  }, [logOpen, configured, multiMode]);
+  }, [logOpen, configured]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [lines.length]);
 
@@ -237,14 +158,6 @@ function OverviewTab({
             </button>
             <button className="btn btn-secondary btn-sm" onClick={() => restartMut.mutate()} disabled={busy}>
               {restartMut.isPending ? 'Restarting…' : 'Restart'}
-            </button>
-            <button
-              className={`btn btn-sm ${multiMode ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => setMultiMode(v => !v)}
-              disabled={!canSwitchMulti}
-              title={canSwitchMulti ? `${multiMode ? 'Switch to single mode' : 'Stream all vProx instances'}` : 'No other vProx instances registered'}
-            >
-              Multi{hasMultiProxy && ` (${instances.length})`}
             </button>
           </div>
         </div>
@@ -284,23 +197,15 @@ function OverviewTab({
           ) : (
             <>
               <p className="text-xs" style={{ color: 'var(--vn-text-muted)' }}>
-                {multiMode
-                  ? `Streaming from ${instances.length} vProx instance(s)`
-                  : `Last 100 lines from ${data?.log_path ?? '$VOPS_HOME/data/logs/main.log'}`}
+                Last 100 lines from <code>{data?.log_path ?? '$VOPS_HOME/data/logs/main.log'}</code>
               </p>
-              <div className="rounded p-3 overflow-auto"
-                style={{ backgroundColor: 'var(--vn-surface-2)', color: 'var(--vn-text)', border: '1px solid var(--vn-border)', maxHeight: 400 }}>
+              <pre className="text-xs font-mono rounded p-3 overflow-auto"
+                style={{ backgroundColor: 'var(--vn-surface-2)', color: 'var(--vn-text)', border: '1px solid var(--vn-border)', maxHeight: 400, whiteSpace: 'pre-wrap', wordWrap: 'break-word' }}>
                 {lines.length === 0
                   ? <span style={{ color: 'var(--vn-text-muted)' }}>No log lines available.</span>
-                  : <div style={{ fontFamily: 'monospace' }}>
-                      {lines.map((line, idx) => (
-                        <div key={idx}>
-                          {formatLogLine(line)}
-                        </div>
-                      ))}
-                    </div>}
+                  : lines.join('\n')}
                 <div ref={bottomRef} />
-              </div>
+              </pre>
             </>
           )
         )}
